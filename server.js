@@ -9,7 +9,14 @@ const { createApp } = require('./src/app');
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.accessSync(DATA_DIR, fs.constants.W_OK);
+} catch (err) {
+  console.error(`Datenordner "${DATA_DIR}" ist nicht vorhanden oder nicht beschreibbar (${err.code}).`);
+  console.error('Auf Render: Persistent Disk anlegen und als Mount Path exakt denselben Pfad wie DATA_DIR eintragen.');
+  process.exit(1);
+}
 const db = openDb(path.join(DATA_DIR, 'tracker.db'));
 
 // First start: create the coach account from environment variables.
