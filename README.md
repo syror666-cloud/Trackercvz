@@ -32,7 +32,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 
 Klienten sehen immer nur ihre eigenen Daten und ihren eigenen Chat.
 
-Design: Light Mode in Blau/Weiß, Dark Mode in Orange/Schwarz (folgt automatisch der Geräteeinstellung).
+Design: redaktionell und fast monochrom – Graphit auf warmem Grau/Weiß, Ember-Orange als einziger Akzent, Brass als zweiter. Überschriften in Space Grotesk, Text in Inter (beide selbst gehostet, keine Verbindung zu Google Fonts). Dark Mode in Schwarz/Orange, folgt automatisch der Geräteeinstellung.
 
 ## Lokal starten
 

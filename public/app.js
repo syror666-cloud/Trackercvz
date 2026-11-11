@@ -140,6 +140,10 @@
     });
   }
 
+  /** Small brass line above page titles, e.g. "Mittwoch, 11. November". */
+  const todayLong = () => new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const eyebrow = (text) => `<p class="eyebrow">${esc(text)}</p>`;
+
   // ---------- routing ----------
   async function boot() {
     try {
@@ -247,6 +251,12 @@
   function renderLogin() {
     setView(`
       <div class="login-wrap">
+        <div class="login-intro">
+          ${eyebrow('Thabstracker · Coaching')}
+          <h1>Fortschritt,<br>präzise <em>festgehalten.</em></h1>
+          <p>Gewicht, Schritte, Schlaf und Ernährung an einem Ort. Dein Coach sieht mit – du bleibst dran.</p>
+          <div class="login-facts"><span>Täglich tracken</span><span>Wöchentlicher Check-in</span><span>Persönlicher Plan</span></div>
+        </div>
         <form class="card login-card" id="login-form">
           <img class="login-logo" src="/logo.jpg" alt="Thabstracker" width="900" height="600">
           <div class="field"><label for="u">Benutzername</label>
@@ -281,7 +291,7 @@
 
     setView(`
       <div class="page-head">
-        <div><h1>Hallo ${esc(me.displayName)}</h1><p class="muted" id="streak"></p></div>
+        <div>${eyebrow(todayLong())}<h1>Hallo ${esc(me.displayName)}</h1><p class="muted" id="streak"></p></div>
       </div>
       <div id="push-prompt"></div>
       <div id="checkin-card"></div>
@@ -984,7 +994,7 @@
   // ---------- client: settings (push + Apple Health) ----------
   async function renderClientSettings() {
     setView(`
-      <div class="page-head"><div><h1>Einstellungen</h1></div></div>
+      <div class="page-head"><div>${eyebrow('Konto')}<h1>Einstellungen</h1></div></div>
       <div class="settings-grid">
         <section class="card" id="push-card"><p class="muted">Lade…</p></section>
         <section class="card" id="health-card"><p class="muted">Lade…</p></section>
@@ -1085,7 +1095,7 @@
 
   // ---------- chat ----------
   function renderClientChat() {
-    setView('<div class="page-head"><div><h1>Nachrichten</h1></div></div><div id="chat"></div>');
+    setView(`<div class="page-head"><div>${eyebrow('Chat mit deinem Coach')}<h1>Nachrichten</h1></div></div><div id="chat"></div>`);
     mountChat(document.getElementById('chat'), {
       query: '',
       title: 'Dein Draht zum Coach',
@@ -1225,7 +1235,7 @@
 
     setView(`
       <div class="page-head">
-        <div><h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}</p></div>
+        <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}</p></div>
         <button class="btn-primary" id="btn-new-client" type="button">+ Neuer Klient</button>
       </div>
       ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
@@ -1298,7 +1308,7 @@
 
     setView(`
       <div class="page-head">
-        <div><h1>Wöchentlicher Check-in</h1>
+        <div>${eyebrow('Coaching')}<h1>Wöchentlicher Check-in</h1>
           <p class="muted">${done} von ${clients.length} diese Woche erledigt</p></div>
         <div class="progress" aria-hidden="true"><span style="width:${Math.round((done / clients.length) * 100)}%"></span></div>
       </div>
@@ -1682,8 +1692,8 @@
     const doneReqs = plan.requests.filter((r) => r.status !== 'open').slice(0, 10);
 
     setView(`
-      <div class="page-head"><div><h1>Ernährungsplan</h1>
-        <p class="muted">Von deinem Coach. Du kannst Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen.</p></div></div>
+      <div class="page-head"><div>${eyebrow('Von deinem Coach')}<h1>Ernährungsplan</h1>
+        <p class="muted">Du kannst einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – dein Coach entscheidet.</p></div></div>
       ${plan.meals.length ? `
       <div class="nutrition-grid">
         <div class="stack">${planSummary(plan, goals)}${meals}</div>
@@ -1978,7 +1988,7 @@
     setView('<p class="muted">Lade…</p>');
     const [ov] = await Promise.all([api('GET', '/api/admin/overview'), loadFoods(true)]);
     setView(`
-      <div class="page-head"><div><h1>Admin</h1><p class="muted">Aktivität deiner Klienten, automatische Erinnerungen und Lebensmittel-Datenbank.</p></div></div>
+      <div class="page-head"><div>${eyebrow('Werkzeuge')}<h1>Admin</h1><p class="muted">Aktivität deiner Klienten, automatische Erinnerungen und Lebensmittel-Datenbank.</p></div></div>
       <div class="stack">
         <section class="card" id="activity"></section>
         <section class="card" id="reminder"></section>
@@ -2372,7 +2382,7 @@
     const head = `
       <a class="back" href="#/">← Alle Klienten</a>
       <div class="page-head">
-        <div><h1>${esc(client.displayName)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p>
+        <div>${eyebrow('Klient')}<h1>${esc(client.displayName)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p>
           <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}
             ${client.healthLinked ? `<span class="badge good">❤️ Apple Health${client.healthLastUsed ? ` · ${esc(relDay(client.healthLastUsed.slice(0, 10)))}` : ' · noch keine Daten'}</span>` : ''}</div></div>
         <div class="row">
