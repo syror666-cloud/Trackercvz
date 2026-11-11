@@ -445,7 +445,8 @@
     }
     const ci = checkins[0];
     const recent = ci && Date.now() - Date.parse(ci.createdAt) < 8 * 86400000;
-    if (!ci || !(recent || (ci.status === 'open' && ci.changes.length))) {
+    // Once the client has accepted the changes, the check-in is done and the card disappears.
+    if (!ci || ci.status === 'accepted' || !(recent || (ci.status === 'open' && ci.changes.length))) {
       root.innerHTML = '';
       return;
     }
@@ -502,7 +503,7 @@
         accept.disabled = true;
         try {
           await api('POST', `/api/checkins/${ci.id}/accept`);
-          toast('Plan aktualisiert ✓');
+          toast('Anpassungen angenommen – dein Plan ist aktualisiert ✓');
           await onAccepted();
           mountClientCheckin(root, onAccepted);
         } catch (err) {
