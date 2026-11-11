@@ -87,7 +87,7 @@ test('coach creates client, client logs entries, coach sees them', async (t) => 
 
   // Goals: coach sets, client reads, client cannot set.
   assert.equal((await coach('PUT', `/api/goals?userId=${clientId}`, { targetWeight: 78, stepsGoal: 10000, sleepGoal: 7.5 })).status, 200);
-  assert.deepEqual((await max('GET', '/api/goals')).data.goals, { targetWeight: 78, stepsGoal: 10000, sleepGoal: 7.5, caloriesGoal: null });
+  assert.deepEqual((await max('GET', '/api/goals')).data.goals, { targetWeight: 78, stepsGoal: 10000, sleepGoal: 7.5, caloriesMin: null, caloriesMax: null });
   assert.equal((await max('PUT', `/api/goals?userId=${clientId}`, { targetWeight: 50 })).status, 403);
 
   // Clearing all values removes the entry.

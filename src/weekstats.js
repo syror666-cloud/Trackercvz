@@ -25,6 +25,14 @@ function periodStats(entries, from, to, goals) {
     stepsGoalDays: goals.steps_goal ? steps.filter((s) => s >= goals.steps_goal).length : null,
     sleepAvg: round(avg(sleep), 2),
     sleepGoalDays: goals.sleep_goal ? sleep.filter((s) => s >= goals.sleep_goal).length : null,
+    trainingDays: inRange.filter((e) => e.training === 1).length,
+    trainingAnswered: inRange.filter((e) => e.training === 0 || e.training === 1).length,
+    caloriesOkDays: inRange.filter((e) => e.calories_ok === 1).length,
+    caloriesAnswered: inRange.filter((e) => e.calories_ok === 0 || e.calories_ok === 1).length,
+    caloriesReportedAvg: (() => {
+      const kcal = inRange.filter((e) => e.calories_ok === 0 && e.calories !== null && e.calories !== undefined).map((e) => e.calories);
+      return kcal.length ? Math.round(avg(kcal)) : null;
+    })(),
   };
 }
 
@@ -38,12 +46,24 @@ function weekComparison(entries, today, goalsRow) {
   for (let i = 13; i >= 0; i--) {
     const date = addDays(today, -i);
     const e = entries.find((x) => x.date === date);
-    days.push({ date, weight: e ? e.weight : null, steps: e ? e.steps : null, sleep: e ? e.sleep : null, note: e ? e.note : null });
+    days.push({
+      date,
+      weight: e ? e.weight : null,
+      steps: e ? e.steps : null,
+      sleep: e ? e.sleep : null,
+      note: e ? e.note : null,
+      training: e && e.training !== null && e.training !== undefined ? Boolean(e.training) : null,
+      caloriesOk: e && e.calories_ok !== null && e.calories_ok !== undefined ? Boolean(e.calories_ok) : null,
+      calories: e ? e.calories ?? null : null,
+    });
   }
   return {
     current,
     previous,
-    delta: { weightAvg: diff('weightAvg', 2), stepsAvg: diff('stepsAvg', 0), sleepAvg: diff('sleepAvg', 2), daysLogged: diff('daysLogged', 0) },
+    delta: {
+      weightAvg: diff('weightAvg', 2), stepsAvg: diff('stepsAvg', 0), sleepAvg: diff('sleepAvg', 2),
+      daysLogged: diff('daysLogged', 0), trainingDays: diff('trainingDays', 0), caloriesOkDays: diff('caloriesOkDays', 0),
+    },
     days,
   };
 }

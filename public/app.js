@@ -279,6 +279,20 @@
               <div class="input-unit"><input id="f-sleep-h" name="sleepH" inputmode="numeric" placeholder="7"><span>Std.</span></div>
               <div class="input-unit"><input id="f-sleep-m" name="sleepM" inputmode="numeric" placeholder="30" aria-label="Schlaf Minuten"><span>Min.</span></div>
             </div></div>
+          <fieldset class="field"><legend>Trainingstag?</legend>
+            <div class="choice">
+              <label><input type="radio" name="training" value="true"><span>🏋️ Ja</span></label>
+              <label><input type="radio" name="training" value="false"><span class="no">Nein</span></label>
+            </div></fieldset>
+          <fieldset class="field" data-kcal-block hidden><legend>Kalorien laut Plan eingehalten? <span class="plan-hint" data-kcal-plan></span></legend>
+            <div class="choice">
+              <label><input type="radio" name="caloriesOk" value="true"><span>✓ Ja</span></label>
+              <label><input type="radio" name="caloriesOk" value="false"><span class="no">✗ Nein</span></label>
+            </div>
+            <div data-kcal-eaten hidden style="margin-top:10px">
+              <label for="f-kcal">Wie viel hast du gegessen? <span class="muted">(optional)</span></label>
+              <div class="input-unit"><input id="f-kcal" name="calories" inputmode="numeric" placeholder="z. B. 2650"><span>kcal</span></div>
+            </div></fieldset>
           <div class="field"><label for="f-note">Notiz <span class="muted">(optional)</span></label>
             <textarea id="f-note" name="note" maxlength="500" placeholder="Wie lief der Tag? Training, Ernährung, Befinden…"></textarea></div>
           <button class="btn-primary btn-block" type="submit">Speichern</button>
@@ -306,6 +320,15 @@
         form.sleepM.value = '';
       }
       form.note.value = (e && e.note) || '';
+      const setChoice = (name, v) =>
+        form.querySelectorAll(`[name=${name}]`).forEach((r) => {
+          r.checked = v !== null && v !== undefined && r.value === String(v);
+          r.dataset.was = String(r.checked);
+        });
+      setChoice('training', e ? e.training : null);
+      setChoice('caloriesOk', e ? e.caloriesOk : null);
+      form.calories.value = e && e.calories !== null && e.calories !== undefined ? e.calories : '';
+      syncKcal();
       const status = document.getElementById('entry-status');
       status.textContent = e ? 'gespeichert' : 'noch offen';
       status.className = e ? 'badge good' : 'badge';
@@ -324,6 +347,26 @@
         : 'Trag heute deine Werte ein.';
     }
 
+    function syncKcal() {
+      const block = form.querySelector('[data-kcal-block]');
+      block.hidden = !hasKcal(state.goals);
+      form.querySelector('[data-kcal-plan]').textContent = hasKcal(state.goals) ? `(Plan: ${fmtKcal(state.goals.caloriesMin, state.goals.caloriesMax)})` : '';
+      const no = form.querySelector('[name=caloriesOk][value=false]').checked;
+      form.querySelector('[data-kcal-eaten]').hidden = !no;
+    }
+    form.addEventListener('change', (e) => {
+      if (e.target.name === 'caloriesOk') syncKcal();
+    });
+    // Tapping a selected choice again clears it.
+    form.querySelectorAll('.choice input').forEach((r) =>
+      r.addEventListener('click', () => {
+        if (r.dataset.was === 'true') {
+          r.checked = false;
+          syncKcal();
+        }
+        form.querySelectorAll(`[name=${r.name}]`).forEach((x) => (x.dataset.was = String(x.checked)));
+      })
+    );
     form.date.addEventListener('change', fillForm);
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -338,8 +381,15 @@
         if (sm !== null && (sm < 0 || sm >= 60)) throw new Error('Minuten müssen zwischen 0 und 59 liegen.');
         const sleep = sh === null && sm === null ? null : Math.round(((sh || 0) + (sm || 0) / 60) * 100) / 100;
         if (!form.date.value) throw new Error('Bitte ein Datum wählen.');
+        const choice = (name) => {
+          const r = form.querySelector(`[name=${name}]:checked`);
+          return r ? r.value === 'true' : null;
+        };
+        const caloriesOk = hasKcal(state.goals) ? choice('caloriesOk') : undefined;
+        const calories = caloriesOk === false ? parseNum(form.calories.value) : caloriesOk === undefined ? undefined : null;
+        if (Number.isNaN(calories)) throw new Error('Bitte bei den Kalorien nur Zahlen eingeben.');
         const { entry } = await api('PUT', `/api/entries/${form.date.value}`, {
-          weight, steps, sleep, note: form.note.value,
+          weight, steps, sleep, note: form.note.value, training: choice('training'), caloriesOk, calories,
         });
         state.entries = state.entries.filter((x) => x.date !== form.date.value);
         if (entry) state.entries.push(entry);
@@ -378,7 +428,10 @@
     maybeShowPushPrompt(document.getElementById('push-prompt'));
     mountClientCheckin(document.getElementById('checkin-card'), async () => {
       const g = await api('GET', '/api/goals');
+      state.goals = g.goals;
+      state.history = g.history;
       dash.setGoals(g.goals, g.history);
+      syncKcal();
     });
   }
 
@@ -400,8 +453,8 @@
     const hasChanges = ci.changes.length > 0;
     const changesHtml = hasChanges
       ? `<div class="proposal"><div class="small muted" style="margin-bottom:6px">Vorgeschlagene Anpassungen für deinen Plan</div>
-          <ul class="change-list">${Object.keys(ci.proposal)
-            .map((k) => `<li><span>${PLAN_LABELS[k]}</span><span><s class="muted">${esc(fmtPlan(k, ci.previous[k]))}</s> → <strong>${esc(fmtPlan(k, ci.proposal[k]))}</strong></span></li>`)
+          <ul class="change-list">${ci.changeItems
+            .map((i) => `<li><span>${esc(i.label)}</span><span><s class="muted">${esc(i.before)}</s> → <strong>${esc(i.after)}</strong></span></li>`)
             .join('')}</ul></div>`
       : '';
     const state =
@@ -462,32 +515,43 @@
 
   // ---------- plan (goals) helpers ----------
   const PLAN_LABELS = {
-    caloriesGoal: 'Kalorien pro Tag',
+    calories: 'Kalorien pro Tag',
     stepsGoal: 'Schritte pro Tag',
     sleepGoal: 'Schlaf pro Nacht',
     targetWeight: 'Zielgewicht',
   };
   function fmtPlan(key, v) {
     if (v === null || v === undefined) return '–';
-    if (key === 'caloriesGoal') return `${num(v)} kcal`;
     if (key === 'stepsGoal') return `${num(v)} Schritte`;
     if (key === 'sleepGoal') return fmtSleep(v);
     return `${num(v, 1)} kg`;
   }
+  const hasKcal = (g) => g && g.caloriesMin !== null && g.caloriesMin !== undefined;
+  function fmtKcal(min, max) {
+    if (min === null || min === undefined) return '–';
+    return min === max ? `${num(min)} kcal` : `${num(min)}–${num(max)} kcal`;
+  }
+  const kcalMid = (g) => (hasKcal(g) ? Math.round((g.caloriesMin + g.caloriesMax) / 2) : null);
 
-  /** Daily values of a plan field between from and to, from the history of plan changes. */
-  function planSeries(history, key, from, to) {
+  /** Calorie range for every day between from and to, from the history of plan changes. */
+  function kcalTargets(history, from, to) {
     const changes = (history || []).map((h) => {
       const d = new Date(h.changedAt);
-      return { date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, value: h[key] };
+      return { date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, min: h.caloriesMin, max: h.caloriesMax };
     });
     const out = [];
     for (let d = from; d <= to; d = addDays(d, 1)) {
-      let v = null;
-      for (const c of changes) if (c.date <= d) v = c.value;
-      if (v !== null && v !== undefined) out.push({ date: d, value: v });
+      let cur = null;
+      for (const c of changes) if (c.date <= d) cur = c;
+      if (cur && cur.min !== null && cur.min !== undefined) out.push({ date: d, min: cur.min, max: cur.max });
     }
     return out;
+  }
+
+  function kcalCell(e) {
+    if (e.caloriesOk === true) return '<span class="good">✓ eingehalten</span>';
+    if (e.caloriesOk === false) return `<span class="bad">✗ ${e.calories !== null && e.calories !== undefined ? `${num(e.calories)} kcal` : 'nicht eingehalten'}</span>`;
+    return '–';
   }
 
   // ---------- shared dashboard ----------
@@ -515,12 +579,17 @@
           <div class="legend"><span><i class="faint"></i>Tageswert</span><span><i></i>Ø 7 Tage</span></div></div>
         <div class="chart-weight" data-chart="weight"></div>
       </div>
-      <div class="card chart-card"><h3>Schritte</h3><div class="chart-steps" data-chart="steps"></div></div>
-      <div class="card chart-card"><h3>Schlaf</h3><div class="chart-sleep" data-chart="sleep"></div></div>
       <div class="card chart-card">
-        <div class="row-between"><h3>Kalorienvorgabe</h3><span class="kcal-now" data-kcal-now></span></div>
+        <div class="row-between"><h3>Kalorien</h3><span class="kcal-now" data-kcal-now></span></div>
+        <div class="legend" style="margin:4px 0 6px;flex-wrap:wrap">
+          <span><i class="lg-band"></i>Vorgabe (Range)</span><span><i></i>Mittelwert</span>
+          <span><i class="lg-dot" style="background:var(--good)"></i>eingehalten</span>
+          <span><i class="lg-dot" style="background:var(--bad)"></i>nicht eingehalten</span>
+        </div>
         <div class="chart-kcal" data-chart="kcal"></div>
       </div>
+      <div class="card chart-card"><h3>Schritte</h3><div class="chart-steps" data-chart="steps"></div></div>
+      <div class="card chart-card"><h3>Schlaf</h3><div class="chart-sleep" data-chart="sleep"></div></div>
       <div class="card">
         <h3 style="margin-bottom:8px">Einträge</h3>
         <div class="table-wrap" data-table></div>
@@ -584,6 +653,9 @@
 
       const daysLogged = new Set(last7.map((e) => e.date)).size;
       const consistencyCls = daysLogged >= 6 ? 'good' : daysLogged >= 4 ? 'warn' : 'bad';
+      const kcalAnswered = last7.filter((e) => e.caloriesOk !== null && e.caloriesOk !== undefined).length;
+      const kcalKept = last7.filter((e) => e.caloriesOk === true).length;
+      const trainingDays = last7.filter((e) => e.training === true).length;
 
       root.querySelector('[data-stats]').innerHTML = `
         <div class="card stat">
@@ -601,6 +673,17 @@
           <div class="stat-label"><span class="dot-key" style="background:var(--sleep)"></span>Schlaf Ø 7 T</div>
           <div class="stat-value">${fmtSleep(sleep7)}</div>
           <div class="stat-sub">${goals.sleepGoal ? `Ziel ${fmtSleep(goals.sleepGoal)} · ${sleepHit}/7 Nächte erreicht` : 'Kein Schlafziel'}</div>
+        </div>
+        <div class="card stat">
+          <div class="stat-label"><span class="dot-key" style="background:var(--accent)"></span>Kalorien / Tag</div>
+          <div class="stat-value">${hasKcal(goals) ? num(kcalMid(goals)) : '–'} <small>kcal</small></div>
+          <div class="stat-sub">${hasKcal(goals) ? (goals.caloriesMin !== goals.caloriesMax ? `Range ${esc(fmtKcal(goals.caloriesMin, goals.caloriesMax))}` : 'Vorgabe deines Coaches') : 'Noch keine Vorgabe'}</div>
+          <div class="stat-sub">${kcalAnswered ? `${kcalKept}/${kcalAnswered} Tage eingehalten (7 T)` : ''}</div>
+        </div>
+        <div class="card stat">
+          <div class="stat-label">🏋️ Training</div>
+          <div class="stat-value">${trainingDays}<small>×</small></div>
+          <div class="stat-sub">Trainingstage in den letzten 7 Tagen</div>
         </div>
         <div class="card stat">
           <div class="stat-label">Konsequenz</div>
@@ -626,12 +709,13 @@
         data: series('sleep'), from, to, type: 'bar', decimals: 1,
         goal: goals.sleepGoal, label: 'Schlafdauer', formatValue: fmtSleep,
       });
-      root.querySelector('[data-kcal-now]').innerHTML = goals.caloriesGoal
-        ? `<strong>${num(goals.caloriesGoal)}</strong> kcal / Tag`
+      root.querySelector('[data-kcal-now]').innerHTML = hasKcal(goals)
+        ? `<strong>${esc(fmtKcal(goals.caloriesMin, goals.caloriesMax))}</strong>${goals.caloriesMin !== goals.caloriesMax ? ` <span class="muted small">Ø ${num(kcalMid(goals))}</span>` : ''}`
         : '<span class="muted small">Noch keine Vorgabe</span>';
-      Charts.render(root.querySelector('[data-chart=kcal]'), {
-        data: planSeries(history, 'caloriesGoal', from, to), from, to,
-        type: 'line', dots: false, stepped: true, unit: 'kcal', label: 'Verlauf der Kalorienvorgabe', height: 160,
+      Charts.renderCalories(root.querySelector('[data-chart=kcal]'), {
+        from, to, height: 190,
+        targets: kcalTargets(history, from, to),
+        days: inRange.map((e) => ({ date: e.date, ok: e.caloriesOk, kcal: e.calories })),
       });
     }
 
@@ -645,7 +729,7 @@
       }
       const editable = Boolean(onEdit);
       wrap.innerHTML = `<table>
-        <thead><tr><th>Datum</th><th class="num">Gewicht</th><th class="num">Schritte</th><th class="num">Schlaf</th><th>Notiz</th>${editable ? '<th></th>' : ''}</tr></thead>
+        <thead><tr><th>Datum</th><th class="num">Gewicht</th><th class="num">Schritte</th><th class="num">Schlaf</th><th>Training</th><th>Kalorien</th><th>Notiz</th>${editable ? '<th></th>' : ''}</tr></thead>
         <tbody>${rows
           .map(
             (e) => `<tr>
@@ -653,6 +737,8 @@
               <td class="num">${e.weight !== null ? `${num(e.weight, 1)} kg` : '–'}</td>
               <td class="num">${num(e.steps)}</td>
               <td class="num">${fmtSleep(e.sleep)}</td>
+              <td>${e.training === true ? '🏋️ Ja' : e.training === false ? '<span class="muted">Nein</span>' : '–'}</td>
+              <td>${kcalCell(e)}</td>
               <td class="note">${esc(e.note || '')}</td>
               ${editable ? `<td class="actions"><button type="button" class="btn-ghost btn-sm" data-edit="${e.date}">Bearbeiten</button><button type="button" class="btn-ghost btn-sm" data-del="${e.date}" aria-label="Löschen">✕</button></td>` : ''}
             </tr>`
@@ -1223,17 +1309,22 @@
       ['Schrittziel erreicht', hit(prev.stepsGoalDays, 7), hit(cur.stepsGoalDays, 7), '<td></td>'],
       ['Schlaf Ø', fmtSleep(prev.sleepAvg), fmtSleep(cur.sleepAvg), deltaCell(cmp.delta.sleepAvg, (v) => fmtSleep(v), 1)],
       ['Schlafziel erreicht', hit(prev.sleepGoalDays, 7), hit(cur.sleepGoalDays, 7), '<td></td>'],
+      ['🏋️ Trainingstage', `${prev.trainingDays}×`, `${cur.trainingDays}×`, deltaCell(cmp.delta.trainingDays, (v) => `${num(v)}×`, 1)],
+      ['Kalorienplan eingehalten', prev.caloriesAnswered ? `${prev.caloriesOkDays}/${prev.caloriesAnswered}` : '–', cur.caloriesAnswered ? `${cur.caloriesOkDays}/${cur.caloriesAnswered}` : '–', deltaCell(cmp.delta.caloriesOkDays, (v) => num(v), 1)],
+      ['Ø gegessen, wenn nicht eingehalten', prev.caloriesReportedAvg ? `${num(prev.caloriesReportedAvg)} kcal` : '–', cur.caloriesReportedAvg ? `${num(cur.caloriesReportedAvg)} kcal` : '–', '<td></td>'],
       ['Tage eingetragen', `${prev.daysLogged}/7`, `${cur.daysLogged}/7`, deltaCell(cmp.delta.daysLogged, (v) => num(v), 1)],
     ];
 
     const dayTable = (days) => `<table class="day-table">
-      <thead><tr><th>Tag</th><th class="num">Gewicht</th><th class="num">Schritte</th><th class="num">Schlaf</th><th>Notiz</th></tr></thead>
+      <thead><tr><th>Tag</th><th class="num">Gewicht</th><th class="num">Schritte</th><th class="num">Schlaf</th><th>Training</th><th>Kalorien</th><th>Notiz</th></tr></thead>
       <tbody>${days
-        .map((d) => `<tr class="${d.weight === null && d.steps === null && d.sleep === null && !d.note ? 'empty-day' : ''}">
+        .map((d) => `<tr class="${d.weight === null && d.steps === null && d.sleep === null && !d.note && d.training === null && d.caloriesOk === null ? 'empty-day' : ''}">
           <td>${esc(shortD(d.date))}</td>
           <td class="num">${d.weight !== null ? num(d.weight, 1) : '–'}</td>
           <td class="num ${goals.stepsGoal && d.steps !== null ? (d.steps >= goals.stepsGoal ? 'good' : '') : ''}">${num(d.steps)}</td>
           <td class="num">${fmtSleep(d.sleep)}</td>
+          <td>${d.training === true ? '🏋️ Ja' : d.training === false ? '<span class="muted">Nein</span>' : '–'}</td>
+          <td>${kcalCell(d)}</td>
           <td class="note">${esc(d.note || '')}</td></tr>`)
         .join('')}</tbody></table>`;
 
@@ -1250,6 +1341,13 @@
       : '';
 
     const nextOpen = clients.slice(idx + 1).find((c) => !c.doneThisWeek) || clients.find((c, i) => i !== idx && !c.doneThisWeek);
+    const kcalRow = `
+      <div class="field plan-field" data-plan="calories"><label for="p-kmin">Zielkalorien pro Tag <span class="muted small">aktuell: ${esc(fmtKcal(goals.caloriesMin, goals.caloriesMax))}</span></label>
+        <div class="kcal-range">
+          <div class="input-unit"><input id="p-kmin" name="caloriesMin" inputmode="numeric" placeholder="von" value="${goals.caloriesMin ?? ''}"><span>kcal</span></div>
+          <span>–</span>
+          <div class="input-unit"><input id="p-kmax" name="caloriesMax" inputmode="numeric" placeholder="bis" aria-label="Kalorien bis" value="${goals.caloriesMax !== null && goals.caloriesMax !== goals.caloriesMin ? goals.caloriesMax : ''}"><span>kcal</span></div>
+        </div></div>`;
     const fieldRow = (key, label, unit, mode, placeholder) => `
       <div class="field plan-field"><label for="p-${key}">${label} <span class="muted small">aktuell: ${esc(fmtPlan(key, goals[key]))}</span></label>
         <div class="input-unit"><input id="p-${key}" name="${key}" inputmode="${mode}" placeholder="${placeholder}"
@@ -1287,7 +1385,7 @@
           <div class="field" style="margin-top:12px"><label for="ci-msg">Nachricht an ${esc(rv.client.displayName)}</label>
             <textarea id="ci-msg" name="message" maxlength="4000" rows="6" placeholder="Wie lief die Woche? Was war gut, was nehmen wir uns vor?"></textarea></div>
           <h3 style="margin:4px 0 8px">Plan anpassen <span class="muted small">(optional)</span></h3>
-          ${fieldRow('caloriesGoal', 'Kalorien pro Tag', 'kcal', 'numeric', 'z. B. 2200')}
+          ${kcalRow}
           ${fieldRow('stepsGoal', 'Schritte pro Tag', 'Schritte', 'numeric', 'z. B. 10000')}
           ${fieldRow('sleepGoal', 'Schlaf pro Nacht', 'Std.', 'decimal', 'z. B. 7,5')}
           ${fieldRow('targetWeight', 'Zielgewicht', 'kg', 'decimal', 'z. B. 80')}
@@ -1295,7 +1393,7 @@
           <button class="btn-primary btn-block" type="submit">Check-in senden${nextOpen ? ' & weiter →' : ''}</button>
           ${nextOpen ? `<a class="btn btn-ghost btn-block" href="#/checkin/${nextOpen.id}">Überspringen → ${esc(nextOpen.displayName)}</a>` : ''}
           <p class="error" hidden></p>
-          <p class="hint">Der Klient sieht den Check-in oben in seiner Übersicht und kann antworten oder die Anpassungen mit einem Klick annehmen.</p>
+          <p class="hint">Der Check-in erscheint oben in der Übersicht des Klienten (nicht im Chat). Er kann die Anpassungen mit einem Klick annehmen – nur seine Antwort landet im Chat.</p>
         </form>
       </div>`;
 
@@ -1316,13 +1414,25 @@
     onCleanup(() => window.removeEventListener('resize', drawCiCharts));
 
     const form = document.getElementById('checkin-form');
-    const keys = ['caloriesGoal', 'stepsGoal', 'sleepGoal', 'targetWeight'];
+    const keys = ['stepsGoal', 'sleepGoal', 'targetWeight'];
     const readProposal = () => {
       const p = {};
       for (const k of keys) {
         const v = parseNum(form[k].value);
         if (Number.isNaN(v)) throw new Error('Bitte nur Zahlen eingeben.');
         if (v !== null && v !== goals[k]) p[k] = v;
+      }
+      let lo = parseNum(form.caloriesMin.value);
+      let hi = parseNum(form.caloriesMax.value);
+      if (Number.isNaN(lo) || Number.isNaN(hi)) throw new Error('Bitte nur Zahlen eingeben.');
+      if (lo !== null || hi !== null) {
+        lo = lo ?? hi;
+        hi = hi ?? lo;
+        if (lo > hi) throw new Error('Kalorien: „von“ muss kleiner als „bis“ sein.');
+        if (lo !== goals.caloriesMin || hi !== goals.caloriesMax) {
+          p.caloriesMin = lo;
+          p.caloriesMax = hi;
+        }
       }
       return p;
     };
@@ -1335,7 +1445,11 @@
         /* shown on submit */
       }
       for (const k of keys) form[k].closest('.plan-field').classList.toggle('changed', k in p);
-      const list = Object.keys(p).map((k) => `${PLAN_LABELS[k]}: ${fmtPlan(k, goals[k])} → ${fmtPlan(k, p[k])}`);
+      form.querySelector('[data-plan=calories]').classList.toggle('changed', 'caloriesMin' in p);
+      const list = keys.filter((k) => k in p).map((k) => `${PLAN_LABELS[k]}: ${fmtPlan(k, goals[k])} → ${fmtPlan(k, p[k])}`);
+      if ('caloriesMin' in p) {
+        list.unshift(`${PLAN_LABELS.calories}: ${fmtKcal(goals.caloriesMin, goals.caloriesMax)} → ${fmtKcal(p.caloriesMin, p.caloriesMax)}`);
+      }
       hint.innerHTML = list.length
         ? `<strong>Vorschlag an den Klienten:</strong><br>${list.map(esc).join('<br>')}`
         : 'Keine Änderungen am Plan – nur Feedback.';
@@ -1612,8 +1726,13 @@
         <div class="stack">
           <form class="card" id="goals-form" novalidate>
             <h2 style="margin-bottom:12px">Plan &amp; Ziele</h2>
-            <div class="field"><label for="g-kcal">Kalorien pro Tag</label>
-              <div class="input-unit"><input id="g-kcal" name="caloriesGoal" inputmode="numeric" placeholder="z. B. 2200"><span>kcal</span></div></div>
+            <div class="field"><label for="g-kmin">Zielkalorien pro Tag <span class="muted small">(Range, z. B. 2200 – 2300)</span></label>
+              <div class="kcal-range">
+                <div class="input-unit"><input id="g-kmin" name="caloriesMin" inputmode="numeric" placeholder="von"><span>kcal</span></div>
+                <span>–</span>
+                <div class="input-unit"><input id="g-kmax" name="caloriesMax" inputmode="numeric" placeholder="bis" aria-label="Kalorien bis"><span>kcal</span></div>
+              </div>
+              <div class="hint">Für einen festen Wert nur „von“ ausfüllen. Im Diagramm erscheint der Mittelwert.</div></div>
             <div class="field"><label for="g-w">Zielgewicht</label>
               <div class="input-unit"><input id="g-w" name="targetWeight" inputmode="decimal"><span>kg</span></div></div>
             <div class="field"><label for="g-s">Schritte pro Tag</label>
@@ -1643,7 +1762,8 @@
     gf.targetWeight.value = show(goals.targetWeight);
     gf.stepsGoal.value = show(goals.stepsGoal);
     gf.sleepGoal.value = show(goals.sleepGoal);
-    gf.caloriesGoal.value = show(goals.caloriesGoal);
+    gf.caloriesMin.value = show(goals.caloriesMin);
+    gf.caloriesMax.value = show(goals.caloriesMax === goals.caloriesMin ? null : goals.caloriesMax);
     gf.addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = gf.querySelector('.error');
@@ -1653,7 +1773,8 @@
           targetWeight: parseNum(gf.targetWeight.value),
           stepsGoal: parseNum(gf.stepsGoal.value),
           sleepGoal: parseNum(gf.sleepGoal.value),
-          caloriesGoal: parseNum(gf.caloriesGoal.value),
+          caloriesMin: parseNum(gf.caloriesMin.value),
+          caloriesMax: parseNum(gf.caloriesMax.value),
         };
         if (Object.values(body).some(Number.isNaN)) throw new Error('Bitte nur Zahlen eingeben.');
         await api('PUT', `/api/goals?userId=${id}`, body);

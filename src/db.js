@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS entries (
   steps      INTEGER,
   sleep      REAL,
   note       TEXT,
+  calories_ok INTEGER,
+  calories   INTEGER,
+  training   INTEGER,
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, date)
 );
@@ -92,7 +95,9 @@ CREATE TABLE IF NOT EXISTS goals (
   target_weight REAL,
   steps_goal    INTEGER,
   sleep_goal    REAL,
-  calories_goal INTEGER
+  calories_goal INTEGER,
+  calories_min  INTEGER,
+  calories_max  INTEGER
 );
 
 -- Every change of a client's plan, for the history charts.
@@ -103,6 +108,8 @@ CREATE TABLE IF NOT EXISTS goal_history (
   steps_goal    INTEGER,
   sleep_goal    REAL,
   calories_goal INTEGER,
+  calories_min  INTEGER,
+  calories_max  INTEGER,
   source        TEXT NOT NULL DEFAULT 'coach',
   changed_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
@@ -130,10 +137,35 @@ function openDb(file) {
   db.exec('PRAGMA foreign_keys = ON;');
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
-  // Databases created before the calorie goal existed get the new column.
-  const goalCols = db.prepare('PRAGMA table_info(goals)').all().map((c) => c.name);
-  if (!goalCols.includes('calories_goal')) db.exec('ALTER TABLE goals ADD COLUMN calories_goal INTEGER');
+  migrate(db);
   return db;
+}
+
+function addColumns(db, table, columns) {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  for (const [name, type] of columns) {
+    if (!existing.includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+  }
+}
+
+/** Brings databases created by older versions up to date. Safe to run on every start. */
+function migrate(db) {
+  addColumns(db, 'goals', [['calories_goal', 'INTEGER'], ['calories_min', 'INTEGER'], ['calories_max', 'INTEGER']]);
+  addColumns(db, 'goal_history', [['calories_min', 'INTEGER'], ['calories_max', 'INTEGER']]);
+  addColumns(db, 'entries', [['calories_ok', 'INTEGER'], ['calories', 'INTEGER'], ['training', 'INTEGER']]);
+
+  // Single calorie goals become a range with the same lower and upper bound.
+  db.exec(`UPDATE goals SET calories_min = calories_goal, calories_max = calories_goal
+           WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
+  db.exec(`UPDATE goal_history SET calories_min = calories_goal, calories_max = calories_goal
+           WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
+
+  // Check-ins no longer post into the chat: remove the automatic messages older versions created.
+  const flag = db.prepare("SELECT 1 FROM settings WHERE key = 'migration_checkin_chat_cleanup'").get();
+  if (!flag) {
+    db.exec(`DELETE FROM messages WHERE body LIKE '📋 Wöchentlicher Check-in%' OR body LIKE '✅ Anpassungen angenommen:%'`);
+    db.exec("INSERT INTO settings (key, value) VALUES ('migration_checkin_chat_cleanup', 'done')");
+  }
 }
 
 function hashPassword(password) {

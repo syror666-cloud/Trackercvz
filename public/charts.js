@@ -191,5 +191,127 @@
     overlay.addEventListener('pointerleave', hide);
   }
 
-  window.Charts = { render, dayNum, dayStr };
+  /**
+   * Calorie chart: target range as a band, its midpoint as a stepped line (labelled with the current value),
+   * and one marker per day: green = plan kept, red = not kept (at the eaten calories, if given).
+   * opts: { from, to, targets: [{date, min, max}], days: [{date, ok, kcal}], height }
+   */
+  function renderCalories(container, opts) {
+    container.innerHTML = '';
+    container.classList.add('chart');
+    const targets = new Map(opts.targets.map((t) => [dayNum(t.date), t]));
+    const days = opts.days.filter((d) => d.ok === true || d.ok === false).map((d) => ({ ...d, x: dayNum(d.date) }));
+    const values = [];
+    for (const t of targets.values()) values.push(t.min, t.max);
+    for (const d of days) if (d.ok === false && d.kcal) values.push(d.kcal);
+    if (!values.length) {
+      const empty = document.createElement('div');
+      empty.className = 'chart-empty';
+      empty.textContent = 'Noch keine Kalorienvorgabe in diesem Zeitraum';
+      container.appendChild(empty);
+      return;
+    }
+
+    const width = Math.max(container.clientWidth, 260);
+    const height = opts.height || 200;
+    const pad = { l: 48, r: 44, t: 14, b: 26 };
+    const pw = width - pad.l - pad.r;
+    const ph = height - pad.t - pad.b;
+    const x0 = dayNum(opts.from) - 0.5;
+    const x1 = Math.max(dayNum(opts.to), dayNum(opts.from) + 1) + 0.5;
+    let yMin = Math.min(...values);
+    let yMax = Math.max(...values);
+    if (yMax - yMin < 200) { yMin -= 100; yMax += 100; }
+    const step = niceStep(yMax - yMin, 4);
+    yMin = Math.floor((yMin - step * 0.3) / step) * step;
+    yMax = Math.ceil((yMax + step * 0.3) / step) * step;
+    const sx = (x) => pad.l + ((x - x0) / (x1 - x0)) * pw;
+    const sy = (y) => pad.t + (1 - (y - yMin) / (yMax - yMin)) * ph;
+
+    const svg = el('svg', { viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': 'Kalorienvorgabe und Einhaltung' }, container);
+    for (let y = yMin; y <= yMax + step / 1000; y += step) {
+      el('line', { x1: pad.l, x2: width - pad.r, y1: sy(y), y2: sy(y), class: 'grid' }, svg);
+      el('text', { x: pad.l - 6, y: sy(y) + 4, class: 'axis', 'text-anchor': 'end' }, svg).textContent = fmt(y, 0);
+    }
+    const labelCount = Math.max(2, Math.min(6, Math.floor(pw / 70)));
+    const xStep = Math.max(1, Math.ceil((x1 - x0) / (labelCount - 1)));
+    for (let x = Math.ceil(x0); x <= Math.floor(x1); x += xStep) {
+      el('text', { x: sx(x), y: height - 8, class: 'axis', 'text-anchor': 'middle' }, svg).textContent = shortDate(x);
+    }
+
+    // Band + midpoint line, day by day (gaps where no plan existed yet).
+    const sorted = [...targets.entries()].filter(([x]) => x >= x0 && x <= x1).sort((a, b) => a[0] - b[0]);
+    let line = '';
+    let prevX = null;
+    let prevMid = null;
+    for (const [x, t] of sorted) {
+      const mid = (t.min + t.max) / 2;
+      el('rect', { x: sx(x - 0.5), y: sy(t.max), width: Math.max(0.5, sx(x + 0.5) - sx(x - 0.5) + 0.3), height: Math.max(1.5, sy(t.min) - sy(t.max)), class: 'kcal-band' }, svg);
+      if (prevX === x - 1) line += `${prevMid !== mid ? `V${sy(mid).toFixed(1)}` : ''}H${sx(x + 0.5).toFixed(1)}`;
+      else line += `M${sx(x - 0.5).toFixed(1)},${sy(mid).toFixed(1)}H${sx(x + 0.5).toFixed(1)}`;
+      prevX = x;
+      prevMid = mid;
+    }
+    if (line) el('path', { d: line, class: 'kcal-mid' }, svg);
+    if (sorted.length) {
+      const [lx, lt] = sorted[sorted.length - 1];
+      el('text', { x: sx(lx + 0.5) + 4, y: sy((lt.min + lt.max) / 2) + 4, class: 'kcal-mid-label' }, svg).textContent = fmt((lt.min + lt.max) / 2, 0);
+    }
+
+    // Daily markers
+    const markerY = (d) => {
+      const t = targets.get(d.x);
+      if (d.ok === false && d.kcal) return d.kcal;
+      return t ? (t.min + t.max) / 2 : null;
+    };
+    for (const d of days) {
+      const y = markerY(d);
+      if (y === null || d.x < x0 || d.x > x1) continue;
+      const cls = d.ok ? 'kcal-ok' : d.kcal ? 'kcal-miss' : 'kcal-miss kcal-unknown';
+      el('circle', { cx: sx(d.x), cy: sy(y), r: 4, class: cls }, svg);
+    }
+
+    // Tooltip
+    const cursor = el('line', { y1: pad.t, y2: pad.t + ph, class: 'cursor', visibility: 'hidden' }, svg);
+    const tip = document.createElement('div');
+    tip.className = 'chart-tip';
+    tip.hidden = true;
+    container.appendChild(tip);
+    const overlay = el('rect', { x: pad.l, y: pad.t, width: pw, height: ph, fill: 'transparent' }, svg);
+    const known = [...new Set([...sorted.map(([x]) => x), ...days.map((d) => d.x)])];
+    const show = (evt) => {
+      const rect = svg.getBoundingClientRect();
+      const xv = x0 + ((((evt.clientX - rect.left) / rect.width) * width - pad.l) / pw) * (x1 - x0);
+      if (!known.length) return;
+      const x = known.reduce((a, b) => (Math.abs(b - xv) < Math.abs(a - xv) ? b : a));
+      const t = targets.get(x);
+      const d = days.find((dd) => dd.x === x);
+      cursor.setAttribute('x1', sx(x));
+      cursor.setAttribute('x2', sx(x));
+      cursor.setAttribute('visibility', 'visible');
+      tip.innerHTML = '';
+      const strong = document.createElement('strong');
+      strong.textContent = t ? `Ø ${fmt((t.min + t.max) / 2, 0)} kcal` : 'Keine Vorgabe';
+      const lines = [longDate(x)];
+      if (t && t.min !== t.max) lines.push(`Vorgabe ${fmt(t.min, 0)}–${fmt(t.max, 0)} kcal`);
+      if (d) lines.push(d.ok ? '✓ Plan eingehalten' : `✗ Nicht eingehalten${d.kcal ? ` · ${fmt(d.kcal, 0)} kcal` : ''}`);
+      tip.append(strong);
+      for (const l of lines) {
+        const span = document.createElement('span');
+        span.textContent = l;
+        tip.append(span);
+      }
+      tip.hidden = false;
+      const left = (sx(x) / width) * rect.width;
+      tip.style.left = `${Math.min(Math.max(left, 80), rect.width - 80)}px`;
+    };
+    overlay.addEventListener('pointermove', show);
+    overlay.addEventListener('pointerdown', show);
+    overlay.addEventListener('pointerleave', () => {
+      cursor.setAttribute('visibility', 'hidden');
+      tip.hidden = true;
+    });
+  }
+
+  window.Charts = { render, renderCalories, dayNum, dayStr };
 })();

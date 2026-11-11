@@ -122,8 +122,19 @@ function entryRow(r) {
     steps: r.steps,
     sleep: r.sleep,
     note: r.note,
+    caloriesOk: r.calories_ok === null || r.calories_ok === undefined ? null : Boolean(r.calories_ok),
+    calories: r.calories ?? null,
+    training: r.training === null || r.training === undefined ? null : Boolean(r.training),
     updatedAt: r.updated_at,
   };
+}
+
+/** Yes/no answers: true/false, null clears, undefined keeps the saved value. Stored as 1/0. */
+function boolField(value, name) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'boolean') throw new HttpError(400, `${name}: nur Ja oder Nein`);
+  return value ? 1 : 0;
 }
 
 function goalsRow(r) {
@@ -131,28 +142,83 @@ function goalsRow(r) {
     targetWeight: r ? r.target_weight : null,
     stepsGoal: r ? r.steps_goal : null,
     sleepGoal: r ? r.sleep_goal : null,
-    caloriesGoal: r ? r.calories_goal : null,
+    caloriesMin: r ? r.calories_min ?? null : null,
+    caloriesMax: r ? r.calories_max ?? null : null,
   };
 }
 
 const PLAN_FIELDS = {
-  caloriesGoal: { name: 'Kalorien', min: 800, max: 8000, integer: true, unit: 'kcal', label: 'Kalorien pro Tag' },
+  caloriesMin: { name: 'Kalorien (von)', min: 800, max: 8000, integer: true },
+  caloriesMax: { name: 'Kalorien (bis)', min: 800, max: 8000, integer: true },
   stepsGoal: { name: 'Schrittziel', min: 0, max: 200000, integer: true, unit: 'Schritte', label: 'Schritte pro Tag' },
   sleepGoal: { name: 'Schlafziel', min: 0, max: 24, unit: 'Std.', label: 'Schlaf pro Nacht' },
   targetWeight: { name: 'Zielgewicht', min: 20, max: 400, unit: 'kg', label: 'Zielgewicht' },
 };
 
+/**
+ * Validates plan values from a request. A single calorie value becomes a range with equal bounds.
+ * Keys that are missing stay undefined.
+ */
+function parsePlan(raw) {
+  const p = {};
+  for (const [k, spec] of Object.entries(PLAN_FIELDS)) p[k] = numberField(raw[k], spec);
+  const lo = p.caloriesMin ?? null;
+  const hi = p.caloriesMax ?? null;
+  if (lo !== null || hi !== null) {
+    p.caloriesMin = lo ?? hi;
+    p.caloriesMax = hi ?? lo;
+    if (p.caloriesMin > p.caloriesMax) throw new HttpError(400, 'Kalorien: „von“ muss kleiner als „bis“ sein');
+  }
+  return p;
+}
+
+/** Older check-ins stored a single calorie goal; read it as a range. */
+function normalizePlan(obj) {
+  const o = { ...obj };
+  if ('caloriesGoal' in o) {
+    if (!('caloriesMin' in o)) {
+      o.caloriesMin = o.caloriesGoal;
+      o.caloriesMax = o.caloriesGoal;
+    }
+    delete o.caloriesGoal;
+  }
+  return o;
+}
+
+const de = (v, d = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: d });
+
+function fmtKcalRange(min, max) {
+  if (min === null || min === undefined) return '–';
+  return min === max ? `${de(min)} kcal` : `${de(min)}–${de(max)} kcal`;
+}
+
 function fmtPlanValue(key, v) {
   if (v === null || v === undefined) return '–';
   const d = key === 'sleepGoal' || key === 'targetWeight' ? 1 : 0;
-  return `${Number(v).toLocaleString('de-DE', { maximumFractionDigits: d })} ${PLAN_FIELDS[key].unit}`;
+  return `${de(v, d)} ${PLAN_FIELDS[key].unit}`;
 }
 
-/** Readable list of proposed plan changes, e.g. "Kalorien pro Tag: 2.200 kcal → 2.000 kcal". */
+/** Proposed plan changes as {label, before, after}; the calorie range counts as one item. */
+function proposalItems(previous, proposal) {
+  const items = [];
+  if ('caloriesMin' in proposal || 'caloriesMax' in proposal) {
+    items.push({
+      key: 'calories',
+      label: 'Kalorien pro Tag',
+      before: fmtKcalRange(previous.caloriesMin, previous.caloriesMax),
+      after: fmtKcalRange(proposal.caloriesMin ?? previous.caloriesMin, proposal.caloriesMax ?? previous.caloriesMax),
+    });
+  }
+  for (const k of ['stepsGoal', 'sleepGoal', 'targetWeight']) {
+    if (k in proposal) {
+      items.push({ key: k, label: PLAN_FIELDS[k].label, before: fmtPlanValue(k, previous[k]), after: fmtPlanValue(k, proposal[k]) });
+    }
+  }
+  return items;
+}
+
 function describeProposal(previous, proposal) {
-  return Object.keys(PLAN_FIELDS)
-    .filter((k) => k in proposal)
-    .map((k) => `${PLAN_FIELDS[k].label}: ${fmtPlanValue(k, previous[k])} → ${fmtPlanValue(k, proposal[k])}`);
+  return proposalItems(previous, proposal).map((i) => `${i.label}: ${i.before} → ${i.after}`);
 }
 
 const publicUser = (u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role });
@@ -210,11 +276,12 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     entries: db.prepare('SELECT * FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC'),
     entry: db.prepare('SELECT * FROM entries WHERE user_id = ? AND date = ?'),
     upsertEntry: db.prepare(
-      `INSERT INTO entries (user_id, date, weight, steps, sleep, note, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO entries (user_id, date, weight, steps, sleep, note, calories_ok, calories, training, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT (user_id, date) DO UPDATE SET
-         weight = excluded.weight, steps = excluded.steps, sleep = excluded.sleep,
-         note = excluded.note, updated_at = excluded.updated_at`
+         weight = excluded.weight, steps = excluded.steps, sleep = excluded.sleep, note = excluded.note,
+         calories_ok = excluded.calories_ok, calories = excluded.calories, training = excluded.training,
+         updated_at = excluded.updated_at`
     ),
     deleteEntry: db.prepare('DELETE FROM entries WHERE user_id = ? AND date = ?'),
     goals: db.prepare('SELECT * FROM goals WHERE user_id = ?'),
@@ -277,13 +344,15 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
        WHERE u.role = 'client' AND m.read_at IS NULL`
     ),
     upsertGoals: db.prepare(
-      `INSERT INTO goals (user_id, target_weight, steps_goal, sleep_goal, calories_goal) VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO goals (user_id, target_weight, steps_goal, sleep_goal, calories_min, calories_max, calories_goal)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)
        ON CONFLICT (user_id) DO UPDATE SET
-         target_weight = excluded.target_weight, steps_goal = excluded.steps_goal,
-         sleep_goal = excluded.sleep_goal, calories_goal = excluded.calories_goal`
+         target_weight = excluded.target_weight, steps_goal = excluded.steps_goal, sleep_goal = excluded.sleep_goal,
+         calories_min = excluded.calories_min, calories_max = excluded.calories_max, calories_goal = NULL`
     ),
     insertGoalHistory: db.prepare(
-      'INSERT INTO goal_history (user_id, target_weight, steps_goal, sleep_goal, calories_goal, source) VALUES (?, ?, ?, ?, ?, ?)'
+      `INSERT INTO goal_history (user_id, target_weight, steps_goal, sleep_goal, calories_min, calories_max, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     ),
     goalHistory: db.prepare('SELECT * FROM goal_history WHERE user_id = ? ORDER BY id ASC'),
     allEntries: db.prepare('SELECT * FROM entries WHERE user_id = ? ORDER BY date ASC'),
@@ -342,19 +411,21 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   }
 
   function saveGoals(userId, g, source) {
-    q.upsertGoals.run(userId, g.targetWeight ?? null, g.stepsGoal ?? null, g.sleepGoal ?? null, g.caloriesGoal ?? null);
-    q.insertGoalHistory.run(userId, g.targetWeight ?? null, g.stepsGoal ?? null, g.sleepGoal ?? null, g.caloriesGoal ?? null, source);
+    const v = [g.targetWeight ?? null, g.stepsGoal ?? null, g.sleepGoal ?? null, g.caloriesMin ?? null, g.caloriesMax ?? null];
+    q.upsertGoals.run(userId, ...v);
+    q.insertGoalHistory.run(userId, ...v, source);
   }
 
   function checkinRow(ci) {
-    const proposal = JSON.parse(ci.proposal);
-    const previous = JSON.parse(ci.previous);
+    const proposal = normalizePlan(JSON.parse(ci.proposal));
+    const previous = normalizePlan(JSON.parse(ci.previous));
     return {
       id: ci.id,
       message: ci.message,
       proposal,
       previous,
       changes: describeProposal(previous, proposal),
+      changeItems: proposalItems(previous, proposal),
       status: ci.status,
       createdAt: ci.created_at,
       seenAt: ci.seen_at,
@@ -539,8 +610,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       requireCoach(ctx);
       const c = targetClient(ctx);
       const body = await readBody(ctx.req);
+      const parsed = parsePlan(body);
       const g = {};
-      for (const [k, spec] of Object.entries(PLAN_FIELDS)) g[k] = numberField(body[k], spec) ?? null;
+      for (const k of Object.keys(PLAN_FIELDS)) g[k] = parsed[k] ?? null;
       saveGoals(c.id, g, 'coach');
       return { goals: g };
     }],
@@ -597,22 +669,25 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const message = textField(body.message, { name: 'Nachricht', max: 4000 });
       if (!message) throw new HttpError(400, 'Bitte eine Nachricht für den Check-in schreiben');
       const current = goalsRow(q.goals.get(c.id));
-      const proposal = {};
       const raw = body.proposal && typeof body.proposal === 'object' ? body.proposal : {};
-      for (const [k, spec] of Object.entries(PLAN_FIELDS)) {
-        const v = numberField(raw[k], spec);
-        if (v !== undefined && v !== null && v !== current[k]) proposal[k] = v;
+      const wanted = parsePlan(raw);
+      const proposal = {};
+      for (const k of ['stepsGoal', 'sleepGoal', 'targetWeight']) {
+        if (wanted[k] !== undefined && wanted[k] !== null && wanted[k] !== current[k]) proposal[k] = wanted[k];
+      }
+      if (
+        wanted.caloriesMin !== undefined && wanted.caloriesMin !== null &&
+        (wanted.caloriesMin !== current.caloriesMin || wanted.caloriesMax !== current.caloriesMax)
+      ) {
+        proposal.caloriesMin = wanted.caloriesMin;
+        proposal.caloriesMax = wanted.caloriesMax;
       }
       const id = Number(
         q.insertCheckin.run(c.id, coach.id, message, JSON.stringify(proposal), JSON.stringify(current)).lastInsertRowid
       );
 
-      // Also post it to the chat so the conversation stays in one place.
+      // The check-in itself stays out of the chat; the client gets a push and sees it on the tracker page.
       const changes = describeProposal(current, proposal);
-      const chatText = `📋 Wöchentlicher Check-in\n\n${message}${
-        changes.length ? `\n\nVorgeschlagene Anpassungen:\n${changes.map((l) => `• ${l}`).join('\n')}` : ''
-      }`;
-      q.insertMessage.run(c.id, coach.id, chatText);
       notifier
         .sendToUsers([c.id], {
           title: 'Dein Check-in ist da 📋',
@@ -629,17 +704,16 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const ci = q.checkin.get(Number(id));
       if (!ci || u.role !== 'client' || ci.client_id !== u.id) throw new HttpError(404, 'Check-in nicht gefunden');
       if (ci.status === 'accepted') throw new HttpError(409, 'Bereits angenommen');
-      const proposal = JSON.parse(ci.proposal);
+      const proposal = normalizePlan(JSON.parse(ci.proposal));
       if (!Object.keys(proposal).length) throw new HttpError(400, 'Dieser Check-in enthält keine Anpassungen');
       const goals = { ...goalsRow(q.goals.get(u.id)), ...proposal };
       saveGoals(u.id, goals, 'checkin');
       q.acceptCheckin.run(ci.id);
-      q.insertMessage.run(u.id, u.id, `✅ Anpassungen angenommen:\n${describeProposal(JSON.parse(ci.previous), proposal).map((l) => `• ${l}`).join('\n')}`);
       notifier
         .sendToUsers(notifier.coachIds(), {
           title: `${u.display_name} hat die Anpassungen angenommen ✅`,
-          body: describeProposal(JSON.parse(ci.previous), proposal).join(' · '),
-          url: `/#/client/${u.id}/chat`,
+          body: describeProposal(normalizePlan(JSON.parse(ci.previous)), proposal).join(' · '),
+          url: `/#/checkin/${u.id}`,
         })
         .catch((err) => console.error(err));
       return { checkin: checkinRow(q.checkin.get(ci.id)), goals };
@@ -651,7 +725,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       if (!ci || u.role !== 'client' || ci.client_id !== u.id) throw new HttpError(404, 'Check-in nicht gefunden');
       const body = textField((await readBody(ctx.req)).body, { name: 'Antwort', max: 2000 });
       if (!body) throw new HttpError(400, 'Antwort darf nicht leer sein');
-      q.insertMessage.run(u.id, u.id, `↩️ Antwort auf den Check-in:\n${body}`);
+      const ciDate = new Date(ci.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', timeZone: notifier.timezone });
+      q.insertMessage.run(u.id, u.id, `↩️ Antwort auf den Check-in vom ${ciDate}:\n${body}`);
       q.repliedCheckin.run(ci.id);
       notifier
         .sendToUsers(notifier.coachIds(), {
@@ -880,7 +955,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       for (const k of ['weight', 'steps', 'sleep']) {
         merged[k] = incoming[k] !== undefined && incoming[k] !== null ? incoming[k] : existing[k] ?? null;
       }
-      q.upsertEntry.run(owner.id, date, merged.weight, merged.steps, merged.sleep, existing.note ?? null);
+      q.upsertEntry.run(
+        owner.id, date, merged.weight, merged.steps, merged.sleep, existing.note ?? null,
+        existing.calories_ok ?? null, existing.calories ?? null, existing.training ?? null
+      );
       q.touchHealthToken.run(owner.id);
       return { ok: true, date, saved: incoming };
     }],
@@ -895,10 +973,13 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     ['GET', /^\/api\/entries\.csv$/, async (ctx) => {
       const c = targetClient(ctx);
       const { from, to } = rangeParams(ctx.url);
-      const lines = ['Datum;Gewicht (kg);Schritte;Schlaf (h);Notiz'];
+      const lines = ['Datum;Gewicht (kg);Schritte;Schlaf (h);Trainingstag;Kalorienplan eingehalten;Gegessene kcal;Notiz'];
       for (const r of q.entries.all(c.id, from, to)) {
         const num = (v) => (v === null ? '' : String(v).replace('.', ','));
-        lines.push([r.date, num(r.weight), r.steps ?? '', num(r.sleep), csvCell(r.note)].join(';'));
+        const yn = (v) => (v === null || v === undefined ? '' : v ? 'ja' : 'nein');
+        lines.push(
+          [r.date, num(r.weight), r.steps ?? '', num(r.sleep), yn(r.training), yn(r.calories_ok), r.calories ?? '', csvCell(r.note)].join(';')
+        );
       }
       const safeName = c.username.replace(/[^a-zA-Z0-9._-]/g, '_');
       ctx.res.writeHead(200, {
@@ -920,16 +1001,24 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         steps: numberField(body.steps, { name: 'Schritte', min: 0, max: 200000, integer: true }),
         sleep: numberField(body.sleep, { name: 'Schlaf', min: 0, max: 24 }),
         note: textField(body.note, { name: 'Notiz', max: 500 }),
+        calories_ok: boolField(body.caloriesOk, 'Kalorienplan eingehalten'),
+        calories: numberField(body.calories, { name: 'Gegessene Kalorien', min: 0, max: 15000, integer: true }),
+        training: boolField(body.training, 'Trainingstag'),
       };
+      // "Plan eingehalten" makes a separately entered calorie number meaningless.
+      if (incoming.calories_ok === 1) incoming.calories = null;
       // Fields left out keep their saved value; null clears them.
       const existing = q.entry.get(u.id, date) || {};
       const merged = {};
       for (const k of Object.keys(incoming)) merged[k] = incoming[k] !== undefined ? incoming[k] : existing[k] ?? null;
-      if (merged.weight === null && merged.steps === null && merged.sleep === null && merged.note === null) {
+      if (Object.values(merged).every((v) => v === null)) {
         q.deleteEntry.run(u.id, date);
         return { entry: null };
       }
-      q.upsertEntry.run(u.id, date, merged.weight, merged.steps, merged.sleep, merged.note);
+      q.upsertEntry.run(
+        u.id, date, merged.weight, merged.steps, merged.sleep, merged.note,
+        merged.calories_ok, merged.calories, merged.training
+      );
       return { entry: entryRow(q.entry.get(u.id, date)) };
     }],
 
@@ -959,9 +1048,16 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       stat = fs.statSync(file);
     }
     const ext = path.extname(file);
+    // Always revalidate, so phones pick up a new version right after a deploy; unchanged files answer 304.
+    const etag = `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' });
+      return res.end();
+    }
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': ext === '.html' || file.endsWith('sw.js') ? 'no-cache' : 'public, max-age=300',
+      'Cache-Control': 'no-cache',
+      ETag: etag,
     });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
