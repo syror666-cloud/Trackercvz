@@ -661,11 +661,3 @@ html { overflow-x: hidden; overscroll-behavior-x: none; }
 .activity-table a strong { font: 400 1rem var(--font-display); letter-spacing: var(--track); }
 .reminder-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .reminder-grid .input-unit input { padding-right: 160px; }
-
-/* Swap decisions shown right at the food / meal */
-.swap-note { margin-top: 6px; font-size: 0.84rem; line-height: 1.4; padding: 4px 8px; border-left: 2px solid currentColor; background: var(--surface-2); }
-.swap-note span { color: var(--steel); }
-.swap-note.bad { color: var(--bad); }
-.swap-note.good { color: var(--good); }
-.meal > .swap-note { margin: 0 0 12px; }
-.recent-decisions .swap-req { opacity: 0.85; }
