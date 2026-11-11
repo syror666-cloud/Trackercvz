@@ -1647,6 +1647,17 @@
   }
 
   const SWAP_STATUS = { open: ['Offen', ''], done: ['Umgesetzt ✓', 'good'], declined: ['Abgelehnt', 'bad'] };
+  /** Decisions stay visible next to the food/meal (and in the coach's request card) for two weeks. */
+  const RECENT_DECISION_MS = 14 * 86400000;
+  const isRecentDecision = (r) => r.status !== 'open' && r.resolvedAt && Date.now() - Date.parse(r.resolvedAt) < RECENT_DECISION_MS;
+  function decisionNote(r) {
+    if (!r) return '';
+    const declined = r.status === 'declined';
+    const text = declined
+      ? `✗ Tausch abgelehnt${r.type === 'meal' ? ' (ganze Mahlzeit)' : ''}`
+      : `✓ Tausch umgesetzt${r.type === 'meal' ? ' (ganze Mahlzeit)' : ''}`;
+    return `<div class="swap-note ${declined ? 'bad' : 'good'}">${text}${r.coachNote ? ` – <span>${esc(r.coachNote)}</span>` : ''}</div>`;
+  }
   function requestLine(r) {
     const [label, cls] = SWAP_STATUS[r.status];
     const wish = [r.wantedFood ? r.wantedFood.name : null, r.wish].filter(Boolean).join(' – ');
@@ -1667,21 +1678,30 @@
 
   function drawClientNutrition(plan, goals) {
     const openFor = (pred) => plan.requests.find((r) => r.status === 'open' && pred(r));
+    // Latest decision for an item/meal, unless a newer request is already open again.
+    const decisionFor = (pred) => {
+      const latest = plan.requests.filter(pred).sort((a, b) => b.id - a.id)[0];
+      return latest && isRecentDecision(latest) ? latest : null;
+    };
     const meals = plan.meals
       .map((m) => {
         const mealReq = openFor((r) => r.type === 'meal' && r.mealId === m.id);
+        const mealDecision = mealReq ? null : decisionFor((r) => r.type === 'meal' && r.mealId === m.id);
         return `<section class="card meal">
           <div class="row-between meal-head"><h2>${esc(m.name)}</h2><span class="muted small">${num(m.kcalTotal)} kcal</span></div>
           <ul class="meal-items">${m.items
             .map((i) => {
               const req = openFor((r) => r.itemId === i.id);
+              const decision = req ? null : decisionFor((r) => r.itemId === i.id);
               return `<li>
                 <div class="item-main"><span class="item-name">${esc(i.name)}</span>
-                  <span class="muted small">${esc(fmtAmount(i.amount, i.unit))} · ${num(i.kcalTotal)} kcal</span></div>
+                  <span class="muted small">${esc(fmtAmount(i.amount, i.unit))} · ${num(i.kcalTotal)} kcal</span>
+                  ${decisionNote(decision)}</div>
                 ${req ? '<span class="badge warn">Tausch angefragt</span>' : `<button type="button" class="btn-ghost btn-sm" data-swap-item="${i.id}">⇄ Tauschen</button>`}
               </li>`;
             })
             .join('') || '<li class="muted small">Noch keine Lebensmittel.</li>'}</ul>
+          ${decisionNote(mealDecision)}
           ${mealReq
             ? '<p class="small"><span class="badge warn">Tausch der ganzen Mahlzeit angefragt</span></p>'
             : `<button type="button" class="btn-secondary btn-sm" data-swap-meal="${m.id}">Ganze Mahlzeit tauschen anfragen</button>`}
@@ -1792,11 +1812,13 @@
       }
     };
     const open = plan.requests.filter((r) => r.status === 'open');
-    const history = plan.requests.filter((r) => r.status !== 'open');
+    const history = plan.requests.filter((r) => r.status !== 'open' && !isRecentDecision(r));
     const itemById = new Map(plan.meals.flatMap((m) => m.items.map((i) => [i.id, { ...i, meal: m }])));
 
-    const requestsHtml = open.length
-      ? `<section class="card requests-card"><h2 style="margin-bottom:8px">🍽 Offene Tauschwünsche (${open.length})</h2>
+    const recent = plan.requests.filter(isRecentDecision);
+    const requestsHtml = open.length || recent.length
+      ? `<section class="card requests-card"><h2 style="margin-bottom:8px">🍽 Tauschwünsche${open.length ? ` – ${open.length} offen` : ''}</h2>
+          ${open.length ? '' : '<p class="small muted" style="margin:0 0 4px">Keine offenen Wünsche.</p>'}
           ${open
             .map((r) => {
               const it = r.itemId ? itemById.get(r.itemId) : null;
@@ -1811,6 +1833,7 @@
                 </div></div>`;
             })
             .join('')}
+          ${recent.length ? `<div class="recent-decisions"><div class="small muted" style="margin:10px 0 2px">Entschieden (letzte 14 Tage)</div>${recent.map(requestLine).join('')}</div>` : ''}
         </section>`
       : '';
 
@@ -1869,7 +1892,7 @@
             <p class="small muted">Du legst Mahlzeiten und Mengen fest. ${esc(client.displayName)} sieht den Plan unter „Ernährung“ und kann einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – du bekommst dann eine Push-Nachricht. Ändern kannst nur du.</p>
             <p class="small muted">Lebensmittel fehlt? Einfach den Namen eintippen und „neu anlegen“ – oder im <a href="#/admin">Admin-Tool</a> pflegen.</p>
           </section>
-          ${history.length ? `<section class="card"><h3 style="margin-bottom:8px">Erledigte Tauschwünsche</h3>${history.slice(0, 10).map(requestLine).join('')}</section>` : ''}
+          ${history.length ? `<section class="card"><h3 style="margin-bottom:8px">Frühere Tauschwünsche</h3>${history.slice(0, 10).map(requestLine).join('')}</section>` : ''}
         </aside>
       </div>`;
 
