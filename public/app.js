@@ -119,6 +119,27 @@
     if (first) first.focus();
   }
 
+  /**
+   * Left column on wide screens: scrolls with the page until its bottom (e.g. the save button) is visible,
+   * then stays there. Short columns simply stay at the top.
+   */
+  function stickyColumn(el) {
+    if (!el) return;
+    const update = () => {
+      const gap = 16;
+      const header = topbar.offsetHeight || 60;
+      el.style.top = `${Math.min(header + gap, window.innerHeight - el.offsetHeight - gap)}px`;
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    onCleanup(() => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    });
+  }
+
   // ---------- routing ----------
   async function boot() {
     try {
@@ -303,6 +324,7 @@
       </div>`);
 
     const form = document.getElementById('entry-form');
+    stickyColumn(form);
     const today = todayStr();
     form.date.max = today;
     form.date.value = today;
@@ -1756,6 +1778,7 @@
         <div id="dashboard" class="stack"></div>
       </div>`);
 
+    stickyColumn(document.querySelector('.grid-2 > .stack'));
     const dash = mountDashboard(document.getElementById('dashboard'), { entries, goals, history: goalHistory });
 
     const gf = document.getElementById('goals-form');

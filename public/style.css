@@ -435,13 +435,15 @@ details.card summary { cursor: pointer; }
 }
 .chart svg { cursor: crosshair; }
 
-/* ---- Two-column pages: left column scrolls along (iPad landscape / desktop) ---- */
+/* ---- Two-column pages: the left column moves with the page until its end is visible,
+   then stays put (iPad landscape / desktop). `top` is set in app.js from its height. ---- */
 @media (min-width: 860px) {
-  .grid-2 > :first-child {
-    position: sticky;
-    top: 76px;
-    max-height: calc(100vh - 92px);
-    overflow-y: auto;
-    scrollbar-width: thin;
-  }
+  .grid-2 > :first-child { position: sticky; top: 76px; }
 }
+
+/* ---- Only vertical page scrolling; tables scroll sideways inside their own box ---- */
+html { overflow-x: hidden; overscroll-behavior-x: none; }
+@supports (overflow: clip) {
+  html, body { overflow-x: clip; }
+}
+.table-wrap { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
