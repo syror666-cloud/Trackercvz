@@ -1,7 +1,7 @@
 {
   "name": "trackercvz",
   "version": "1.0.0",
-  "description": "Fitness-Tracker für Coach und Klienten: Gewicht, Schritte, Schlaf",
+  "description": "Thabs Tracker – Fitness-Tracker für Coach und Klienten: Gewicht, Schritte, Schlaf",
   "private": true,
   "main": "server.js",
   "engines": {

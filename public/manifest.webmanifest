@@ -1,10 +1,13 @@
 {
-  "name": "Fitness Tracker",
-  "short_name": "Tracker",
+  "name": "Thabs Tracker",
+  "short_name": "Thabs Tracker",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f6f7f9",
-  "theme_color": "#0f766e",
+  "background_color": "#0a0a0a",
+  "theme_color": "#1d6fd8",
   "lang": "de",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
 }

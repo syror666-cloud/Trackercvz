@@ -126,6 +126,44 @@ test('clients cannot see each other', async (t) => {
   assert.equal(r.data.entries.length, 0);
 });
 
+test('chat between client and coach', async (t) => {
+  const { server, client } = await setup();
+  t.after(() => server.close());
+  const coach = client();
+  await coach('POST', '/api/login', { username: 'coach', password: 'coachpass123' });
+  const a = (await coach('POST', '/api/clients', { username: 'anna', password: 'annapass123' })).data.client.id;
+  const b = (await coach('POST', '/api/clients', { username: 'ben', password: 'benpass1234' })).data.client.id;
+
+  const anna = client();
+  await anna('POST', '/api/login', { username: 'anna', password: 'annapass123' });
+  assert.equal((await anna('POST', '/api/messages', { body: '   ' })).status, 400);
+  assert.equal((await anna('POST', '/api/messages', { body: 'Kannst du mir einen Plan für Beine machen?' })).status, 201);
+
+  assert.equal((await coach('GET', '/api/messages/unread')).data.unread, 1);
+  const list = (await coach('GET', '/api/clients')).data.clients;
+  assert.equal(list.find((c) => c.id === a).unreadMessages, 1);
+  assert.equal(list.find((c) => c.id === b).unreadMessages, 0);
+
+  // Coach reads Anna's thread (marks it read) and answers.
+  const thread = await coach('GET', `/api/messages?userId=${a}`);
+  assert.equal(thread.data.messages.length, 1);
+  assert.equal(thread.data.messages[0].mine, false);
+  assert.equal((await coach('GET', '/api/messages/unread')).data.unread, 0);
+  assert.equal((await coach('POST', `/api/messages?userId=${a}`, { body: 'Klar, kommt morgen!' })).status, 201);
+  assert.equal((await coach('GET', `/api/messages?userId=${b}`)).data.messages.length, 0);
+
+  assert.equal((await anna('GET', '/api/messages/unread')).data.unread, 1);
+  const own = (await anna('GET', '/api/messages')).data.messages;
+  assert.deepEqual(own.map((m) => [m.mine, m.fromCoach]), [[true, false], [false, true]]);
+  const newer = (await anna('GET', `/api/messages?after=${own[0].id}`)).data.messages;
+  assert.equal(newer.length, 1);
+
+  // Ben cannot read Anna's thread.
+  const ben = client();
+  await ben('POST', '/api/login', { username: 'ben', password: 'benpass1234' });
+  assert.equal((await ben('GET', `/api/messages?userId=${a}`)).data.messages.length, 0);
+});
+
 test('rejects non-JSON writes and serves the app shell', async (t) => {
   const { server, base } = await setup();
   t.after(() => server.close());

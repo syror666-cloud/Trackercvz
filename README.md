@@ -1,4 +1,4 @@
-# Fitness Tracker (Coach & Klient)
+# Thabs Tracker (Coach & Klient)
 
 Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und der Coach jederzeit **Einsicht in alle Einträge** hat.
 
@@ -9,6 +9,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - Werte können über den Tag nachgetragen werden; vergangene Tage lassen sich bearbeiten oder löschen
 - Übersicht: aktuelles Gewicht, Veränderung in 7 Tagen und insgesamt, Ø Schritte und Ø Schlaf der letzten 7 Tage, Serie
 - Diagramme: Gewichtsverlauf mit 7-Tage-Durchschnitt, Schritte und Schlaf als Balken (Zeiträume 30 T / 90 T / 1 J / Alle)
+- **Nachrichten:** eigener Chat mit dem Coach für Wünsche, Fragen und Vorschläge
 
 **Coach**
 - Übersicht aller Klienten: letzter Eintrag (farbig markiert, wenn jemand nicht einträgt), Gewicht und Veränderung, Ø Schritte und Ø Schlaf
@@ -16,8 +17,11 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - Ziele festlegen (Zielgewicht, Schritte pro Tag, Schlaf pro Nacht); der Klient sieht sie in seiner Übersicht
 - Klienten anlegen, umbenennen, Passwort neu vergeben, löschen
 - CSV-Export (öffnet sich direkt in Excel)
+- **Nachrichten:** ein Chat pro Klient; ungelesene Nachrichten werden in der Übersicht und in der Navigation angezeigt
 
-Klienten sehen immer nur ihre eigenen Daten.
+Klienten sehen immer nur ihre eigenen Daten und ihren eigenen Chat.
+
+Design: Light Mode in Blau/Weiß, Dark Mode in Orange/Schwarz (folgt automatisch der Geräteeinstellung).
 
 ## Lokal starten
 

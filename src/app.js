@@ -161,7 +161,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date ASC LIMIT 1) AS first_weight,
          (SELECT COUNT(*) FROM entries e WHERE e.user_id = u.id AND e.date > date('now', '-7 days')) AS entries_7d,
          (SELECT AVG(steps) FROM entries e WHERE e.user_id = u.id AND steps IS NOT NULL AND e.date > date('now', '-7 days')) AS avg_steps_7d,
-         (SELECT AVG(sleep) FROM entries e WHERE e.user_id = u.id AND sleep IS NOT NULL AND e.date > date('now', '-7 days')) AS avg_sleep_7d
+         (SELECT AVG(sleep) FROM entries e WHERE e.user_id = u.id AND sleep IS NOT NULL AND e.date > date('now', '-7 days')) AS avg_sleep_7d,
+         (SELECT COUNT(*) FROM messages m WHERE m.client_id = u.id AND m.sender_id = u.id AND m.read_at IS NULL) AS unread_messages
        FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
     ),
     entries: db.prepare('SELECT * FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC'),
@@ -175,6 +176,30 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
     ),
     deleteEntry: db.prepare('DELETE FROM entries WHERE user_id = ? AND date = ?'),
     goals: db.prepare('SELECT * FROM goals WHERE user_id = ?'),
+    messages: db.prepare(
+      `SELECT m.*, u.role AS sender_role, u.display_name AS sender_name
+       FROM messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.client_id = ? AND m.id > ? ORDER BY m.id ASC LIMIT 500`
+    ),
+    lastMessages: db.prepare(
+      `SELECT * FROM (
+         SELECT m.*, u.role AS sender_role, u.display_name AS sender_name
+         FROM messages m JOIN users u ON u.id = m.sender_id
+         WHERE m.client_id = ? ORDER BY m.id DESC LIMIT 300
+       ) ORDER BY id ASC`
+    ),
+    insertMessage: db.prepare('INSERT INTO messages (client_id, sender_id, body) VALUES (?, ?, ?)'),
+    markRead: db.prepare(
+      `UPDATE messages SET read_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+       WHERE client_id = ? AND sender_id <> ? AND read_at IS NULL`
+    ),
+    unreadForClient: db.prepare(
+      'SELECT COUNT(*) AS n FROM messages WHERE client_id = ? AND sender_id <> ? AND read_at IS NULL'
+    ),
+    unreadForCoach: db.prepare(
+      `SELECT COUNT(*) AS n FROM messages m JOIN users u ON u.id = m.sender_id
+       WHERE u.role = 'client' AND m.read_at IS NULL`
+    ),
     upsertGoals: db.prepare(
       `INSERT INTO goals (user_id, target_weight, steps_goal, sleep_goal) VALUES (?, ?, ?, ?)
        ON CONFLICT (user_id) DO UPDATE SET
@@ -298,6 +323,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
           entries7d: r.entries_7d,
           avgSteps7d: r.avg_steps_7d,
           avgSleep7d: r.avg_sleep_7d,
+          unreadMessages: r.unread_messages,
         })),
       };
     }],
@@ -351,6 +377,42 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
       };
       q.upsertGoals.run(c.id, g.targetWeight, g.stepsGoal, g.sleepGoal);
       return { goals: g };
+    }],
+
+    // ---- Messages (one thread per client, between client and coach) ----
+    ['GET', /^\/api\/messages\/unread$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const n = u.role === 'coach' ? q.unreadForCoach.get().n : q.unreadForClient.get(u.id, u.id).n;
+      return { unread: n };
+    }],
+
+    ['GET', /^\/api\/messages$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const c = targetClient(ctx);
+      const after = Number(ctx.url.searchParams.get('after')) || 0;
+      q.markRead.run(c.id, u.id);
+      const rows = after > 0 ? q.messages.all(c.id, after) : q.lastMessages.all(c.id);
+      return {
+        messages: rows.map((m) => ({
+          id: m.id,
+          body: m.body,
+          createdAt: m.created_at,
+          readAt: m.read_at,
+          fromCoach: m.sender_role === 'coach',
+          senderName: m.sender_name,
+          mine: m.sender_id === u.id,
+        })),
+      };
+    }],
+
+    ['POST', /^\/api\/messages$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const c = targetClient(ctx);
+      const body = textField((await readBody(ctx.req)).body, { name: 'Nachricht', max: 2000 });
+      if (!body) throw new HttpError(400, 'Nachricht darf nicht leer sein');
+      const id = Number(q.insertMessage.run(c.id, u.id, body).lastInsertRowid);
+      ctx.res.statusCode = 201;
+      return { id };
     }],
 
     // ---- Entries ----

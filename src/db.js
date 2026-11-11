@@ -30,6 +30,16 @@ CREATE TABLE IF NOT EXISTS entries (
   PRIMARY KEY (user_id, date)
 );
 
+CREATE TABLE IF NOT EXISTS messages (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  read_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS messages_client ON messages (client_id, id);
+
 CREATE TABLE IF NOT EXISTS goals (
   user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   target_weight REAL,

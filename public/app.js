@@ -4,8 +4,11 @@
   const app = document.getElementById('app');
   const topbar = document.getElementById('topbar');
   const dialog = document.getElementById('dialog');
+  const nav = document.getElementById('nav');
   let me = null;
-  let resizeHandler = null;
+  let cleanups = [];
+  let unreadTimer = null;
+  const onCleanup = (fn) => cleanups.push(fn);
 
   // ---------- helpers ----------
   const esc = (s) =>
@@ -127,8 +130,8 @@
   }
 
   function setView(html) {
-    if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-    resizeHandler = null;
+    cleanups.forEach((fn) => fn());
+    cleanups = [];
     app.innerHTML = html;
     window.scrollTo(0, 0);
   }
@@ -136,16 +139,49 @@
   function route() {
     if (!me) {
       topbar.hidden = true;
+      clearInterval(unreadTimer);
+      unreadTimer = null;
       return renderLogin();
     }
     topbar.hidden = false;
     document.getElementById('whoami').textContent = `${me.displayName} · ${me.role === 'coach' ? 'Coach' : 'Klient'}`;
-    const m = location.hash.match(/^#\/client\/(\d+)/);
+    renderNav();
+    if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
+    refreshUnread();
+    const m = location.hash.match(/^#\/client\/(\d+)(\/chat)?/);
     if (me.role === 'coach') {
-      if (m) return renderCoachClient(Number(m[1]));
+      if (m) return renderCoachClient(Number(m[1]), m[2] ? 'chat' : 'overview');
       return renderCoachHome();
     }
+    if (location.hash === '#/chat') return renderClientChat();
     return renderClientHome();
+  }
+
+  function renderNav() {
+    const links =
+      me.role === 'coach'
+        ? [['#/', 'Klienten', true]]
+        : [['#/', 'Tracker', false], ['#/chat', 'Nachrichten', true]];
+    const current = me.role === 'coach' ? '#/' : location.hash === '#/chat' ? '#/chat' : '#/';
+    nav.innerHTML = links
+      .map(
+        ([href, label, badge]) =>
+          `<a href="${href}"${href === current ? ' aria-current="page"' : ''}>${label}${badge ? '<span class="count" data-unread hidden></span>' : ''}</a>`
+      )
+      .join('');
+  }
+
+  async function refreshUnread() {
+    if (!me) return;
+    try {
+      const { unread } = await api('GET', '/api/messages/unread');
+      nav.querySelectorAll('[data-unread]').forEach((b) => {
+        b.textContent = unread > 99 ? '99+' : unread;
+        b.hidden = !unread;
+      });
+    } catch {
+      /* ignore – shown again on next poll */
+    }
   }
 
   window.addEventListener('hashchange', route);
@@ -181,7 +217,7 @@
     setView(`
       <div class="login-wrap">
         <form class="card login-card" id="login-form">
-          <div class="brand"><img src="/icon.svg" alt="" width="32" height="32"><span>Fitness Tracker</span></div>
+          <img class="login-logo" src="/logo.jpg" alt="Thabs Tracker" width="900" height="600">
           <div class="field"><label for="u">Benutzername</label>
             <input id="u" name="username" autocomplete="username" autocapitalize="none" required></div>
           <div class="field"><label for="p">Passwort</label>
@@ -502,11 +538,12 @@
     }
 
     let resizeTimer;
-    resizeHandler = () => {
+    const resizeHandler = () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(drawCharts, 150);
     };
     window.addEventListener('resize', resizeHandler);
+    onCleanup(() => window.removeEventListener('resize', resizeHandler));
 
     draw();
     return {
@@ -521,6 +558,116 @@
     };
   }
 
+  // ---------- chat ----------
+  function renderClientChat() {
+    setView('<div class="page-head"><div><h1>Nachrichten</h1></div></div><div id="chat"></div>');
+    mountChat(document.getElementById('chat'), {
+      query: '',
+      title: 'Dein Draht zum Coach',
+      subtitle: 'Wünsche, Fragen und Vorschläge – nur dein Coach liest mit.',
+      empty: 'Noch keine Nachrichten. Schreib deinem Coach, was dir auf dem Herzen liegt – z. B. Wünsche zum Training, Fragen zur Ernährung oder Vorschläge.',
+    });
+  }
+
+  function mountChat(root, { query, title, subtitle, empty }) {
+    root.innerHTML = `
+      <section class="card chat">
+        <div class="chat-head"><h2>${esc(title)}</h2><p class="muted small">${esc(subtitle)}</p></div>
+        <div class="chat-log" aria-live="polite"><p class="chat-empty">Lade…</p></div>
+        <form class="chat-form">
+          <textarea name="body" rows="1" maxlength="2000" placeholder="Nachricht schreiben…" aria-label="Nachricht"></textarea>
+          <button class="btn-primary" type="submit">Senden</button>
+        </form>
+      </section>`;
+    const log = root.querySelector('.chat-log');
+    const form = root.querySelector('.chat-form');
+    const input = form.body;
+    let messages = [];
+    let lastId = 0;
+    let stopped = false;
+    let scrolledOnce = false;
+
+    const timeOf = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const dayOf = (iso) => {
+      const d = new Date(iso);
+      const local = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      const diff = daysBetween(local, todayStr());
+      return diff === 0 ? 'Heute' : diff === 1 ? 'Gestern' : fmtDate(local);
+    };
+
+    function draw() {
+      if (!messages.length) {
+        log.innerHTML = `<p class="chat-empty">${esc(empty)}</p>`;
+        return;
+      }
+      const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+      let day = '';
+      log.innerHTML = messages
+        .map((m) => {
+          const d = dayOf(m.createdAt);
+          const sep = d !== day ? `<div class="chat-day">${esc(d)}</div>` : '';
+          day = d;
+          return `${sep}<div class="msg ${m.mine ? 'mine' : 'theirs'}">${esc(m.body)}<time>${timeOf(m.createdAt)}</time></div>`;
+        })
+        .join('');
+      if (nearBottom || !scrolledOnce) log.scrollTop = log.scrollHeight;
+      scrolledOnce = true;
+    }
+
+    async function load() {
+      try {
+        const { messages: fresh } = await api('GET', `/api/messages${query}${query ? '&' : '?'}after=${lastId}`);
+        if (stopped) return;
+        if (fresh.length || !lastId) {
+          messages = messages.concat(fresh);
+          if (fresh.length) lastId = fresh[fresh.length - 1].id;
+          draw();
+          refreshUnread();
+        }
+      } catch {
+        /* retry on next poll */
+      }
+    }
+
+    function autosize() {
+      input.style.height = 'auto';
+      input.style.height = `${Math.min(input.scrollHeight + 2, 160)}px`;
+    }
+    input.addEventListener('input', autosize);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = input.value.trim();
+      if (!body) return;
+      const btn = form.querySelector('button');
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/messages${query}`, { body });
+        input.value = '';
+        autosize();
+        await load();
+        log.scrollTop = log.scrollHeight;
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    });
+
+    load();
+    const timer = setInterval(load, 8000);
+    onCleanup(() => {
+      stopped = true;
+      clearInterval(timer);
+    });
+  }
+
   // ---------- coach: overview ----------
   async function renderCoachHome() {
     setView('<p class="muted">Lade…</p>');
@@ -531,10 +678,13 @@
         const days = c.lastEntry ? daysBetween(c.lastEntry, todayStr()) : null;
         const cls = days === null ? 'bad' : days <= 1 ? 'good' : days <= 3 ? 'warn' : 'bad';
         const delta = c.lastWeight !== null && c.firstWeight !== null ? c.lastWeight - c.firstWeight : null;
-        return `<a class="card client-card" href="#/client/${c.id}">
+        return `<a class="card client-card" href="#/client/${c.id}${c.unreadMessages ? '/chat' : ''}">
           <div class="row-between">
             <h3>${esc(c.displayName)}</h3>
-            <span class="badge ${cls}">${relDay(c.lastEntry)}</span>
+            <div class="row" style="gap:6px">
+              ${c.unreadMessages ? `<span class="unread-badge">💬 ${c.unreadMessages} neu</span>` : ''}
+              <span class="badge ${cls}">${relDay(c.lastEntry)}</span>
+            </div>
           </div>
           <div class="muted small">@${esc(c.username)} · ${c.entries7d}/7 Tage eingetragen</div>
           <div class="metrics">
@@ -583,7 +733,7 @@
   }
 
   function showCredentials(name, username, password, after) {
-    const text = `Dein Zugang zum Fitness Tracker\nAdresse: ${location.origin}\nBenutzername: ${username}\nPasswort: ${password}`;
+    const text = `Dein Zugang zum Thabs Tracker\nAdresse: ${location.origin}\nBenutzername: ${username}\nPasswort: ${password}`;
     dialog.innerHTML = `<form method="dialog">
       <h2>Zugang für ${esc(name)}</h2>
       <p class="muted small">Schick diese Daten an deinen Klienten. Das Passwort wird danach nicht mehr angezeigt.</p>
@@ -605,22 +755,23 @@
   }
 
   // ---------- coach: client detail ----------
-  async function renderCoachClient(id) {
+  async function renderCoachClient(id, tab) {
     setView('<p class="muted">Lade…</p>');
     let clients, entries, goals;
     try {
       [{ clients }, { entries }, { goals }] = await Promise.all([
         api('GET', '/api/clients'),
-        api('GET', `/api/entries?userId=${id}`),
-        api('GET', `/api/goals?userId=${id}`),
+        tab === 'chat' ? { entries: [] } : api('GET', `/api/entries?userId=${id}`),
+        tab === 'chat' ? { goals: {} } : api('GET', `/api/goals?userId=${id}`),
       ]);
+      if (!clients.some((c) => c.id === id)) throw new Error('Klient nicht gefunden');
     } catch (err) {
       setView(`<a class="back" href="#/">← Alle Klienten</a><div class="card empty-state">${esc(err.message)}</div>`);
       return;
     }
     const client = clients.find((c) => c.id === id);
 
-    setView(`
+    const head = `
       <a class="back" href="#/">← Alle Klienten</a>
       <div class="page-head">
         <div><h1>${esc(client.displayName)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p></div>
@@ -628,6 +779,26 @@
           <a class="btn btn-secondary" href="/api/entries.csv?userId=${id}">CSV exportieren</a>
         </div>
       </div>
+      <nav class="tabs" aria-label="Bereiche">
+        <a href="#/client/${id}"${tab === 'chat' ? '' : ' aria-current="page"'}>Übersicht</a>
+        <a href="#/client/${id}/chat"${tab === 'chat' ? ' aria-current="page"' : ''}>Nachrichten${
+          client.unreadMessages && tab !== 'chat' ? ` <span class="count">${client.unreadMessages}</span>` : ''
+        }</a>
+      </nav>`;
+
+    if (tab === 'chat') {
+      setView(`${head}<div id="chat"></div>`);
+      mountChat(document.getElementById('chat'), {
+        query: `?userId=${id}`,
+        title: `Nachrichten mit ${client.displayName}`,
+        subtitle: 'Wünsche, Fragen und Vorschläge deines Klienten',
+        empty: `${client.displayName} hat dir noch nicht geschrieben. Du kannst das Gespräch auch selbst beginnen.`,
+      });
+      return;
+    }
+
+    setView(`
+      ${head}
       <div class="grid-2">
         <div class="stack">
           <form class="card" id="goals-form" novalidate>
