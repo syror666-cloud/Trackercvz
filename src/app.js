@@ -10,6 +10,7 @@ const { nextRecurringRun, localDate } = require('./schedule');
 const { weekComparison } = require('./weekstats');
 const { nutritionRoutes } = require('./nutrition');
 const { createReminders, adminRoutes } = require('./admin');
+const { metricsModule, CATEGORIES } = require('./metrics');
 
 const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -249,6 +250,7 @@ const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
+  let metrics; // created further down, once all helpers exist
   const q = {
     sessionUser: db.prepare(
       `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
@@ -263,9 +265,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     userById: db.prepare('SELECT * FROM users WHERE id = ?'),
     setPassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
     setDisplayName: db.prepare('UPDATE users SET display_name = ? WHERE id = ?'),
+    setCategory: db.prepare('UPDATE users SET category = ? WHERE id = ?'),
     deleteUser: db.prepare("DELETE FROM users WHERE id = ? AND role = 'client'"),
     clients: db.prepare(
-      `SELECT u.id, u.username, u.display_name, u.created_at,
+      `SELECT u.id, u.username, u.display_name, u.created_at, u.category,
          (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date DESC LIMIT 1) AS last_weight,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date ASC LIMIT 1) AS first_weight,
@@ -382,7 +385,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       "UPDATE checkins SET replied_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"
     ),
     clientsBasic: db.prepare(
-      `SELECT u.id, u.display_name, u.username,
+      `SELECT u.id, u.display_name, u.username, u.category,
          (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry
        FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
     ),
@@ -557,6 +560,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           id: r.id,
           username: r.username,
           displayName: r.display_name,
+          category: r.category,
           createdAt: r.created_at,
           lastEntry: r.last_entry,
           lastWeight: r.last_weight,
@@ -594,6 +598,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         const name = textField(body.displayName, { name: 'Name', max: 80 });
         if (!name) throw new HttpError(400, 'Name darf nicht leer sein');
         q.setDisplayName.run(name, c.id);
+      }
+      if (body.category !== undefined) {
+        if (body.category !== null && !(body.category in CATEGORIES)) throw new HttpError(400, 'Ungültige Kategorie');
+        q.setCategory.run(body.category, c.id);
       }
       if (body.password !== undefined) {
         q.setPassword.run(hashPassword(validatePassword(body.password)), c.id);
@@ -640,6 +648,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
             id: c.id,
             displayName: c.display_name,
             username: c.username,
+            category: c.category,
             lastEntry: c.last_entry,
             lastCheckin: last ? checkinRow(last) : null,
             doneThisWeek: Boolean(last && last.created_at >= weekAgo),
@@ -656,7 +665,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const last = q.lastCheckin.get(c.id);
       const since = last ? last.created_at : new Date(Date.now() - 14 * 86400000).toISOString();
       return {
-        client: { id: c.id, displayName: c.display_name, username: c.username },
+        client: { id: c.id, displayName: c.display_name, username: c.username, category: c.category },
+        measurements: metrics.reviewFor(c, today),
         goals: goalsRow(goals),
         comparison: weekComparison(q.allEntries.all(c.id), today, goals),
         checkins: q.checkinsOf.all(c.id, 5).map(checkinRow),
@@ -1046,8 +1056,12 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     }],
   ];
 
-  const deps = { db, notifier, reminders, HttpError, readBody, textField, numberField, requireUser, requireCoach, targetClient, clientById };
-  routes.push(...nutritionRoutes(deps), ...adminRoutes(deps));
+  const deps = {
+    db, notifier, reminders, HttpError, readBody, textField, numberField, requireUser, requireCoach, targetClient, clientById,
+    isValidDate, maxAllowedDate, localDate,
+  };
+  metrics = metricsModule(deps);
+  routes.push(...nutritionRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

@@ -119,7 +119,7 @@ function createReminders(db, notifier) {
 function adminRoutes({ db, reminders, HttpError, readBody, textField, numberField, requireCoach }) {
   const q = {
     activity: db.prepare(
-      `SELECT u.id, u.display_name, u.username, u.created_at, u.last_seen_at,
+      `SELECT u.id, u.display_name, u.username, u.created_at, u.last_seen_at, u.category,
          (SELECT MAX(created_at) FROM logins l WHERE l.user_id = u.id) AS last_login,
          (SELECT COUNT(*) FROM logins l WHERE l.user_id = u.id AND l.created_at >= ?) AS logins_7,
          (SELECT COUNT(*) FROM logins l WHERE l.user_id = u.id AND l.created_at >= ?) AS logins_30,
@@ -143,6 +143,7 @@ function adminRoutes({ db, reminders, HttpError, readBody, textField, numberFiel
         id: r.id,
         displayName: r.display_name,
         username: r.username,
+        category: r.category,
         lastLogin: r.last_login,
         lastSeen: r.last_seen_at,
         logins7: r.logins_7,

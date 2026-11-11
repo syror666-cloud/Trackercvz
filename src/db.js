@@ -158,6 +158,36 @@ CREATE TABLE IF NOT EXISTS swap_requests (
 );
 CREATE INDEX IF NOT EXISTS swap_requests_client ON swap_requests (client_id, status);
 
+-- Extra measurements per client category (configured by the coach in the admin tool).
+-- kind 'number': one value per day (e.g. Bauchumfang); kind 'pr': strength records (exercise, weight, reps).
+CREATE TABLE IF NOT EXISTS metrics (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  unit       TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL DEFAULT 'number' CHECK (kind IN ('number', 'pr')),
+  categories TEXT NOT NULL DEFAULT '[]',
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE TABLE IF NOT EXISTS metric_values (
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  metric_id INTEGER NOT NULL REFERENCES metrics(id) ON DELETE CASCADE,
+  date      TEXT NOT NULL,
+  value     REAL NOT NULL,
+  PRIMARY KEY (user_id, metric_id, date)
+);
+CREATE TABLE IF NOT EXISTS prs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  metric_id  INTEGER NOT NULL REFERENCES metrics(id) ON DELETE CASCADE,
+  date       TEXT NOT NULL,
+  exercise   TEXT NOT NULL,
+  weight     REAL NOT NULL,
+  reps       INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS prs_user ON prs (user_id, date);
+
 CREATE TABLE IF NOT EXISTS goals (
   user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   target_weight REAL,
@@ -228,7 +258,15 @@ function migrate(db) {
   db.exec(`UPDATE goal_history SET calories_min = calories_goal, calories_max = calories_goal
            WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
 
-  addColumns(db, 'users', [['last_seen_at', 'TEXT']]);
+  addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT']]);
+
+  // Starter extra measurements: belly circumference for diets, gym PRs for building muscle.
+  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'metrics_seeded'").get()) {
+    const add = db.prepare('INSERT INTO metrics (name, unit, kind, categories) VALUES (?, ?, ?, ?)');
+    add.run('Bauchumfang', 'cm', 'number', JSON.stringify(['diet']));
+    add.run('Kraft-PRs', 'kg', 'pr', JSON.stringify(['build']));
+    db.exec("INSERT INTO settings (key, value) VALUES ('metrics_seeded', 'done')");
+  }
 
   // Starter food database (only once, so foods the coach deleted don't come back).
   const seeded = db.prepare("SELECT 1 FROM settings WHERE key = 'foods_seeded'").get();

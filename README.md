@@ -5,6 +5,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 ## Funktionen
 
 **Klient** (optimiert fürs Handy, lässt sich als App auf den Homescreen legen)
+- Große grüne „Gespeichert“-Bestätigung nach dem Speichern
 - Tageseintrag: Gewicht (kg), Schritte, Schlaf (Std./Min.), Trainingstag ja/nein, Kalorienplan eingehalten ja/nein (bei Nein optional die gegessenen Kalorien), optionale Notiz
 - Werte können über den Tag nachgetragen werden; vergangene Tage lassen sich bearbeiten oder löschen
 - Übersicht: aktuelles Gewicht, Veränderung in 7 Tagen und insgesamt, Ø Schritte und Ø Schlaf der letzten 7 Tage, Serie
@@ -25,6 +26,8 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Wöchentlicher Check-in:** alle Klienten in einer Reihe nacheinander abarbeiten; Wochenvergleich (letzte 7 Tage vs. Vorwoche) mit Gewicht, Schritten, Schlaf, Trainingstagen, Einhaltung des Kalorienplans, Tagesdetails und Diagrammen; Nachricht schreiben und Plan anpassen (Zielkalorien als Range, Schritte, Schlaf, Zielgewicht); der Klient nimmt Anpassungen per Klick an, der Plan wird dann automatisch aktualisiert
 - **Plan:** Kalorien pro Tag, Schritte, Schlaf und Zielgewicht; jede Änderung wird im Verlauf gespeichert
 - **Ernährungsplan** pro Klient: Mahlzeiten aus der Lebensmittel-Datenbank zusammenstellen, Tauschwünsche per Klick kcal-gleich übernehmen, selbst anpassen oder ablehnen (Push bei neuen Wünschen)
+- **Kategorien** (nur für den Coach sichtbar): Diät, Reverse Diät, Aufbau, Maintenance – als farbige Markierung in Übersicht, Check-in und Admin-Tool
+- **Zusatzmaße je Kategorie**, im Admin-Tool zuordenbar: Zahlenwerte wie Bauchumfang (Feld im Tageseintrag + Verlaufsdiagramm) und Kraft-PRs (Übung, Gewicht, Wiederholungen; Rekorde werden erkannt, Push an den Coach); beides auch im Check-in-Wochenvergleich
 - **Admin-Tool:** Logins, App-Nutzung und Tage ohne Eintrag je Klient; automatische Push-Erinnerung nach X Tagen ohne Eintrag (täglich zu fester Uhrzeit, auch in der Push-Übersicht verlinkt); Lebensmittel-Datenbank mit ca. 100 üblichen Lebensmitteln (kcal pro 100 g/ml), eigene Lebensmittel anlegen und bearbeiten
 - **Nachrichten:** ein Chat pro Klient; ungelesene Nachrichten werden in der Übersicht und in der Navigation angezeigt
 - **Push-Benachrichtigungen:** einmalig (sofort oder geplant) und wiederkehrend (täglich oder an bestimmten Wochentagen), an alle oder ausgewählte Klienten; Übersicht, wer zugestimmt, abgelehnt oder noch nicht entschieden hat

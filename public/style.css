@@ -661,3 +661,88 @@ html { overflow-x: hidden; overscroll-behavior-x: none; }
 .activity-table a strong { font: 400 1rem var(--font-display); letter-spacing: var(--track); }
 .reminder-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .reminder-grid .input-unit input { padding-right: 160px; }
+
+/* ---- Client categories (coach only): small coloured text tags ---- */
+:root {
+  --cat-diet: #d64545;
+  --cat-reverse: #b7791f;
+  --cat-build: #2c6fa3;
+  --cat-maintenance: #2f7d5b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cat-diet: #ff8f8f;
+    --cat-reverse: #f2c46d;
+    --cat-build: #8cc8ea;
+    --cat-maintenance: #7fd1a0;
+  }
+}
+.cat-diet { --cat: var(--cat-diet); }
+.cat-reverse { --cat: var(--cat-reverse); }
+.cat-build { --cat: var(--cat-build); }
+.cat-maintenance { --cat: var(--cat-maintenance); }
+.cat {
+  display: inline-flex; align-items: center; gap: 5px; vertical-align: middle;
+  font: 500 0.72rem/1.4 var(--font-body); letter-spacing: 0.02em;
+  color: var(--cat); background: color-mix(in srgb, var(--cat) 11%, transparent);
+  padding: 1px 8px; border-radius: 20px; white-space: nowrap;
+}
+.cat::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--cat); }
+h1 .cat { font-size: 0.8rem; position: relative; top: -0.5em; }
+h2 .cat, h3 .cat { position: relative; top: -2px; }
+.cat-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cat); display: inline-block; margin-left: -2px; }
+.cat-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.cat-option {
+  min-height: 36px; padding: 7px 14px; border-radius: var(--r-pill) !important;
+  background: transparent; color: var(--steel); border: 1px solid var(--line); font-size: 0.92rem;
+}
+.cat-option:hover { border-color: var(--text); }
+.cat-option[aria-checked="true"] { border-color: var(--text); background: var(--text); color: var(--surface); }
+.cat-option.cat-diet[aria-checked="true"], .cat-option.cat-reverse[aria-checked="true"],
+.cat-option.cat-build[aria-checked="true"], .cat-option.cat-maintenance[aria-checked="true"] {
+  background: color-mix(in srgb, var(--cat) 14%, var(--surface)); border-color: var(--cat); color: var(--cat);
+}
+
+/* ---- Extra measurements & PRs ---- */
+.chart-metric { --series: var(--brass); }
+.pr-form { display: grid; grid-template-columns: minmax(0, 1fr) 150px 110px auto; gap: 8px; margin-bottom: 16px; }
+@media (max-width: 640px) { .pr-form { grid-template-columns: 1fr 1fr; } .pr-form input[name=exercise] { grid-column: 1 / -1; } .pr-form button { grid-column: 1 / -1; } }
+.pr-history { margin-top: 28px; }
+.pr-history summary { cursor: pointer; font: 400 0.95rem var(--font-display); color: var(--steel); }
+.pr-week { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.metrics-table th.center, .metrics-table td.center { text-align: center; }
+.cell-check { width: 18px; height: 18px; min-height: 0; padding: 0; accent-color: var(--text); cursor: pointer; }
+.metric-form { display: grid; grid-template-columns: minmax(0, 1fr) 140px 160px auto; gap: 8px; margin-top: 30px; }
+@media (max-width: 720px) { .metric-form { grid-template-columns: 1fr 1fr; } .metric-form input[name=name], .metric-form button { grid-column: 1 / -1; } }
+
+/* ---- "Gespeichert" confirmation ---- */
+.saved-hud {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  pointer-events: none; visibility: hidden;
+}
+.saved-hud.show { visibility: visible; animation: hud-out 0.25s ease-in 1.35s forwards; }
+.saved-box {
+  --hud: #1f9d63;
+  min-width: 190px; max-width: min(320px, calc(100vw - 48px));
+  padding: 26px 28px 22px; border-radius: 22px;
+  background: var(--hud); color: #fff; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  box-shadow: 0 18px 50px rgba(0, 41, 65, 0.28);
+}
+.saved-hud.show .saved-box { animation: hud-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+.saved-box svg { width: 64px; height: 64px; margin-bottom: 6px; }
+.saved-box circle { fill: rgba(255, 255, 255, 0.16); stroke: none; }
+.saved-box path {
+  fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 40; stroke-dashoffset: 40;
+}
+.saved-hud.show .saved-box path { animation: hud-check 0.38s ease-out 0.18s forwards; }
+.saved-box strong { font: 400 1.6rem/1.1 var(--font-display); letter-spacing: -0.02em; }
+.saved-box span { font-size: 0.88rem; opacity: 0.9; }
+@keyframes hud-in { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+@keyframes hud-check { to { stroke-dashoffset: 0; } }
+@keyframes hud-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .saved-hud.show .saved-box, .saved-hud.show { animation-duration: 0.01s; }
+  .saved-box path { stroke-dashoffset: 0; }
+}

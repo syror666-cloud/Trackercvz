@@ -144,6 +144,33 @@
   const todayLong = () => new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
   const eyebrow = (text) => `<p class="eyebrow">${esc(text)}</p>`;
 
+  // ---------- client categories (coach only) ----------
+  const CATEGORIES = { diet: 'Diät', reverse: 'Reverse Diät', build: 'Aufbau', maintenance: 'Maintenance' };
+  const catTag = (c) => (c && CATEGORIES[c] ? `<span class="cat cat-${c}">${CATEGORIES[c]}</span>` : '');
+
+  // ---------- "Gespeichert" confirmation in the middle of the screen ----------
+  let hudTimer;
+  function savedHud(text = 'Gespeichert', sub = '') {
+    let hud = document.getElementById('saved-hud');
+    if (!hud) {
+      hud = document.createElement('div');
+      hud.id = 'saved-hud';
+      hud.className = 'saved-hud';
+      hud.setAttribute('role', 'status');
+      hud.setAttribute('aria-live', 'assertive');
+      document.body.appendChild(hud);
+    }
+    hud.innerHTML = `<div class="saved-box">
+        <svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23"/><path d="M15 27.5l7.5 7.5L37.5 19"/></svg>
+        <strong>${esc(text)}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}
+      </div>`;
+    hud.classList.remove('show');
+    void hud.offsetWidth; // restart the animation
+    hud.classList.add('show');
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => hud.classList.remove('show'), 1600);
+  }
+
   // ---------- routing ----------
   async function boot() {
     try {
@@ -286,8 +313,13 @@
   // ---------- client: daily entry ----------
   async function renderClientHome() {
     setView('<p class="muted">Lade…</p>');
-    const [{ entries }, { goals, history }] = await Promise.all([api('GET', '/api/entries'), api('GET', '/api/goals')]);
-    const state = { entries, goals, history };
+    const [{ entries }, { goals, history }, { metrics }] = await Promise.all([
+      api('GET', '/api/entries'),
+      api('GET', '/api/goals'),
+      api('GET', '/api/measurements'),
+    ]);
+    const state = { entries, goals, history, metrics };
+    const numberMetrics = () => state.metrics.filter((m) => m.kind === 'number');
 
     setView(`
       <div class="page-head">
@@ -312,6 +344,7 @@
               <div class="input-unit"><input id="f-sleep-h" name="sleepH" inputmode="numeric" placeholder="7"><span>Std.</span></div>
               <div class="input-unit"><input id="f-sleep-m" name="sleepM" inputmode="numeric" placeholder="30" aria-label="Schlaf Minuten"><span>Min.</span></div>
             </div></div>
+          <div data-metric-fields></div>
           <fieldset class="field"><legend>Trainingstag?</legend>
             <div class="choice">
               <label><input type="radio" name="training" value="true"><span>🏋️ Ja</span></label>
@@ -362,6 +395,7 @@
       setChoice('training', e ? e.training : null);
       setChoice('caloriesOk', e ? e.caloriesOk : null);
       form.calories.value = e && e.calories !== null && e.calories !== undefined ? e.calories : '';
+      drawMetricFields();
       syncKcal();
       const status = document.getElementById('entry-status');
       status.textContent = e ? 'gespeichert' : 'noch offen';
@@ -401,6 +435,18 @@
         form.querySelectorAll(`[name=${r.name}]`).forEach((x) => (x.dataset.was = String(x.checked)));
       })
     );
+    // Extra measurements of the client's category (e.g. Bauchumfang), filled per date.
+    function drawMetricFields() {
+      const box = form.querySelector('[data-metric-fields]');
+      box.innerHTML = numberMetrics()
+        .map((m) => {
+          const v = (m.values || []).find((x) => x.date === form.date.value);
+          return `<div class="field"><label for="m-${m.id}">${esc(m.name)} <span class="muted">(optional)</span></label>
+            <div class="input-unit"><input id="m-${m.id}" data-metric="${m.id}" inputmode="decimal" value="${v ? String(v.value).replace('.', ',') : ''}"><span>${esc(m.unit)}</span></div></div>`;
+        })
+        .join('');
+    }
+
     form.date.addEventListener('change', fillForm);
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -422,16 +468,30 @@
         const caloriesOk = hasKcal(state.goals) ? choice('caloriesOk') : undefined;
         const calories = caloriesOk === false ? parseNum(form.calories.value) : caloriesOk === undefined ? undefined : null;
         if (Number.isNaN(calories)) throw new Error('Bitte bei den Kalorien nur Zahlen eingeben.');
-        const { entry } = await api('PUT', `/api/entries/${form.date.value}`, {
+        const metricInputs = [...form.querySelectorAll('[data-metric]')].map((inp) => ({ id: Number(inp.dataset.metric), value: parseNum(inp.value) }));
+        if (metricInputs.some((x) => Number.isNaN(x.value))) throw new Error('Bitte bei den Zusatzmaßen nur Zahlen eingeben.');
+        const date = form.date.value;
+        const { entry } = await api('PUT', `/api/entries/${date}`, {
           weight, steps, sleep, note: form.note.value, training: choice('training'), caloriesOk, calories,
         });
-        state.entries = state.entries.filter((x) => x.date !== form.date.value);
+        let metricsChanged = false;
+        for (const x of metricInputs) {
+          const m = state.metrics.find((y) => y.id === x.id);
+          const old = (m.values || []).find((v) => v.date === date);
+          if ((old ? old.value : null) !== x.value) {
+            state.metrics = (await api('PUT', `/api/measurements/${x.id}/${date}`, { value: x.value })).metrics;
+            metricsChanged = true;
+          }
+        }
+        state.entries = state.entries.filter((x) => x.date !== date);
         if (entry) state.entries.push(entry);
         state.entries.sort((a, b) => a.date.localeCompare(b.date));
-        toast(entry ? 'Eintrag gespeichert ✓' : 'Eintrag entfernt');
+        if (entry || metricsChanged) savedHud('Gespeichert', fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' }));
+        else toast('Eintrag entfernt');
         fillForm();
         updateStreak();
         dash.update(state.entries);
+        if (metricsChanged) dash.setMeasurements(state.metrics);
       } catch (err) {
         errEl.textContent = err.message;
         errEl.hidden = false;
@@ -442,6 +502,20 @@
       entries: state.entries,
       goals: state.goals,
       history: state.history,
+      measurements: state.metrics,
+      async onPrAdd(body) {
+        const res = await api('POST', '/api/prs', body);
+        state.metrics = res.metrics;
+        const what = `${res.saved.exercise}: ${num(res.saved.weight, 1)} kg × ${res.saved.reps}`;
+        if (res.saved.isRecord && res.saved.previous) savedHud('Neuer Bestwert! 💪', what);
+        else savedHud('Gespeichert', what);
+        return res.metrics;
+      },
+      async onPrDelete(id) {
+        state.metrics = (await api('DELETE', `/api/prs/${id}`)).metrics;
+        toast('PR gelöscht');
+        return state.metrics;
+      },
       onEdit(date) {
         form.date.value = date;
         fillForm();
@@ -597,7 +671,7 @@
     ['all', 'Alle'],
   ];
 
-  function mountDashboard(root, { entries, goals, history, onEdit, onDelete }) {
+  function mountDashboard(root, { entries, goals, history, measurements, onEdit, onDelete, onPrAdd, onPrDelete }) {
     let rangeKey = '30';
     let all = entries;
 
@@ -623,6 +697,8 @@
         </div>
         <div class="chart-kcal" data-chart="kcal"></div>
       </div>
+      <div class="stack" data-metric-charts></div>
+      <div data-pr></div>
       <div class="card chart-card"><h3>Schritte</h3><div class="chart-steps" data-chart="steps"></div></div>
       <div class="card chart-card"><h3>Schlaf</h3><div class="chart-sleep" data-chart="sleep"></div></div>
       <div class="card">
@@ -787,25 +863,135 @@
       }
     }
 
+    // Extra measurements: one chart per number metric (follows the range), PR card for strength records.
+    function drawMetricCharts() {
+      const slot = root.querySelector('[data-metric-charts]');
+      const list = (measurements || []).filter((m) => m.kind === 'number');
+      const { from, to } = rangeBounds();
+      slot.hidden = !list.length;
+      slot.innerHTML = list
+        .map((m) => {
+          const vals = m.values || [];
+          const last = vals[vals.length - 1];
+          const first = vals.find((v) => v.date >= from) || vals[0];
+          const delta = last && first && last.date !== first.date ? last.value - first.value : null;
+          return `<div class="card chart-card">
+            <div class="row-between"><h3>${esc(m.name)}</h3>
+              <span class="kcal-now">${last ? `<strong>${num(last.value, 1)}</strong> ${esc(m.unit)}${delta !== null ? ` <span class="muted small">${signed(delta)} im Zeitraum</span>` : ''}` : '<span class="muted small">Noch kein Wert</span>'}</span></div>
+            <div class="chart-metric" data-metric-chart="${m.id}"></div></div>`;
+        })
+        .join('');
+      for (const m of list) {
+        Charts.render(slot.querySelector(`[data-metric-chart="${m.id}"]`), {
+          data: (m.values || []).filter((v) => v.date >= from && v.date <= to), from, to,
+          type: 'line', unit: m.unit, decimals: 1, height: 170, label: m.name,
+        });
+      }
+    }
+
+    function drawPrs() {
+      const slot = root.querySelector('[data-pr]');
+      const prMetric = (measurements || []).find((m) => m.kind === 'pr');
+      if (!prMetric) {
+        slot.innerHTML = '';
+        slot.hidden = true;
+        return;
+      }
+      slot.hidden = false;
+      const prs = prMetric.prs || [];
+      const best = new Map();
+      for (const p of prs) {
+        const k = p.exercise.toLowerCase();
+        const b = best.get(k);
+        if (!b) best.set(k, { ...p, first: p });
+        else if (p.weight > b.weight || (p.weight === b.weight && p.reps > b.reps)) best.set(k, { ...p, first: b.first });
+      }
+      const exercises = [...new Set(prs.map((p) => p.exercise))];
+      slot.innerHTML = `<section class="card pr-card">
+        <div class="row-between" style="margin-bottom:12px"><h3>💪 ${esc(prMetric.name)}</h3><span class="muted small">${prs.length} Einträge</span></div>
+        ${onPrAdd ? `<form class="pr-form" novalidate>
+          <input name="exercise" list="pr-exercises" maxlength="60" placeholder="Übung, z. B. Bankdrücken" aria-label="Übung">
+          <datalist id="pr-exercises">${exercises.map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
+          <div class="input-unit"><input name="weight" inputmode="decimal" placeholder="Gewicht" aria-label="Gewicht"><span>kg</span></div>
+          <div class="input-unit"><input name="reps" inputmode="numeric" placeholder="Wdh." aria-label="Wiederholungen"><span>×</span></div>
+          <button type="submit" class="btn-primary">PR speichern</button>
+        </form>` : ''}
+        ${best.size ? `<div class="table-wrap"><table>
+          <thead><tr><th>Übung</th><th class="num">Bestwert</th><th class="num">Seit Start</th><th>Datum</th></tr></thead>
+          <tbody>${[...best.values()]
+            .sort((a, b) => a.exercise.localeCompare(b.exercise))
+            .map((b) => {
+              const gain = b.first && b.first.id !== b.id ? b.weight - b.first.weight : null;
+              return `<tr><td>${esc(b.exercise)}</td><td class="num"><strong>${num(b.weight, 1)} kg × ${b.reps}</strong></td>
+                <td class="num ${gain > 0 ? 'good' : ''}">${gain !== null ? `${signed(gain)} kg` : '–'}</td><td>${esc(fmtDate(b.date, { day: '2-digit', month: '2-digit', year: '2-digit' }))}</td></tr>`;
+            })
+            .join('')}</tbody></table></div>
+          <details class="pr-history"><summary>Alle Einträge</summary>
+            <ul class="plain-list">${prs
+              .slice()
+              .reverse()
+              .map((p) => `<li><span>${esc(fmtDate(p.date, { day: '2-digit', month: '2-digit' }))} · ${esc(p.exercise)} · ${num(p.weight, 1)} kg × ${p.reps} ${p.isRecord && p.previous ? '<span class="badge good">Rekord</span>' : ''}</span>
+                ${onPrDelete ? `<button type="button" class="btn-ghost btn-sm" data-del-pr="${p.id}" aria-label="Löschen">✕</button>` : ''}</li>`)
+              .join('')}</ul></details>` : `<p class="muted small" style="margin:0">${onPrAdd ? 'Noch keine PRs – trag deinen ersten Bestwert ein.' : 'Noch keine PRs eingetragen.'}</p>`}
+      </section>`;
+      const form = slot.querySelector('.pr-form');
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          try {
+            const weight = parseNum(form.weight.value);
+            const reps = parseNum(form.reps.value);
+            if (!form.exercise.value.trim()) throw new Error('Bitte die Übung angeben.');
+            if (weight === null || Number.isNaN(weight) || !reps || Number.isNaN(reps)) throw new Error('Bitte Gewicht und Wiederholungen angeben.');
+            measurements = await onPrAdd({ metricId: prMetric.id, exercise: form.exercise.value, weight, reps, date: todayStr() });
+            drawPrs();
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      }
+      slot.querySelectorAll('[data-del-pr]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          if (!confirm('Diesen PR löschen?')) return;
+          try {
+            measurements = await onPrDelete(Number(b.dataset.delPr));
+            drawPrs();
+          } catch (err) {
+            toast(err.message, true);
+          }
+        })
+      );
+    }
+
     function draw() {
       drawStats();
       drawCharts();
+      drawMetricCharts();
       drawTable();
     }
 
     let resizeTimer;
     const resizeHandler = () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(drawCharts, 150);
+      resizeTimer = setTimeout(() => {
+        drawCharts();
+        drawMetricCharts();
+      }, 150);
     };
     window.addEventListener('resize', resizeHandler);
     onCleanup(() => window.removeEventListener('resize', resizeHandler));
 
     draw();
+    drawPrs();
     return {
       update(newEntries) {
         all = newEntries;
         draw();
+      },
+      setMeasurements(m) {
+        measurements = m;
+        drawMetricCharts();
+        drawPrs();
       },
       setGoals(g, h) {
         goals = g;
@@ -1215,7 +1401,7 @@
         const delta = c.lastWeight !== null && c.firstWeight !== null ? c.lastWeight - c.firstWeight : null;
         return `<a class="card client-card" href="#/client/${c.id}${c.unreadMessages ? '/chat' : ''}">
           <div class="row-between">
-            <h3>${esc(c.displayName)}</h3>
+            <h3>${esc(c.displayName)} ${catTag(c.category)}</h3>
             <div class="row" style="gap:6px">
               ${c.unreadMessages ? `<span class="unread-badge">💬 ${c.unreadMessages} neu</span>` : ''}
               ${c.openSwaps ? `<span class="unread-badge">🍽 ${c.openSwaps}</span>` : ''}
@@ -1316,7 +1502,7 @@
         ${clients
           .map(
             (c, i) => `<a href="#/checkin/${c.id}" class="queue-item ${c.doneThisWeek ? 'done' : ''}"${c.id === selected.id ? ' aria-current="page"' : ''}>
-              <span class="queue-num">${c.doneThisWeek ? '✓' : i + 1}</span><span>${esc(c.displayName)}</span></a>`
+              <span class="queue-num">${c.doneThisWeek ? '✓' : i + 1}</span><span>${esc(c.displayName)}</span>${c.category ? `<i class="cat-dot cat-${c.category}" title="${CATEGORIES[c.category]}"></i>` : ''}</a>`
           )
           .join('')}
       </nav>
@@ -1332,7 +1518,7 @@
 
     const deltaCell = (d, fmt, goodDir) => {
       if (d === null || d === undefined) return '<td class="num muted">–</td>';
-      const cls = d === 0 ? '' : Math.sign(d) === goodDir ? 'good' : 'bad';
+      const cls = d === 0 || !goodDir ? '' : Math.sign(d) === goodDir ? 'good' : 'bad';
       return `<td class="num ${cls}">${d > 0 ? '+' : d < 0 ? '−' : '±'}${fmt(Math.abs(d))}</td>`;
     };
     const weightDir = goals.targetWeight !== null && cur.weightAvg !== null && goals.targetWeight > cur.weightAvg ? 1 : -1;
@@ -1394,14 +1580,30 @@
         <div class="stack">
           <section class="card">
             <div class="row-between" style="margin-bottom:8px">
-              <h2>${esc(rv.client.displayName)} – Wochenvergleich</h2>
+              <h2>${esc(rv.client.displayName)} – Wochenvergleich ${catTag(rv.client.category)}</h2>
               <a class="small" href="#/client/${selected.id}">Alle Daten →</a>
             </div>
             <p class="small muted" style="margin:0 0 10px">Diese Woche: ${esc(shortD(cur.from))} – ${esc(shortD(cur.to))} · Vorwoche: ${esc(shortD(prev.from))} – ${esc(shortD(prev.to))}</p>
             <div class="table-wrap"><table class="compare">
               <thead><tr><th></th><th class="num">Vorwoche</th><th class="num">Diese Woche</th><th class="num">Veränderung</th></tr></thead>
-              <tbody>${rows.map(([l, a, b, d]) => `<tr><td>${l}</td><td class="num">${a}</td><td class="num"><strong>${b}</strong></td>${d}</tr>`).join('')}</tbody>
+              <tbody>${rows.map(([l, a, b, d]) => `<tr><td>${l}</td><td class="num">${a}</td><td class="num"><strong>${b}</strong></td>${d}</tr>`).join('')}
+              ${(rv.measurements || [])
+                .filter((m) => m.kind === 'number')
+                .map((m) => {
+                  const dir = rv.client.category === 'diet' ? -1 : rv.client.category === 'build' ? 1 : 0;
+                  const v = (x) => (x ? `${num(x.value, 1)} ${esc(m.unit)}` : '–');
+                  return `<tr class="metric-row"><td>${esc(m.name)} <span class="muted small">(letzter Wert)</span></td><td class="num">${v(m.previous)}</td><td class="num"><strong>${v(m.current)}</strong></td>${deltaCell(m.delta, (x) => `${num(x, 1)} ${esc(m.unit)}`, dir)}</tr>`;
+                })
+                .join('')}</tbody>
             </table></div>
+            ${(rv.measurements || [])
+              .filter((m) => m.kind === 'pr')
+              .map((m) => `<div class="pr-week"><h3>💪 ${esc(m.name)} diese Woche</h3>${m.prsThisWeek.length
+                ? `<ul class="plain-list">${m.prsThisWeek
+                    .map((p) => `<li><span>${esc(shortD(p.date))} · ${esc(p.exercise)} · <strong>${num(p.weight, 1)} kg × ${p.reps}</strong></span>${p.isRecord && p.previous ? `<span class="badge good">Rekord · vorher ${num(p.previous.weight, 1)} kg × ${p.previous.reps}</span>` : ''}</li>`)
+                    .join('')}</ul>`
+                : '<p class="muted small" style="margin:4px 0 0">Keine neuen Einträge.</p>'}</div>`)
+              .join('')}
           </section>
           <section class="card chart-card"><h3>Gewicht – 14 Tage</h3><div class="chart-weight" data-chart="ci-weight"></div></section>
           <section class="card chart-card"><h3>Schritte – 14 Tage</h3><div class="chart-steps" data-chart="ci-steps"></div></section>
@@ -1995,11 +2197,77 @@
       <div class="stack">
         <section class="card" id="activity"></section>
         <section class="card" id="reminder"></section>
+        <section class="card" id="metrics"></section>
         <section class="card" id="foods"></section>
       </div>`);
     drawActivity(ov);
     drawReminder(ov);
     drawFoods();
+    drawMetricsAdmin();
+  }
+
+  async function drawMetricsAdmin() {
+    const root = document.getElementById('metrics');
+    const { categories, counts, metrics } = await api('GET', '/api/metrics');
+    const cats = Object.entries(categories);
+    root.innerHTML = `
+      <div class="row-between" style="margin-bottom:8px"><h2>Kategorien &amp; Zusatzmaße</h2></div>
+      <p class="small muted" style="margin:0 0 12px">Lege fest, welche Zusatzmaße Klienten einer Kategorie tracken. Die Kategorie selbst sieht nur du – Klienten sehen nur die passenden Felder.</p>
+      <div class="row" style="gap:14px;margin-bottom:14px">${cats.map(([k]) => `<span>${catTag(k)} <span class="muted small">${counts[k] || 0}</span></span>`).join('')}
+        <span class="muted small">ohne Kategorie: ${counts.none || 0}</span></div>
+      <div class="table-wrap"><table class="metrics-table">
+        <thead><tr><th>Zusatzmaß</th><th>Art</th>${cats.map(([, l]) => `<th class="center">${l}</th>`).join('')}<th class="center">Aktiv</th><th></th></tr></thead>
+        <tbody>${metrics
+          .map((m) => `<tr data-metric-row="${m.id}">
+            <td><strong>${esc(m.name)}</strong> ${m.unit ? `<span class="muted small">${esc(m.unit)}</span>` : ''}</td>
+            <td class="muted small">${m.kind === 'pr' ? 'Kraft-PRs (Übung, kg, Wdh.)' : 'Zahl pro Tag'}</td>
+            ${cats.map(([k]) => `<td class="center"><input type="checkbox" class="cell-check" data-cat-check="${k}" ${m.categories.includes(k) ? 'checked' : ''} aria-label="${esc(m.name)}: ${categories[k]}"></td>`).join('')}
+            <td class="center"><input type="checkbox" class="cell-check" data-active ${m.active ? 'checked' : ''} aria-label="${esc(m.name)} aktiv"></td>
+            <td class="actions"><button type="button" class="btn-ghost btn-sm danger-text" data-del-metric aria-label="Löschen">✕</button></td>
+          </tr>`)
+          .join('') || `<tr><td colspan="${cats.length + 4}" class="muted">Noch keine Zusatzmaße.</td></tr>`}</tbody>
+      </table></div>
+      <form class="metric-form" novalidate>
+        <input name="name" maxlength="40" placeholder="Neues Maß, z. B. Oberarmumfang" aria-label="Name">
+        <input name="unit" maxlength="12" placeholder="Einheit, z. B. cm" aria-label="Einheit">
+        <select name="kind" aria-label="Art"><option value="number">Zahl pro Tag</option><option value="pr">Kraft-PRs</option></select>
+        <button type="submit" class="btn-secondary">+ Hinzufügen</button>
+      </form>`;
+
+    root.querySelectorAll('[data-metric-row]').forEach((tr) => {
+      const id = tr.dataset.metricRow;
+      const save = async (body, msg) => {
+        try {
+          await api('PATCH', `/api/metrics/${id}`, body);
+          toast(msg);
+        } catch (err) {
+          toast(err.message, true);
+          drawMetricsAdmin();
+        }
+      };
+      tr.querySelectorAll('[data-cat-check]').forEach((cb) =>
+        cb.addEventListener('change', () =>
+          save({ categories: [...tr.querySelectorAll('[data-cat-check]:checked')].map((x) => x.dataset.catCheck) }, 'Zuordnung gespeichert')
+        )
+      );
+      tr.querySelector('[data-active]').addEventListener('change', (e) => save({ active: e.target.checked }, e.target.checked ? 'Aktiviert' : 'Deaktiviert'));
+      tr.querySelector('[data-del-metric]').addEventListener('click', async () => {
+        if (!confirm('Dieses Zusatzmaß mit allen eingetragenen Werten löschen? Tipp: „Aktiv“ abwählen blendet es nur aus.')) return;
+        await api('DELETE', `/api/metrics/${id}`).catch((err) => toast(err.message, true));
+        drawMetricsAdmin();
+      });
+    });
+    const f = root.querySelector('.metric-form');
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api('POST', '/api/metrics', { name: f.name.value, unit: f.unit.value, kind: f.kind.value, categories: [] });
+        toast('Zusatzmaß angelegt – jetzt Kategorien anhaken');
+        drawMetricsAdmin();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
   }
 
   const fmtTs = (iso) =>
@@ -2025,10 +2293,11 @@
       <div class="row-between" style="margin-bottom:8px"><h2>Aktivität &amp; Logins</h2><span class="muted small">${rows.length} Klienten</span></div>
       <p class="small muted" style="margin:0 0 10px">„App genutzt“ zählt die Tage, an denen der Klient den Tracker geöffnet hat. Logins sind seltener, weil man 30 Tage angemeldet bleibt.</p>
       <div class="table-wrap"><table class="activity-table">
-        <thead><tr><th>Klient</th><th>Ohne Eintrag</th><th class="num">Einträge 7 T</th><th class="num">App genutzt 7 T / 30 T</th><th>Zuletzt aktiv</th><th>Letzter Login</th><th class="num">Logins 30 T</th><th>Erinnerung</th></tr></thead>
+        <thead><tr><th>Klient</th><th>Kategorie</th><th>Ohne Eintrag</th><th class="num">Einträge 7 T</th><th class="num">App genutzt 7 T / 30 T</th><th>Zuletzt aktiv</th><th>Letzter Login</th><th class="num">Logins 30 T</th><th>Erinnerung</th></tr></thead>
         <tbody>${rows
           .map((c) => `<tr>
             <td><a href="#/client/${c.id}"><strong>${esc(c.displayName)}</strong></a></td>
+            <td>${catTag(c.category) || '<span class="muted small">–</span>'}</td>
             <td>${missingBadge(c)}</td>
             <td class="num">${c.entries7}/7</td>
             <td class="num">${c.activeDays7} / ${c.activeDays30}</td>
@@ -2037,7 +2306,7 @@
             <td class="num">${c.logins30}</td>
             <td class="small">${reminderText[c.reminderState] || '–'}${c.lastReminder ? `<div class="muted">zuletzt ${esc(fmtDate(c.lastReminder, { day: '2-digit', month: '2-digit' }))}</div>` : ''}</td>
           </tr>`)
-          .join('') || '<tr><td colspan="8" class="muted">Noch keine Klienten.</td></tr>'}</tbody>
+          .join('') || '<tr><td colspan="9" class="muted">Noch keine Klienten.</td></tr>'}</tbody>
       </table></div>`;
   }
 
@@ -2366,7 +2635,15 @@
     setView('<p class="muted">Lade…</p>');
     let clients, entries, goals;
     let goalHistory = [];
+    let measurements = [];
+    let metricDefs = [];
     try {
+      if (tab === 'overview') {
+        [{ metrics: measurements }, { metrics: metricDefs }] = await Promise.all([
+          api('GET', `/api/measurements?userId=${id}`),
+          api('GET', '/api/metrics'),
+        ]);
+      }
       [{ clients }, { entries }, { goals }] = await Promise.all([
         api('GET', '/api/clients'),
         tab !== 'overview' ? { entries: [] } : api('GET', `/api/entries?userId=${id}`),
@@ -2385,7 +2662,7 @@
     const head = `
       <a class="back" href="#/">← Alle Klienten</a>
       <div class="page-head">
-        <div>${eyebrow('Klient')}<h1>${esc(client.displayName)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p>
+        <div>${eyebrow('Klient')}<h1>${esc(client.displayName)} ${catTag(client.category)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p>
           <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}
             ${client.healthLinked ? `<span class="badge good">❤️ Apple Health${client.healthLastUsed ? ` · ${esc(relDay(client.healthLastUsed.slice(0, 10)))}` : ' · noch keine Daten'}</span>` : ''}</div></div>
         <div class="row">
@@ -2423,6 +2700,17 @@
       ${head}
       <div class="grid-2">
         <div class="stack">
+          <section class="card" id="category-card">
+            <div class="row-between" style="margin-bottom:10px"><h2>Kategorie</h2><span class="muted small">nur für dich sichtbar</span></div>
+            <div class="cat-picker" role="radiogroup" aria-label="Kategorie">
+              ${[[null, 'Keine'], ...Object.entries(CATEGORIES)]
+                .map(([k, l]) => `<button type="button" role="radio" aria-checked="${(client.category || null) === k}" data-cat="${k || ''}" class="cat-option ${k ? `cat-${k}` : ''}">${l}</button>`)
+                .join('')}
+            </div>
+            <p class="hint">${client.category
+              ? `Zusatzmaße: ${esc(metricDefs.filter((m) => m.active && m.categories.includes(client.category)).map((m) => m.name).join(', ') || 'keine')} · <a href="#/admin">im Admin-Tool ändern</a>`
+              : 'Mit einer Kategorie bekommt dein Klient passende Zusatzmaße (z. B. Bauchumfang bei Diät).'}</p>
+          </section>
           <form class="card" id="goals-form" novalidate>
             <h2 style="margin-bottom:12px">Plan &amp; Ziele</h2>
             <div class="field"><label for="g-kmin">Zielkalorien pro Tag <span class="muted small">(Range, z. B. 2200 – 2300)</span></label>
@@ -2455,7 +2743,18 @@
       </div>`);
 
     stickyColumn(document.querySelector('.grid-2 > .stack'));
-    const dash = mountDashboard(document.getElementById('dashboard'), { entries, goals, history: goalHistory });
+    const dash = mountDashboard(document.getElementById('dashboard'), { entries, goals, history: goalHistory, measurements });
+    document.querySelectorAll('[data-cat]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        try {
+          await api('PATCH', `/api/clients/${id}`, { category: b.dataset.cat || null });
+          toast(b.dataset.cat ? `Kategorie: ${CATEGORIES[b.dataset.cat]}` : 'Kategorie entfernt');
+          renderCoachClient(id, 'overview');
+        } catch (err) {
+          toast(err.message, true);
+        }
+      })
+    );
 
     const gf = document.getElementById('goals-form');
     const show = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
