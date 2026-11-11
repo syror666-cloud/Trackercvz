@@ -90,6 +90,74 @@ CREATE TABLE IF NOT EXISTS health_tokens (
   last_used_at TEXT
 );
 
+-- Every successful login, and one row per day a user opened the app (for the admin tool).
+CREATE TABLE IF NOT EXISTS logins (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS logins_user ON logins (user_id, created_at);
+CREATE TABLE IF NOT EXISTS activity_days (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date    TEXT NOT NULL,
+  PRIMARY KEY (user_id, date)
+);
+
+-- Automatic "you haven't tracked for N days" reminders: last reminder per client.
+CREATE TABLE IF NOT EXISTS reminder_state (
+  user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  last_sent_date TEXT NOT NULL,
+  last_result    TEXT
+);
+
+-- Food database: calories per 100 g (or 100 ml).
+CREATE TABLE IF NOT EXISTS foods (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  kcal       REAL NOT NULL,
+  unit       TEXT NOT NULL DEFAULT 'g' CHECK (unit IN ('g', 'ml')),
+  category   TEXT,
+  is_custom  INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Nutrition plan: meals with items. Items keep a copy of name and kcal so the plan stays stable.
+CREATE TABLE IF NOT EXISTS meals (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name      TEXT NOT NULL,
+  position  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS meals_client ON meals (client_id, position);
+CREATE TABLE IF NOT EXISTS meal_items (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  meal_id  INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+  food_id  INTEGER REFERENCES foods(id) ON DELETE SET NULL,
+  name     TEXT NOT NULL,
+  kcal     REAL NOT NULL,
+  unit     TEXT NOT NULL DEFAULT 'g',
+  amount   REAL NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS meal_items_meal ON meal_items (meal_id, position);
+
+-- Client requests to swap a food or a whole meal; only the coach changes the plan.
+CREATE TABLE IF NOT EXISTS swap_requests (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type           TEXT NOT NULL CHECK (type IN ('item', 'meal')),
+  meal_id        INTEGER REFERENCES meals(id) ON DELETE SET NULL,
+  item_id        INTEGER REFERENCES meal_items(id) ON DELETE SET NULL,
+  subject        TEXT NOT NULL,
+  wish           TEXT,
+  wanted_food_id INTEGER REFERENCES foods(id) ON DELETE SET NULL,
+  status         TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done', 'declined')),
+  coach_note     TEXT,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  resolved_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS swap_requests_client ON swap_requests (client_id, status);
+
 CREATE TABLE IF NOT EXISTS goals (
   user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   target_weight REAL,
@@ -159,6 +227,16 @@ function migrate(db) {
            WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
   db.exec(`UPDATE goal_history SET calories_min = calories_goal, calories_max = calories_goal
            WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
+
+  addColumns(db, 'users', [['last_seen_at', 'TEXT']]);
+
+  // Starter food database (only once, so foods the coach deleted don't come back).
+  const seeded = db.prepare("SELECT 1 FROM settings WHERE key = 'foods_seeded'").get();
+  if (!seeded) {
+    const insert = db.prepare('INSERT OR IGNORE INTO foods (name, kcal, unit, category) VALUES (?, ?, ?, ?)');
+    for (const [name, kcal, unit, category] of require('./foods-seed')) insert.run(name, kcal, unit, category);
+    db.exec("INSERT INTO settings (key, value) VALUES ('foods_seeded', 'done')");
+  }
 
   // Check-ins no longer post into the chat: remove the automatic messages older versions created.
   const flag = db.prepare("SELECT 1 FROM settings WHERE key = 'migration_checkin_chat_cleanup'").get();

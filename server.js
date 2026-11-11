@@ -6,6 +6,7 @@ const path = require('node:path');
 const { openDb, createUser } = require('./src/db');
 const { createApp } = require('./src/app');
 const { createNotifier } = require('./src/notify');
+const { createReminders } = require('./src/admin');
 
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
@@ -41,12 +42,18 @@ const notifier = createNotifier(db, {
   timezone: process.env.APP_TIMEZONE || 'Europe/Berlin',
 });
 
-// Scheduled coach push messages: check every 30 seconds.
-setInterval(() => notifier.runDue().catch((err) => console.error(err)), 30000).unref();
+const reminders = createReminders(db, notifier);
+
+// Scheduled coach push messages and the daily inactivity reminder: check every 30 seconds.
+setInterval(() => {
+  notifier.runDue().catch((err) => console.error(err));
+  reminders.runScheduled().catch((err) => console.error(err));
+}, 30000).unref();
 
 const app = createApp({
   db,
   notifier,
+  reminders,
   publicDir: path.join(__dirname, 'public'),
   secureCookies: process.env.SECURE_COOKIES === 'true' || process.env.NODE_ENV === 'production',
   trustProxy: process.env.TRUST_PROXY === 'true' || Boolean(process.env.RENDER),

@@ -8,6 +8,8 @@ const { createNotifier } = require('./notify');
 const { isAllowedEndpoint } = require('./push');
 const { nextRecurringRun, localDate } = require('./schedule');
 const { weekComparison } = require('./weekstats');
+const { nutritionRoutes } = require('./nutrition');
+const { createReminders, adminRoutes } = require('./admin');
 
 const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -241,8 +243,9 @@ function parseSteps(value) {
 
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders }) {
   notifier = notifier || createNotifier(db, {});
+  reminders = reminders || createReminders(db, notifier);
   const q = {
     sessionUser: db.prepare(
       `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
@@ -270,7 +273,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
          (SELECT status FROM push_consent pc WHERE pc.user_id = u.id) AS push_status,
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
          (SELECT last_used_at FROM health_tokens ht WHERE ht.user_id = u.id) AS health_last_used,
-         (SELECT COUNT(*) FROM health_tokens ht WHERE ht.user_id = u.id) AS health_linked
+         (SELECT COUNT(*) FROM health_tokens ht WHERE ht.user_id = u.id) AS health_linked,
+         (SELECT COUNT(*) FROM swap_requests sr WHERE sr.client_id = u.id AND sr.status = 'open') AS open_swaps
        FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
     ),
     entries: db.prepare('SELECT * FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC'),
@@ -285,6 +289,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     ),
     deleteEntry: db.prepare('DELETE FROM entries WHERE user_id = ? AND date = ?'),
     goals: db.prepare('SELECT * FROM goals WHERE user_id = ?'),
+    insertLogin: db.prepare('INSERT INTO logins (user_id) VALUES (?)'),
+    markActiveDay: db.prepare('INSERT OR IGNORE INTO activity_days (user_id, date) VALUES (?, ?)'),
+    setLastSeen: db.prepare("UPDATE users SET last_seen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"),
     consent: db.prepare('SELECT status FROM push_consent WHERE user_id = ?'),
     setConsent: db.prepare(
       `INSERT INTO push_consent (user_id, status) VALUES (?, ?)
@@ -515,6 +522,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       q.deleteExpiredSessions.run(Date.now());
       const token = crypto.randomBytes(32).toString('hex');
       q.insertSession.run(sha256(token), u.id, Date.now() + SESSION_MS);
+      q.insertLogin.run(u.id);
       ctx.res.setHeader('Set-Cookie', cookie(token, SESSION_MS / 1000));
       return { user: publicUser(u) };
     }],
@@ -558,6 +566,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           pushDevices: r.push_devices,
           healthLinked: Boolean(r.health_linked),
           healthLastUsed: r.health_last_used,
+          openSwaps: r.open_swaps,
         })),
       };
     }],
@@ -836,7 +845,11 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     // ---- Coach: scheduled push notifications ----
     ['GET', /^\/api\/notifications$/, async (ctx) => {
       requireCoach(ctx);
-      return { timezone: notifier.timezone, notifications: q.notifications.all().map(notificationRow) };
+      return {
+        timezone: notifier.timezone,
+        notifications: q.notifications.all().map(notificationRow),
+        automation: reminders.config(),
+      };
     }],
 
     ['POST', /^\/api\/notifications$/, async (ctx) => {
@@ -1030,6 +1043,19 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     }],
   ];
 
+  const deps = { db, notifier, reminders, HttpError, readBody, textField, numberField, requireUser, requireCoach, targetClient, clientById };
+  routes.push(...nutritionRoutes(deps), ...adminRoutes(deps));
+
+  // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
+  const lastSeenWritten = new Map();
+  function recordActivity(user) {
+    const now = Date.now();
+    if (now - (lastSeenWritten.get(user.id) || 0) < 60000) return;
+    lastSeenWritten.set(user.id, now);
+    q.setLastSeen.run(user.id);
+    q.markActiveDay.run(user.id, localDate(now, notifier.timezone));
+  }
+
   const root = path.resolve(publicDir);
 
   function serveStatic(req, res, pathname) {
@@ -1087,6 +1113,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       }
 
       const ctx = { req, res, url, user: currentUser(req) };
+      if (ctx.user) recordActivity(ctx.user);
       for (const [method, re, fn] of routes) {
         const m = url.pathname.match(re);
         if (m && method === req.method) {
