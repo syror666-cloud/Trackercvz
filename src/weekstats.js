@@ -69,3 +69,43 @@ function weekComparison(entries, today, goalsRow) {
 }
 
 module.exports = { weekComparison };
+
+/**
+ * Positive highlights of the week for the client's check-in card.
+ * - Weight: weekly average moved more than 0.6 % in the goal direction (target weight, else category).
+ * - Steps goal reached on more than 5 days.
+ * - Sleep goal reached on at least 5 nights.
+ */
+function weekHighlights(cmp, goalsRow, category) {
+  const goals = goalsRow || {};
+  const out = [];
+  const cur = cmp.current;
+  const prev = cmp.previous;
+  const de = (v, d = 1) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  if (cur.weightAvg !== null && prev.weightAvg !== null && prev.weightAvg > 0) {
+    let dir = 0;
+    if (goals.target_weight !== null && goals.target_weight !== undefined) dir = Math.sign(goals.target_weight - prev.weightAvg);
+    else if (category === 'diet') dir = -1;
+    else if (category === 'build') dir = 1;
+    const diff = cur.weightAvg - prev.weightAvg;
+    const pct = (diff / prev.weightAvg) * 100;
+    if (dir !== 0 && Math.sign(diff) === dir && Math.abs(pct) > 0.6) {
+      const sign = diff < 0 ? '−' : '+';
+      out.push({
+        key: 'weight',
+        icon: dir < 0 ? '📉' : '📈',
+        text: `Gewicht im Wochenschnitt ${sign}${de(Math.abs(diff))} kg (${sign}${de(Math.abs(pct))} %) – genau in Richtung Ziel`,
+      });
+    }
+  }
+  if (goals.steps_goal && cur.stepsGoalDays !== null && cur.stepsGoalDays > 5) {
+    out.push({ key: 'steps', icon: '👟', text: `Schrittziel an ${cur.stepsGoalDays} von 7 Tagen erreicht` });
+  }
+  if (goals.sleep_goal && cur.sleepGoalDays !== null && cur.sleepGoalDays >= 5) {
+    out.push({ key: 'sleep', icon: '😴', text: `Schlafziel in ${cur.sleepGoalDays} von 7 Nächten erreicht` });
+  }
+  return out;
+}
+
+module.exports.weekHighlights = weekHighlights;

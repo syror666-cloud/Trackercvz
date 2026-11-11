@@ -7,7 +7,7 @@ const { hashPassword, verifyPassword, createUser } = require('./db');
 const { createNotifier } = require('./notify');
 const { isAllowedEndpoint } = require('./push');
 const { nextRecurringRun, localDate, zonedToUtc } = require('./schedule');
-const { weekComparison } = require('./weekstats');
+const { weekComparison, weekHighlights } = require('./weekstats');
 const { nutritionRoutes } = require('./nutrition');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
@@ -382,7 +382,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     goalHistory: db.prepare('SELECT * FROM goal_history WHERE user_id = ? ORDER BY id ASC'),
     allEntries: db.prepare('SELECT * FROM entries WHERE user_id = ? ORDER BY date ASC'),
     insertCheckin: db.prepare(
-      'INSERT INTO checkins (client_id, coach_id, message, proposal, previous) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO checkins (client_id, coach_id, message, proposal, previous, highlights) VALUES (?, ?, ?, ?, ?, ?)'
     ),
     checkin: db.prepare('SELECT * FROM checkins WHERE id = ?'),
     checkinsOf: db.prepare('SELECT * FROM checkins WHERE client_id = ? ORDER BY id DESC LIMIT ?'),
@@ -463,6 +463,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       previous,
       changes: describeProposal(previous, proposal),
       changeItems: proposalItems(previous, proposal),
+      highlights: JSON.parse(ci.highlights || '[]'),
       status: ci.status,
       createdAt: ci.created_at,
       seenAt: ci.seen_at,
@@ -739,6 +740,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         measurements: metrics.reviewFor(c, today),
         goals: goalsRow(goals),
         comparison: weekComparison(q.allEntries.all(c.id), today, goals),
+        highlights: weekHighlights(weekComparison(q.allEntries.all(c.id), today, goals), goals, c.category),
         checkins: q.checkinsOf.all(c.id, 5).map(checkinRow),
         clientMessages: q.messagesSince
           .all(c.id, since)
@@ -774,8 +776,12 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         proposal.caloriesMin = wanted.caloriesMin;
         proposal.caloriesMax = wanted.caloriesMax;
       }
+      const today = localDate(Date.now(), notifier.timezone);
+      const goalsRaw = q.goals.get(c.id);
+      const highlights = weekHighlights(weekComparison(q.allEntries.all(c.id), today, goalsRaw), goalsRaw, c.category);
       const id = Number(
-        q.insertCheckin.run(c.id, coach.id, message, JSON.stringify(proposal), JSON.stringify(current)).lastInsertRowid
+        q.insertCheckin.run(c.id, coach.id, message, JSON.stringify(proposal), JSON.stringify(current), JSON.stringify(highlights))
+          .lastInsertRowid
       );
 
       // The check-in itself stays out of the chat; the client gets a push and sees it on the tracker page.

@@ -7,7 +7,9 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 **Klient** (optimiert fürs Handy, lässt sich als App auf den Homescreen legen)
 - Große grüne „Gespeichert“-Bestätigung nach dem Speichern
 - Konto (Profilbild-Menü oben rechts): Profilbild, Name, Benutzername und Passwort ändern
-- Auf dem Handy: Navigation als Leiste unten
+- Auf dem Handy: Navigation als Leiste unten, Pull to refresh (nach unten ziehen zum Aktualisieren)
+- Begrüßung nach Tageszeit (Guten Morgen bis 11 Uhr, Guten Mittag bis 14 Uhr, Nachmittag, Abend, Nacht)
+- Check-in mit „Highlights deiner Woche“: Gewicht im Wochenschnitt > 0,6 % in Zielrichtung, Schrittziel an mehr als 5 Tagen, Schlafziel in mindestens 5 Nächten (nur wenn etwas erreicht wurde)
 - Tageseintrag: Gewicht (kg), Schritte, Schlaf (Std./Min.), Trainingstag ja/nein, Kalorienplan eingehalten ja/nein (bei Nein optional die gegessenen Kalorien), optionale Notiz
 - Werte können über den Tag nachgetragen werden; vergangene Tage lassen sich bearbeiten oder löschen
 - Übersicht: aktuelles Gewicht, Veränderung in 7 Tagen und insgesamt, Ø Schritte und Ø Schlaf der letzten 7 Tage, Serie

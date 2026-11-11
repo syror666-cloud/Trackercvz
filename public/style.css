@@ -835,3 +835,50 @@ h2 .cat, h3 .cat { position: relative; top: -2px; }
   .chat { height: calc(100dvh - 250px); }
 }
 @media (max-width: 720px) { .brand span { display: inline; } }
+
+/* ---- Pull to refresh (phones) ---- */
+.ptr {
+  position: fixed; top: calc(62px + env(safe-area-inset-top)); left: 50%; z-index: 25;
+  transform: translate(-50%, -56px); opacity: 0; pointer-events: none;
+}
+.ptr.settling { transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.3s; }
+#app.settling { transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.ptr-badge {
+  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 41, 65, 0.14);
+}
+.ptr svg { width: 34px; height: 34px; overflow: visible; }
+.ptr-track { fill: none; stroke: var(--border); stroke-width: 3; }
+.ptr-ring {
+  fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: 20px 20px;
+}
+.ptr-arrow, .ptr-check { fill: none; stroke: var(--text); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transform-origin: 20px 20px; transition: transform 0.2s, opacity 0.2s; }
+.ptr-check { opacity: 0; stroke: var(--good); stroke-dasharray: 20; stroke-dashoffset: 20; }
+.ptr.ready .ptr-arrow { transform: rotate(180deg); stroke: var(--accent); }
+.ptr.loading .ptr-arrow { opacity: 0; }
+.ptr.loading .ptr-ring { stroke-dashoffset: 70 !important; animation: ptr-spin 0.8s linear infinite; }
+.ptr.done .ptr-arrow { opacity: 0; }
+.ptr.done .ptr-ring { stroke: var(--good); stroke-dashoffset: 0 !important; }
+.ptr.done .ptr-check { opacity: 1; animation: ptr-check 0.3s ease-out forwards; }
+@keyframes ptr-spin { to { transform: rotate(270deg); } }
+@keyframes ptr-check { to { stroke-dashoffset: 0; } }
+@media (max-width: 720px) {
+  html, body { overscroll-behavior-y: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ptr.loading .ptr-ring { animation-duration: 2s; }
+}
+
+/* ---- Week highlights in the check-in ---- */
+.highlights {
+  margin: 12px 0; padding: 12px 14px 10px;
+  background: var(--surface); border-radius: 12px 0 12px 12px;
+  border-left: 3px solid var(--good);
+}
+.highlights-title { font: 400 1rem var(--font-display); letter-spacing: var(--track); margin-bottom: 6px; }
+.highlights ul { list-style: none; margin: 0; padding: 0; }
+.highlights li { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; font-size: 0.95rem; }
+.hl-icon { width: 22px; flex-shrink: 0; text-align: center; }
+.hl-preview .highlights { background: var(--surface-2); margin-top: 14px; }

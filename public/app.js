@@ -144,6 +144,23 @@
   const todayLong = () => new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
   const eyebrow = (text) => `<p class="eyebrow">${esc(text)}</p>`;
 
+  /** Greeting by time of day: morning until 11, midday until 14, afternoon until 18, evening until 23. */
+  function greeting(date = new Date()) {
+    const h = date.getHours();
+    if (h >= 5 && h < 11) return 'Guten Morgen';
+    if (h >= 11 && h < 14) return 'Guten Mittag';
+    if (h >= 14 && h < 18) return 'Schönen Nachmittag';
+    if (h >= 18 && h < 23) return 'Guten Abend';
+    return 'Gute Nacht';
+  }
+
+  /** "Highlights of your week" list (only rendered when there is something to celebrate). */
+  function highlightsHtml(list, title) {
+    if (!list || !list.length) return '';
+    return `<div class="highlights"><div class="highlights-title">✨ ${esc(title)}</div>
+      <ul>${list.map((h) => `<li><span class="hl-icon" aria-hidden="true">${h.icon}</span><span>${esc(h.text)}</span></li>`).join('')}</ul></div>`;
+  }
+
   // ---------- client categories (coach only) ----------
   const CATEGORIES = { diet: 'Diät', reverse: 'Reverse Diät', build: 'Aufbau', maintenance: 'Maintenance' };
   const catTag = (c) => (c && CATEGORIES[c] ? `<span class="cat cat-${c}">${CATEGORIES[c]}</span>` : '');
@@ -472,7 +489,7 @@
 
     setView(`
       <div class="page-head">
-        <div>${eyebrow(todayLong())}<h1>Hallo ${esc(me.displayName)}</h1><p class="muted" id="streak"></p></div>
+        <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p></div>
       </div>
       <div id="push-prompt"></div>
       <div id="checkin-card"></div>
@@ -723,6 +740,7 @@
       <section class="card checkin-card">
         <div class="row-between"><h2>📋 Check-in von deinem Coach</h2><span class="badge">${esc(date)}</span></div>
         <p class="checkin-msg">${esc(ci.message)}</p>
+        ${highlightsHtml(ci.highlights, 'Highlights deiner Woche')}
         ${changesHtml}
         ${state}
         <div class="row" style="margin-top:12px">
@@ -1769,6 +1787,9 @@
         <form class="card checkin-form" id="checkin-form" novalidate>
           <h2>Check-in schreiben</h2>
           ${lastHtml}
+          ${rv.highlights && rv.highlights.length
+            ? `<div class="hl-preview">${highlightsHtml(rv.highlights, 'Highlights, die dein Klient mitbekommt')}</div>`
+            : '<p class="small muted" style="margin:10px 0 0">Diese Woche keine Highlights – im Check-in wird dann keine Highlight-Box angezeigt.</p>'}
           ${msgsHtml}
           <div class="field" style="margin-top:12px"><label for="ci-msg">Nachricht an ${esc(rv.client.displayName)}</label>
             <textarea id="ci-msg" name="message" maxlength="4000" rows="6" placeholder="Wie lief die Woche? Was war gut, was nehmen wir uns vor?"></textarea></div>
@@ -3020,5 +3041,101 @@
     });
   }
 
+  /**
+   * Pull to refresh (phones): pull down at the top of the page. A coral ring fills while pulling,
+   * the arrow flips when you can let go, the ring spins while loading and ends with a check mark.
+   */
+  function setupPullToRefresh() {
+    if (!matchMedia('(pointer: coarse)').matches) return;
+    const ptr = document.createElement('div');
+    ptr.className = 'ptr';
+    ptr.setAttribute('aria-hidden', 'true');
+    ptr.innerHTML = `<div class="ptr-badge"><svg viewBox="0 0 40 40">
+        <circle class="ptr-track" cx="20" cy="20" r="15"/><circle class="ptr-ring" cx="20" cy="20" r="15"/>
+        <path class="ptr-arrow" d="M20 13v13M14.5 21l5.5 5.5 5.5-5.5"/><path class="ptr-check" d="M13.5 20.5l4.5 4.5 8.5-9"/></svg></div>`;
+    document.body.appendChild(ptr);
+    const ring = ptr.querySelector('.ptr-ring');
+    const CIRC = 2 * Math.PI * 15;
+    ring.style.strokeDasharray = `${CIRC}`;
+    const THRESHOLD = 72;
+    const MAX = 120;
+    let startY = null;
+    let dist = 0;
+    let armed = false;
+    let busy = false;
+
+    const enabled = () => me && innerWidth <= 720 && !dialog.open && !document.querySelector('.sub-dialog[open]');
+    const blockedBy = (target) => {
+      const scroller = target.closest('.chat-log, .food-results, .user-menu, .food-table-wrap');
+      return scroller && scroller.scrollTop > 0;
+    };
+    function paint() {
+      const p = Math.min(1, dist / THRESHOLD);
+      ptr.style.transform = `translate(-50%, ${dist - 56}px)`;
+      ptr.style.opacity = String(Math.min(1, dist / 30));
+      ring.style.strokeDashoffset = String(CIRC * (1 - p));
+      ptr.classList.toggle('ready', p >= 1);
+      app.style.transform = `translateY(${dist * 0.45}px)`;
+    }
+    function settle() {
+      ptr.classList.add('settling');
+      app.classList.add('settling');
+      dist = 0;
+      paint();
+      setTimeout(() => {
+        ptr.classList.remove('settling', 'ready', 'loading', 'done');
+        app.classList.remove('settling');
+        app.style.transform = '';
+      }, 320);
+    }
+
+    window.addEventListener('touchstart', (e) => {
+      if (busy || !enabled() || window.scrollY > 0 || e.touches.length !== 1 || blockedBy(e.target)) return;
+      startY = e.touches[0].clientY;
+      dist = 0;
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (startY === null) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0 || window.scrollY > 0) {
+        if (dist > 0) settle();
+        startY = null;
+        return;
+      }
+      e.preventDefault(); // we handle this gesture
+      dist = MAX * (1 - Math.exp(-dy / (MAX * 1.4))); // rubber band
+      const nowArmed = dist >= THRESHOLD;
+      if (nowArmed && !armed && navigator.vibrate) navigator.vibrate(8);
+      armed = nowArmed;
+      paint();
+    }, { passive: false });
+
+    window.addEventListener('touchend', async () => {
+      if (startY === null) return;
+      startY = null;
+      if (!armed) return settle();
+      armed = false;
+      busy = true;
+      ptr.classList.add('loading', 'settling');
+      app.classList.add('settling');
+      dist = 64;
+      paint();
+      const minTime = new Promise((r) => setTimeout(r, 700));
+      try {
+        await Promise.all([Promise.resolve(route()), minTime]);
+        refreshUnread();
+        ptr.classList.remove('loading');
+        ptr.classList.add('done');
+        await new Promise((r) => setTimeout(r, 450));
+      } catch {
+        /* the page shows its own error */
+      }
+      busy = false;
+      settle();
+    });
+  }
+
+  setupPullToRefresh();
   boot();
 })();
