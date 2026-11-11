@@ -38,6 +38,8 @@ Danach meldest du dich als Coach an und legst unter **„+ Neuer Klient“** den
 
 ## Online stellen
 
+**Schritt-für-Schritt-Anleitung für Render: siehe [HOSTING.md](HOSTING.md).**
+
 Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracker.db`. Ein reines Static Hosting wie GitHub Pages oder Netlify reicht nicht.
 
 | Variable | Bedeutung |

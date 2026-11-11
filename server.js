@@ -32,6 +32,7 @@ const app = createApp({
   db,
   publicDir: path.join(__dirname, 'public'),
   secureCookies: process.env.SECURE_COOKIES === 'true' || process.env.NODE_ENV === 'production',
+  trustProxy: process.env.TRUST_PROXY === 'true' || Boolean(process.env.RENDER),
 });
 
 http.createServer(app).listen(PORT, () => {

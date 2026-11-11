@@ -138,7 +138,7 @@ function csvCell(v) {
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function createApp({ db, publicDir, secureCookies = false }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false }) {
   const q = {
     sessionUser: db.prepare(
       `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
@@ -247,7 +247,9 @@ function createApp({ db, publicDir, secureCookies = false }) {
 
   const routes = [
     ['POST', /^\/api\/login$/, async (ctx) => {
-      const ip = ctx.req.socket.remoteAddress || 'unknown';
+      // Behind a hosting proxy every request arrives from the proxy's address; use the forwarded client IP.
+      const forwarded = trustProxy ? String(ctx.req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
+      const ip = forwarded || ctx.req.socket.remoteAddress || 'unknown';
       checkLoginRate(ip);
       const { username, password } = await readBody(ctx.req);
       const u = typeof username === 'string' ? q.userByName.get(username.trim()) : null;
