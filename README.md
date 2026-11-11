@@ -6,6 +6,8 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 
 **Klient** (optimiert fürs Handy, lässt sich als App auf den Homescreen legen)
 - Große grüne „Gespeichert“-Bestätigung nach dem Speichern
+- Konto (Profilbild-Menü oben rechts): Profilbild, Name, Benutzername und Passwort ändern
+- Auf dem Handy: Navigation als Leiste unten
 - Tageseintrag: Gewicht (kg), Schritte, Schlaf (Std./Min.), Trainingstag ja/nein, Kalorienplan eingehalten ja/nein (bei Nein optional die gegessenen Kalorien), optionale Notiz
 - Werte können über den Tag nachgetragen werden; vergangene Tage lassen sich bearbeiten oder löschen
 - Übersicht: aktuelles Gewicht, Veränderung in 7 Tagen und insgesamt, Ø Schritte und Ø Schlaf der letzten 7 Tage, Serie
@@ -18,6 +20,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Apple Health:** automatische Übertragung von Schritten (optional Gewicht) über einen Kurzbefehl der Apple-App „Kurzbefehle“ mit persönlichem Schlüssel (Anleitung direkt in der App unter „Einstellungen“)
 
 **Coach**
+- Dashboard über den Klienten: ungelesene Nachrichten, offene Check-ins (nur Samstag/Sonntag), Tauschwünsche, nicht angenommene Plananpassungen, Klienten ohne Eintrag seit 2+ Tagen
 - Übersicht aller Klienten: letzter Eintrag (farbig markiert, wenn jemand nicht einträgt), Gewicht und Veränderung, Ø Schritte und Ø Schlaf
 - Detailansicht je Klient mit allen Diagrammen und Einträgen (nur lesen)
 - Ziele festlegen (Zielgewicht, Schritte pro Tag, Schlaf pro Nacht); der Klient sieht sie in seiner Übersicht

@@ -196,7 +196,13 @@
       return renderLogin();
     }
     topbar.hidden = false;
-    document.getElementById('whoami').textContent = `${me.displayName} · ${me.role === 'coach' ? 'Coach' : 'Klient'}`;
+    renderUserBadge();
+    if (location.hash === '#/account') {
+      renderNav();
+      if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
+      refreshUnread();
+      return renderAccount();
+    }
     renderNav();
     if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
     refreshUnread();
@@ -220,16 +226,42 @@
       me.role === 'coach'
         ? [['#/', 'Klienten', true], ['#/checkin', 'Check-in', false], ['#/admin', 'Admin', false]]
         : [['#/', 'Tracker', false], ['#/nutrition', 'Ernährung', false], ['#/chat', 'Nachrichten', true], ['#/settings', 'Einstellungen', false]];
-    const current =
+    let current =
       me.role === 'coach'
         ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash === '#/admin' ? '#/admin' : '#/'
         : ['#/chat', '#/settings', '#/nutrition'].includes(location.hash) ? location.hash : '#/';
+    if (location.hash === '#/account') current = null; // the account page lives in the profile menu
     nav.innerHTML = links
       .map(
         ([href, label, badge]) =>
-          `<a href="${href}"${href === current ? ' aria-current="page"' : ''}>${label}${badge ? '<span class="count" data-unread hidden></span>' : ''}</a>`
+          `<a href="${href}"${href === current ? ' aria-current="page"' : ''}><span class="nav-icon">${NAV_ICONS[label] || ''}${badge ? '<span class="count" data-unread hidden></span>' : ''}</span><span class="nav-label">${label}</span></a>`
       )
       .join('');
+  }
+
+  const svgIcon = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const NAV_ICONS = {
+    Tracker: svgIcon('<path d="M3 12h4l3-7 4 14 3-7h4"/>'),
+    Ernährung: svgIcon('<path d="M7 3v7a2 2 0 0 0 4 0V3M9 10v11M17 3c-1.7 1.3-2.5 3.6-2.5 6.5 0 2 .8 3 2.5 3.5V21"/>'),
+    Nachrichten: svgIcon('<path d="M4 5h16v11H9l-5 4z"/>'),
+    Einstellungen: svgIcon('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'),
+    Klienten: svgIcon('<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><path d="M16 4.8a3.2 3.2 0 0 1 0 6.3M18 14.9c1.6.7 2.7 2.4 3 5.1"/>'),
+    'Check-in': svgIcon('<rect x="5" y="4" width="14" height="17" rx="1"/><path d="M9 3h6v3H9zM9 13l2 2 4-4"/>'),
+    Admin: svgIcon('<rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/>'),
+  };
+  const PERSON_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="9" r="4"/><path d="M4 21c.8-4.2 3.9-6.5 8-6.5s7.2 2.3 8 6.5z"/></svg>';
+
+  /** Profile picture (or a placeholder) in the top bar and in the account menu. */
+  function avatarHtml(user) {
+    return user && user.avatar ? `<img src="${esc(user.avatar)}" alt="">` : PERSON_ICON;
+  }
+  function renderUserBadge() {
+    document.querySelectorAll('[data-avatar]').forEach((el) => {
+      el.innerHTML = avatarHtml(me);
+      el.classList.toggle('has-img', Boolean(me.avatar));
+    });
+    document.getElementById('menu-name').textContent = me.displayName;
+    document.getElementById('menu-role').textContent = `@${me.username} · ${me.role === 'coach' ? 'Coach' : 'Klient'}`;
   }
 
   async function refreshUnread() {
@@ -247,7 +279,29 @@
 
   window.addEventListener('hashchange', route);
 
+  const avatarBtn = document.getElementById('avatar-btn');
+  const userMenu = document.getElementById('user-menu');
+  function setMenu(open) {
+    userMenu.hidden = !open;
+    avatarBtn.setAttribute('aria-expanded', String(open));
+  }
+  avatarBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu(userMenu.hidden);
+  });
+  document.addEventListener('click', (e) => {
+    if (!userMenu.hidden && !userMenu.contains(e.target)) setMenu(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !userMenu.hidden) {
+      setMenu(false);
+      avatarBtn.focus();
+    }
+  });
+  document.getElementById('menu-account').addEventListener('click', () => setMenu(false));
+
   document.getElementById('btn-logout').addEventListener('click', async () => {
+    setMenu(false);
     await push.forgetDevice().catch(() => {});
     await api('POST', '/api/logout').catch(() => {});
     me = null;
@@ -255,7 +309,7 @@
     route();
   });
 
-  document.getElementById('btn-password').addEventListener('click', () => {
+  function openPasswordDialog() {
     openDialog(
       `<h2>Passwort ändern</h2>
        <div class="field"><label for="pw-cur">Aktuelles Passwort</label>
@@ -269,10 +323,105 @@
        </div>`,
       async (f) => {
         await api('POST', '/api/me/password', { currentPassword: f.cur.value, newPassword: f.next.value });
-        toast('Passwort geändert');
+        savedHud('Passwort geändert');
       }
     );
-  });
+  }
+
+  // ---------- account: profile picture, name, username, password ----------
+  function renderAccount() {
+    setView(`
+      <div class="page-head"><div>${eyebrow(me.role === 'coach' ? 'Coach' : 'Dein Profil')}<h1>Konto</h1></div></div>
+      <div class="account-grid">
+        <section class="card account-photo">
+          <div class="avatar avatar-xl ${me.avatar ? 'has-img' : ''}" data-avatar-preview>${avatarHtml(me)}</div>
+          <div>
+            <h2>Profilbild</h2>
+            <p class="muted small">Quadratisch zugeschnitten. ${me.role === 'client' ? 'Sieht nur dein Coach.' : 'Sehen deine Klienten nicht.'}</p>
+            <div class="row" style="gap:8px">
+              <label class="btn btn-secondary file-btn">Bild wählen<input type="file" accept="image/*" data-avatar-file hidden></label>
+              ${me.avatar ? '<button type="button" class="btn-ghost danger-text" data-avatar-remove>Entfernen</button>' : ''}
+            </div>
+          </div>
+        </section>
+        <form class="card" id="profile-form" novalidate>
+          <h2 style="margin-bottom:14px">Profil</h2>
+          <div class="field"><label for="pf-name">Name</label><input id="pf-name" name="displayName" maxlength="80" value="${esc(me.displayName)}"></div>
+          <div class="field"><label for="pf-user">Benutzername</label><input id="pf-user" name="username" maxlength="32" autocapitalize="none" value="${esc(me.username)}">
+            <div class="hint">Damit meldest du dich an. 3–32 Zeichen: Buchstaben, Ziffern, . _ -</div></div>
+          <button type="submit" class="btn-primary">Speichern</button>
+          <p class="error" hidden></p>
+        </form>
+        <section class="card">
+          <h2 style="margin-bottom:8px">Passwort</h2>
+          <p class="muted small">Ändere dein Passwort regelmäßig und nutze es nirgendwo sonst.</p>
+          <button type="button" class="btn-secondary" data-password>Passwort ändern</button>
+        </section>
+      </div>`);
+
+    const fileInput = app.querySelector('[data-avatar-file]');
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      try {
+        const image = await squareImage(file, 320);
+        me = (await api('PUT', '/api/me/avatar', { image })).user;
+        renderUserBadge();
+        savedHud('Profilbild gespeichert');
+        renderAccount();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    const remove = app.querySelector('[data-avatar-remove]');
+    if (remove) {
+      remove.addEventListener('click', async () => {
+        me = (await api('DELETE', '/api/me/avatar')).user;
+        renderUserBadge();
+        toast('Profilbild entfernt');
+        renderAccount();
+      });
+    }
+    const form = document.getElementById('profile-form');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = form.querySelector('.error');
+      errEl.hidden = true;
+      try {
+        me = (await api('PATCH', '/api/me', { displayName: form.displayName.value, username: form.username.value.trim() })).user;
+        renderUserBadge();
+        savedHud('Gespeichert');
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.hidden = false;
+      }
+    });
+    app.querySelector('[data-password]').addEventListener('click', openPasswordDialog);
+  }
+
+  /** Crops an image file to a centred square and returns a small JPEG data URL. */
+  function squareImage(file, size) {
+    return new Promise((resolve, reject) => {
+      if (!/^image\//.test(file.type)) return reject(new Error('Bitte eine Bilddatei wählen.'));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Bild konnte nicht gelesen werden.'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Dieses Bildformat wird nicht unterstützt.'));
+        img.onload = () => {
+          const side = Math.min(img.naturalWidth, img.naturalHeight);
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   // ---------- login ----------
   function renderLogin() {
@@ -1392,7 +1541,7 @@
   // ---------- coach: overview ----------
   async function renderCoachHome() {
     setView('<p class="muted">Lade…</p>');
-    const { clients } = await api('GET', '/api/clients');
+    const [{ clients }, queue] = await Promise.all([api('GET', '/api/clients'), api('GET', '/api/checkins/queue')]);
 
     const cards = clients
       .map((c) => {
@@ -1401,7 +1550,7 @@
         const delta = c.lastWeight !== null && c.firstWeight !== null ? c.lastWeight - c.firstWeight : null;
         return `<a class="card client-card" href="#/client/${c.id}${c.unreadMessages ? '/chat' : ''}">
           <div class="row-between">
-            <h3>${esc(c.displayName)} ${catTag(c.category)}</h3>
+            <h3>${c.avatar ? `<img class="mini-avatar" src="${esc(c.avatar)}" alt="">` : ''}${esc(c.displayName)} ${catTag(c.category)}</h3>
             <div class="row" style="gap:6px">
               ${c.unreadMessages ? `<span class="unread-badge">💬 ${c.unreadMessages} neu</span>` : ''}
               ${c.openSwaps ? `<span class="unread-badge">🍽 ${c.openSwaps}</span>` : ''}
@@ -1424,6 +1573,7 @@
         <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}</p></div>
         <button class="btn-primary" id="btn-new-client" type="button">+ Neuer Klient</button>
       </div>
+      ${clients.length ? coachDashboard(clients, queue) : ''}
       ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
         <p>Noch keine Klienten angelegt.</p>
         <p>Lege einen Zugang an und gib die Zugangsdaten an deinen Klienten weiter.</p></div>`}
@@ -2606,6 +2756,49 @@
     };
     f.addEventListener('change', sync);
     sync();
+  }
+
+  /** "To do" tiles above the client list: messages, check-ins (weekend only), swaps, pending plans, inactivity. */
+  function coachDashboard(clients, queue) {
+    const byId = new Map(queue.clients.map((q) => [q.id, q]));
+    const who = (c) => `${c.avatar ? `<img class="mini-avatar" src="${esc(c.avatar)}" alt="">` : ''}${esc(c.displayName)}`;
+    const tile = ({ key, title, items, empty, total, note, cls }) => `
+      <section class="card dash-tile ${cls || ''} ${items.length ? 'has-items' : ''}" data-tile="${key}">
+        <div class="dash-top"><span class="stat-label">${title}</span><span class="dash-num">${total ?? items.length}</span></div>
+        ${note ? `<p class="small muted dash-note">${note}</p>` : ''}
+        ${items.length
+          ? `<ul class="dash-list">${items.slice(0, 5).map((i) => `<li><a href="${i.href}">${i.label}</a>${i.meta ? `<span class="muted small">${i.meta}</span>` : ''}</li>`).join('')}${items.length > 5 ? `<li class="muted small">+ ${items.length - 5} weitere</li>` : ''}</ul>`
+          : `<p class="dash-empty small">${empty}</p>`}
+      </section>`;
+
+    const messages = clients.filter((c) => c.unreadMessages).map((c) => ({ href: `#/client/${c.id}/chat`, label: who(c), meta: `${c.unreadMessages} neu` }));
+    const swaps = clients.filter((c) => c.openSwaps).map((c) => ({ href: `#/client/${c.id}/nutrition`, label: who(c), meta: `${c.openSwaps} offen` }));
+    const pendingPlans = clients
+      .filter((c) => {
+        const q = byId.get(c.id);
+        return q && q.lastCheckin && q.lastCheckin.status === 'open' && q.lastCheckin.changes.length;
+      })
+      .map((c) => ({ href: `#/client/${c.id}`, label: who(c), meta: 'nicht angenommen' }));
+    const inactive = clients
+      .map((c) => ({ c, days: c.lastEntry ? daysBetween(c.lastEntry, todayStr()) : null }))
+      .filter(({ days }) => days === null || days >= 2)
+      .sort((a, b) => (b.days ?? 999) - (a.days ?? 999))
+      .map(({ c, days }) => ({ href: `#/client/${c.id}`, label: who(c), meta: days === null ? 'noch nie' : `${days} Tage` }));
+    const openCheckins = queue.isWeekend
+      ? clients.filter((c) => byId.get(c.id) && !byId.get(c.id).doneThisWeek).map((c) => ({ href: `#/checkin/${c.id}`, label: who(c) }))
+      : [];
+    const checkinTile = queue.isWeekend
+      ? tile({ key: 'checkins', title: 'Offene Check-ins', items: openCheckins, empty: 'Alle Check-ins erledigt ✓', note: `${clients.length - openCheckins.length} von ${clients.length} erledigt` })
+      : tile({ key: 'checkins', title: 'Check-ins', items: [], total: '–', empty: 'Unter der Woche gibt es keine Check-ins. Ab Samstag erscheinen hier die offenen.', cls: 'is-off' });
+
+    return `<div class="dash-grid">
+      ${tile({ key: 'messages', title: 'Ungelesene Nachrichten', items: messages, total: clients.reduce((a, c) => a + (c.unreadMessages || 0), 0), empty: 'Keine neuen Nachrichten ✓' })}
+      ${checkinTile}
+      ${tile({ key: 'swaps', title: 'Tauschwünsche', items: swaps, total: clients.reduce((a, c) => a + (c.openSwaps || 0), 0), empty: 'Keine offenen Wünsche ✓' })}
+      ${tile({ key: 'plans', title: 'Plananpassungen offen', items: pendingPlans, empty: 'Alle Anpassungen angenommen ✓' })}
+      ${tile({ key: 'inactive', title: 'Ohne Eintrag (2+ Tage)', items: inactive, empty: 'Alle tracken fleißig ✓' })}
+    </div>
+    <div class="row-between list-head"><h2>Alle Klienten</h2></div>`;
   }
 
   function showCredentials(name, username, password, after) {

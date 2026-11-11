@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { hashPassword, verifyPassword, createUser } = require('./db');
 const { createNotifier } = require('./notify');
 const { isAllowedEndpoint } = require('./push');
-const { nextRecurringRun, localDate } = require('./schedule');
+const { nextRecurringRun, localDate, zonedToUtc } = require('./schedule');
 const { weekComparison } = require('./weekstats');
 const { nutritionRoutes } = require('./nutrition');
 const { createReminders, adminRoutes } = require('./admin');
@@ -14,7 +14,7 @@ const { metricsModule, CATEGORIES } = require('./metrics');
 
 const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
-const MAX_BODY = 64 * 1024;
+const MAX_BODY = 400 * 1024; // room for a small profile picture
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 10;
 
@@ -227,7 +227,17 @@ function describeProposal(previous, proposal) {
   return proposalItems(previous, proposal).map((i) => `${i.label}: ${i.before} → ${i.after}`);
 }
 
-const publicUser = (u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role });
+const avatarUrl = (u) => (u.avatar ? `/api/avatar/${u.id}?v=${encodeURIComponent(u.avatar_updated || '1')}` : null);
+const publicUser = (u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, avatar: avatarUrl(u) });
+
+/** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
+function parseAvatar(dataUrl) {
+  const m = typeof dataUrl === 'string' && dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) throw new HttpError(400, 'Bitte ein Bild (JPG, PNG oder WebP) wählen');
+  const bytes = Buffer.from(m[2], 'base64');
+  if (bytes.length > 250 * 1024) throw new HttpError(413, 'Das Bild ist zu groß');
+  return { type: m[1], bytes };
+}
 
 function csvCell(v) {
   if (v === null || v === undefined) return '';
@@ -265,10 +275,12 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     userById: db.prepare('SELECT * FROM users WHERE id = ?'),
     setPassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
     setDisplayName: db.prepare('UPDATE users SET display_name = ? WHERE id = ?'),
+    setUsername: db.prepare('UPDATE users SET username = ? WHERE id = ?'),
+    setAvatar: db.prepare('UPDATE users SET avatar = ?, avatar_updated = ? WHERE id = ?'),
     setCategory: db.prepare('UPDATE users SET category = ? WHERE id = ?'),
     deleteUser: db.prepare("DELETE FROM users WHERE id = ? AND role = 'client'"),
     clients: db.prepare(
-      `SELECT u.id, u.username, u.display_name, u.created_at, u.category,
+      `SELECT u.id, u.username, u.display_name, u.created_at, u.category, u.avatar IS NOT NULL AS has_avatar, u.avatar_updated,
          (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date DESC LIMIT 1) AS last_weight,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date ASC LIMIT 1) AS first_weight,
@@ -423,6 +435,18 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     };
   }
 
+  /**
+   * Check-ins happen on the weekend. The current check-in period starts on the most recent
+   * Saturday 00:00 (local time) – today if it is Saturday.
+   */
+  function checkinPeriodStart(now) {
+    const today = localDate(now, notifier.timezone);
+    const dow = new Date(`${today}T00:00:00Z`).getUTCDay(); // 0 = Sunday … 6 = Saturday
+    const back = (dow + 1) % 7; // days since Saturday
+    const sat = new Date(Date.parse(`${today}T00:00:00Z`) - back * 86400000).toISOString().slice(0, 10);
+    return zonedToUtc(sat, '00:00', notifier.timezone);
+  }
+
   function saveGoals(userId, g, source) {
     const v = [g.targetWeight ?? null, g.stepsGoal ?? null, g.sleepGoal ?? null, g.caloriesMin ?? null, g.caloriesMax ?? null];
     q.upsertGoals.run(userId, ...v);
@@ -541,6 +565,48 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
 
     ['GET', /^\/api\/me$/, async (ctx) => ({ user: publicUser(requireUser(ctx)) })],
 
+    ['PATCH', /^\/api\/me$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const body = await readBody(ctx.req);
+      if (body.displayName !== undefined) {
+        const name = textField(body.displayName, { name: 'Name', max: 80 });
+        if (!name) throw new HttpError(400, 'Name darf nicht leer sein');
+        q.setDisplayName.run(name, u.id);
+      }
+      if (body.username !== undefined) {
+        const username = validateUsername(typeof body.username === 'string' ? body.username.trim() : body.username);
+        const clash = q.userByName.get(username);
+        if (clash && clash.id !== u.id) throw new HttpError(409, 'Dieser Benutzername ist schon vergeben');
+        q.setUsername.run(username, u.id);
+      }
+      return { user: publicUser(q.userById.get(u.id)) };
+    }],
+
+    ['PUT', /^\/api\/me\/avatar$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { type, bytes } = parseAvatar((await readBody(ctx.req)).image);
+      q.setAvatar.run(`data:${type};base64,${bytes.toString('base64')}`, new Date().toISOString(), u.id);
+      return { user: publicUser(q.userById.get(u.id)) };
+    }],
+
+    ['DELETE', /^\/api\/me\/avatar$/, async (ctx) => {
+      const u = requireUser(ctx);
+      q.setAvatar.run(null, new Date().toISOString(), u.id);
+      return { user: publicUser(q.userById.get(u.id)) };
+    }],
+
+    // Profile pictures: own picture, or any picture for the coach.
+    ['GET', /^\/api\/avatar\/(\d+)$/, async (ctx, [, id]) => {
+      const u = requireUser(ctx);
+      if (u.role !== 'coach' && u.id !== Number(id)) throw new HttpError(404, 'Nicht gefunden');
+      const target = q.userById.get(Number(id));
+      const m = target && target.avatar && target.avatar.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+      if (!m) throw new HttpError(404, 'Kein Profilbild');
+      ctx.res.writeHead(200, { 'Content-Type': m[1], 'Cache-Control': 'private, max-age=604800' });
+      ctx.res.end(Buffer.from(m[2], 'base64'));
+      return undefined;
+    }],
+
     ['POST', /^\/api\/me\/password$/, async (ctx) => {
       const u = requireUser(ctx);
       const { currentPassword, newPassword } = await readBody(ctx.req);
@@ -569,6 +635,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           avgSteps7d: r.avg_steps_7d,
           avgSleep7d: r.avg_sleep_7d,
           unreadMessages: r.unread_messages,
+          avatar: r.has_avatar ? `/api/avatar/${r.id}?v=${encodeURIComponent(r.avatar_updated || '1')}` : null,
           pushStatus: r.push_status || 'unknown',
           pushDevices: r.push_devices,
           healthLinked: Boolean(r.health_linked),
@@ -640,8 +707,11 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     // ---- Weekly check-ins ----
     ['GET', /^\/api\/checkins\/queue$/, async (ctx) => {
       requireCoach(ctx);
-      const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString();
+      const periodStart = new Date(checkinPeriodStart(Date.now())).toISOString();
+      const dow = new Date(`${localDate(Date.now(), notifier.timezone)}T00:00:00Z`).getUTCDay();
       return {
+        isWeekend: dow === 6 || dow === 0,
+        periodStart,
         clients: q.clientsBasic.all().map((c) => {
           const last = q.lastCheckin.get(c.id);
           return {
@@ -651,7 +721,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
             category: c.category,
             lastEntry: c.last_entry,
             lastCheckin: last ? checkinRow(last) : null,
-            doneThisWeek: Boolean(last && last.created_at >= weekAgo),
+            doneThisWeek: Boolean(last && last.created_at >= periodStart),
           };
         }),
       };

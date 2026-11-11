@@ -258,7 +258,7 @@ function migrate(db) {
   db.exec(`UPDATE goal_history SET calories_min = calories_goal, calories_max = calories_goal
            WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
 
-  addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT']]);
+  addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT']]);
 
   // Starter extra measurements: belly circumference for diets, gym PRs for building muscle.
   if (!db.prepare("SELECT 1 FROM settings WHERE key = 'metrics_seeded'").get()) {
