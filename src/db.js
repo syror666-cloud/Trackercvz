@@ -40,6 +40,53 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS messages_client ON messages (client_id, id);
 
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint        TEXT NOT NULL UNIQUE,
+  p256dh          TEXT NOT NULL,
+  auth            TEXT NOT NULL,
+  user_agent      TEXT,
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  last_success_at TEXT
+);
+
+-- Whether a user agreed to push messages: 'granted' or 'denied' (no row = not asked yet).
+CREATE TABLE IF NOT EXISTS push_consent (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  status     TEXT NOT NULL CHECK (status IN ('granted', 'denied')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  title         TEXT NOT NULL,
+  body          TEXT NOT NULL,
+  audience      TEXT NOT NULL CHECK (audience IN ('all', 'some')),
+  recipient_ids TEXT NOT NULL DEFAULT '[]',
+  schedule      TEXT NOT NULL CHECK (schedule IN ('once', 'daily', 'weekly')),
+  time          TEXT,
+  weekdays      TEXT NOT NULL DEFAULT '[]',
+  active        INTEGER NOT NULL DEFAULT 1,
+  next_run_at   INTEGER,
+  last_sent_at  INTEGER,
+  last_result   TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Personal key for automatic imports (e.g. Apple Health via the Shortcuts app).
+CREATE TABLE IF NOT EXISTS health_tokens (
+  user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  token_hash   TEXT NOT NULL UNIQUE,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  last_used_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS goals (
   user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   target_weight REAL,

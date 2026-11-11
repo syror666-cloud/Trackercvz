@@ -1,6 +1,6 @@
 {
-  "name": "Thabs Tracker",
-  "short_name": "Thabs Tracker",
+  "name": "Thabstracker",
+  "short_name": "Thabstracker",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

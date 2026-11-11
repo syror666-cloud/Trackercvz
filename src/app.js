@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { hashPassword, verifyPassword, createUser } = require('./db');
+const { createNotifier } = require('./notify');
+const { isAllowedEndpoint } = require('./push');
+const { nextRecurringRun, localDate } = require('./schedule');
 
 const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -138,7 +141,20 @@ function csvCell(v) {
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false }) {
+/** Step counts from the Shortcuts app may arrive as "8.523", "8523,0" or 8523.4. */
+function parseSteps(value) {
+  if (value === undefined || value === null || value === '') return value === '' ? null : value;
+  if (typeof value === 'number') return Math.round(value);
+  const t = String(value).replace(/[^\d.,]/g, '');
+  if (/^\d{1,3}([.,]\d{3})+$/.test(t)) return Number(t.replace(/[.,]/g, ''));
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) && t ? Math.round(n) : value;
+}
+
+const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier }) {
+  notifier = notifier || createNotifier(db, {});
   const q = {
     sessionUser: db.prepare(
       `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
@@ -162,7 +178,11 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
          (SELECT COUNT(*) FROM entries e WHERE e.user_id = u.id AND e.date > date('now', '-7 days')) AS entries_7d,
          (SELECT AVG(steps) FROM entries e WHERE e.user_id = u.id AND steps IS NOT NULL AND e.date > date('now', '-7 days')) AS avg_steps_7d,
          (SELECT AVG(sleep) FROM entries e WHERE e.user_id = u.id AND sleep IS NOT NULL AND e.date > date('now', '-7 days')) AS avg_sleep_7d,
-         (SELECT COUNT(*) FROM messages m WHERE m.client_id = u.id AND m.sender_id = u.id AND m.read_at IS NULL) AS unread_messages
+         (SELECT COUNT(*) FROM messages m WHERE m.client_id = u.id AND m.sender_id = u.id AND m.read_at IS NULL) AS unread_messages,
+         (SELECT status FROM push_consent pc WHERE pc.user_id = u.id) AS push_status,
+         (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
+         (SELECT last_used_at FROM health_tokens ht WHERE ht.user_id = u.id) AS health_last_used,
+         (SELECT COUNT(*) FROM health_tokens ht WHERE ht.user_id = u.id) AS health_linked
        FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
     ),
     entries: db.prepare('SELECT * FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC'),
@@ -176,6 +196,40 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
     ),
     deleteEntry: db.prepare('DELETE FROM entries WHERE user_id = ? AND date = ?'),
     goals: db.prepare('SELECT * FROM goals WHERE user_id = ?'),
+    consent: db.prepare('SELECT status FROM push_consent WHERE user_id = ?'),
+    setConsent: db.prepare(
+      `INSERT INTO push_consent (user_id, status) VALUES (?, ?)
+       ON CONFLICT (user_id) DO UPDATE SET status = excluded.status, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
+    ),
+    subCount: db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?'),
+    upsertSub: db.prepare(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh,
+         auth = excluded.auth, user_agent = excluded.user_agent`
+    ),
+    deleteSubByEndpoint: db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?'),
+    deleteSubsOfUser: db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?'),
+    notifications: db.prepare('SELECT * FROM notifications ORDER BY active DESC, COALESCE(next_run_at, last_sent_at) DESC, id DESC'),
+    notification: db.prepare('SELECT * FROM notifications WHERE id = ?'),
+    insertNotification: db.prepare(
+      `INSERT INTO notifications (title, body, audience, recipient_ids, schedule, time, weekdays, next_run_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ),
+    setNotificationActive: db.prepare('UPDATE notifications SET active = ?, next_run_at = ? WHERE id = ?'),
+    deleteNotification: db.prepare('DELETE FROM notifications WHERE id = ?'),
+    healthToken: db.prepare('SELECT * FROM health_tokens WHERE user_id = ?'),
+    upsertHealthToken: db.prepare(
+      `INSERT INTO health_tokens (user_id, token_hash) VALUES (?, ?)
+       ON CONFLICT (user_id) DO UPDATE SET token_hash = excluded.token_hash,
+         created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), last_used_at = NULL`
+    ),
+    deleteHealthToken: db.prepare('DELETE FROM health_tokens WHERE user_id = ?'),
+    touchHealthToken: db.prepare(
+      "UPDATE health_tokens SET last_used_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE user_id = ?"
+    ),
+    userByHealthToken: db.prepare(
+      "SELECT u.* FROM health_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND u.role = 'client'"
+    ),
     messages: db.prepare(
       `SELECT m.*, u.role AS sender_role, u.display_name AS sender_name
        FROM messages m JOIN users u ON u.id = m.sender_id
@@ -208,6 +262,37 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
   };
 
   const loginAttempts = new Map();
+  const userName = db.prepare('SELECT display_name FROM users WHERE id = ?');
+
+  function notificationRow(n) {
+    const ids = JSON.parse(n.recipient_ids);
+    const weekdays = JSON.parse(n.weekdays);
+    let scheduleText;
+    if (n.schedule === 'daily') scheduleText = `Täglich um ${n.time} Uhr`;
+    else if (n.schedule === 'weekly') scheduleText = `${weekdays.map((d) => WEEKDAY_NAMES[d - 1]).join(', ')} um ${n.time} Uhr`;
+    else scheduleText = 'Einmalig';
+    return {
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      audience: n.audience,
+      recipientIds: ids,
+      recipientNames: ids.map((id) => (userName.get(id) || {}).display_name).filter(Boolean),
+      schedule: n.schedule,
+      scheduleText,
+      time: n.time,
+      weekdays,
+      active: Boolean(n.active),
+      nextRunAt: n.active && n.next_run_at ? new Date(n.next_run_at).toISOString() : null,
+      lastSentAt: n.last_sent_at ? new Date(n.last_sent_at).toISOString() : null,
+      lastResult: n.last_result,
+    };
+  }
+
+  function requestOrigin(req) {
+    const proto = trustProxy ? String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() : secureCookies ? 'https' : 'http';
+    return req.headers.host ? `${proto || 'http'}://${req.headers.host}` : null;
+  }
 
   function cookie(token, maxAgeSec) {
     const parts = [`sid=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Strict', `Max-Age=${maxAgeSec}`];
@@ -324,6 +409,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
           avgSteps7d: r.avg_steps_7d,
           avgSleep7d: r.avg_sleep_7d,
           unreadMessages: r.unread_messages,
+          pushStatus: r.push_status || 'unknown',
+          pushDevices: r.push_devices,
+          healthLinked: Boolean(r.health_linked),
+          healthLastUsed: r.health_last_used,
         })),
       };
     }],
@@ -411,8 +500,194 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
       const body = textField((await readBody(ctx.req)).body, { name: 'Nachricht', max: 2000 });
       if (!body) throw new HttpError(400, 'Nachricht darf nicht leer sein');
       const id = Number(q.insertMessage.run(c.id, u.id, body).lastInsertRowid);
+      // Notify the other side; failures must not break sending the message.
+      const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
+      const push =
+        u.role === 'coach'
+          ? notifier.sendToUsers([c.id], { title: 'Neue Nachricht von deinem Coach', body: preview, url: '/#/chat' })
+          : notifier.sendToUsers(notifier.coachIds(), {
+              title: `Nachricht von ${c.display_name}`, body: preview, url: `/#/client/${c.id}/chat`,
+            });
+      push.catch((err) => console.error(err));
       ctx.res.statusCode = 201;
       return { id };
+    }],
+
+    // ---- Push notifications ----
+    ['GET', /^\/api\/push\/config$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const consent = q.consent.get(u.id);
+      return {
+        publicKey: notifier.publicKey,
+        status: consent ? consent.status : 'unknown',
+        devices: q.subCount.get(u.id).n,
+      };
+    }],
+
+    ['POST', /^\/api\/push\/subscribe$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { subscription } = await readBody(ctx.req);
+      const endpoint = subscription && subscription.endpoint;
+      const keys = (subscription && subscription.keys) || {};
+      if (typeof endpoint !== 'string' || !isAllowedEndpoint(endpoint)) throw new HttpError(400, 'Unbekannter Push-Dienst');
+      if (typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string' || keys.p256dh.length > 200 || keys.auth.length > 100) {
+        throw new HttpError(400, 'Ungültige Push-Schlüssel');
+      }
+      q.upsertSub.run(u.id, endpoint, keys.p256dh, keys.auth, String(ctx.req.headers['user-agent'] || '').slice(0, 300));
+      q.setConsent.run(u.id, 'granted');
+      notifier.rememberOrigin(requestOrigin(ctx.req));
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/push\/unsubscribe$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { endpoint } = await readBody(ctx.req);
+      if (typeof endpoint === 'string') q.deleteSubByEndpoint.run(u.id, endpoint);
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/push\/consent$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { status } = await readBody(ctx.req);
+      if (status !== 'denied') throw new HttpError(400, 'Ungültiger Status');
+      q.setConsent.run(u.id, 'denied');
+      q.deleteSubsOfUser.run(u.id);
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/push\/test$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const r = await notifier.sendToUsers([u.id], {
+        title: 'Thabstracker', body: 'Benachrichtigungen sind aktiv 💪', url: '/',
+      });
+      return r;
+    }],
+
+    // ---- Coach: scheduled push notifications ----
+    ['GET', /^\/api\/notifications$/, async (ctx) => {
+      requireCoach(ctx);
+      return { timezone: notifier.timezone, notifications: q.notifications.all().map(notificationRow) };
+    }],
+
+    ['POST', /^\/api\/notifications$/, async (ctx) => {
+      requireCoach(ctx);
+      const b = await readBody(ctx.req);
+      const title = textField(b.title, { name: 'Titel', max: 60 });
+      const text = textField(b.body, { name: 'Text', max: 240 });
+      if (!title || !text) throw new HttpError(400, 'Titel und Text sind Pflicht');
+      if (!['all', 'some'].includes(b.audience)) throw new HttpError(400, 'Empfänger fehlen');
+      let recipients = [];
+      if (b.audience === 'some') {
+        if (!Array.isArray(b.recipientIds) || !b.recipientIds.length) throw new HttpError(400, 'Bitte mindestens einen Klienten auswählen');
+        recipients = [...new Set(b.recipientIds.map(Number))];
+        for (const id of recipients) clientById(id);
+      }
+      if (!['once', 'daily', 'weekly'].includes(b.schedule)) throw new HttpError(400, 'Ungültige Wiederholung');
+
+      let time = null;
+      let weekdays = [];
+      let nextRun;
+      if (b.schedule === 'once') {
+        if (b.sendAt) {
+          nextRun = Date.parse(b.sendAt);
+          if (!Number.isFinite(nextRun)) throw new HttpError(400, 'Ungültiger Zeitpunkt');
+          if (nextRun < Date.now() - 60000) throw new HttpError(400, 'Der Zeitpunkt liegt in der Vergangenheit');
+        } else {
+          nextRun = Date.now();
+        }
+      } else {
+        if (typeof b.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(b.time)) throw new HttpError(400, 'Bitte eine Uhrzeit angeben');
+        time = b.time;
+        if (b.schedule === 'weekly') {
+          weekdays = Array.isArray(b.weekdays) ? [...new Set(b.weekdays.map(Number))].filter((d) => d >= 1 && d <= 7).sort() : [];
+          if (!weekdays.length) throw new HttpError(400, 'Bitte mindestens einen Wochentag auswählen');
+        }
+        nextRun = nextRecurringRun({ schedule: b.schedule, time, weekdays }, Date.now(), notifier.timezone);
+      }
+
+      const id = Number(
+        q.insertNotification.run(title, text, b.audience, JSON.stringify(recipients), b.schedule, time, JSON.stringify(weekdays), nextRun)
+          .lastInsertRowid
+      );
+      if (b.schedule === 'once' && !b.sendAt) await notifier.runDue();
+      ctx.res.statusCode = 201;
+      return { notification: notificationRow(q.notification.get(id)) };
+    }],
+
+    ['PATCH', /^\/api\/notifications\/(\d+)$/, async (ctx, [, id]) => {
+      requireCoach(ctx);
+      const n = q.notification.get(Number(id));
+      if (!n) throw new HttpError(404, 'Nicht gefunden');
+      const { active } = await readBody(ctx.req);
+      if (typeof active !== 'boolean') throw new HttpError(400, 'Ungültiger Status');
+      if (n.schedule === 'once' && active && (!n.next_run_at || n.last_sent_at)) {
+        throw new HttpError(400, 'Einmalige Nachrichten können nach dem Senden nicht erneut aktiviert werden');
+      }
+      const next = active && n.schedule !== 'once'
+        ? nextRecurringRun({ schedule: n.schedule, time: n.time, weekdays: JSON.parse(n.weekdays) }, Date.now(), notifier.timezone)
+        : n.next_run_at;
+      q.setNotificationActive.run(active ? 1 : 0, next, n.id);
+      return { notification: notificationRow(q.notification.get(n.id)) };
+    }],
+
+    ['POST', /^\/api\/notifications\/(\d+)\/send$/, async (ctx, [, id]) => {
+      requireCoach(ctx);
+      const r = await notifier.sendNow(Number(id));
+      if (!r) throw new HttpError(404, 'Nicht gefunden');
+      return { result: r, notification: notificationRow(q.notification.get(Number(id))) };
+    }],
+
+    ['DELETE', /^\/api\/notifications\/(\d+)$/, async (ctx, [, id]) => {
+      requireCoach(ctx);
+      q.deleteNotification.run(Number(id));
+      return { ok: true };
+    }],
+
+    // ---- Apple Health & Co.: personal import key ----
+    ['GET', /^\/api\/health\/token$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const t = q.healthToken.get(u.id);
+      return { linked: Boolean(t), createdAt: t ? t.created_at : null, lastUsedAt: t ? t.last_used_at : null };
+    }],
+
+    ['POST', /^\/api\/health\/token$/, async (ctx) => {
+      const u = requireUser(ctx);
+      if (u.role !== 'client') throw new HttpError(403, 'Nur für Klienten');
+      const token = `tt_${crypto.randomBytes(24).toString('base64url')}`;
+      q.upsertHealthToken.run(u.id, sha256(token));
+      return { token };
+    }],
+
+    ['DELETE', /^\/api\/health\/token$/, async (ctx) => {
+      const u = requireUser(ctx);
+      q.deleteHealthToken.run(u.id);
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/health\/import$/, async (ctx) => {
+      const auth = String(ctx.req.headers.authorization || '');
+      const m = auth.match(/^Bearer\s+(\S+)$/i);
+      const owner = m ? q.userByHealthToken.get(sha256(m[1])) : null;
+      if (!owner) throw new HttpError(401, 'Ungültiger oder fehlender Schlüssel');
+      const body = await readBody(ctx.req);
+      const date = body.date === undefined || body.date === '' ? localDate(Date.now(), notifier.timezone) : body.date;
+      if (!isValidDate(date) || date > maxAllowedDate()) throw new HttpError(400, 'Ungültiges Datum');
+      const incoming = {
+        weight: numberField(body.weight === '' ? undefined : body.weight, { name: 'Gewicht', min: 20, max: 400 }),
+        steps: numberField(parseSteps(body.steps === '' ? undefined : body.steps), { name: 'Schritte', min: 0, max: 200000, integer: true }),
+        sleep: numberField(body.sleep === '' ? undefined : body.sleep, { name: 'Schlaf', min: 0, max: 24 }),
+      };
+      if (Object.values(incoming).every((v) => v === undefined || v === null)) {
+        throw new HttpError(400, 'Keine Werte übermittelt (steps, weight oder sleep)');
+      }
+      const existing = q.entry.get(owner.id, date) || {};
+      const merged = {};
+      for (const k of ['weight', 'steps', 'sleep']) {
+        merged[k] = incoming[k] !== undefined && incoming[k] !== null ? incoming[k] : existing[k] ?? null;
+      }
+      q.upsertEntry.run(owner.id, date, merged.weight, merged.steps, merged.sleep, existing.note ?? null);
+      q.touchHealthToken.run(owner.id);
+      return { ok: true, date, saved: incoming };
     }],
 
     // ---- Entries ----
@@ -491,7 +766,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false })
     const ext = path.extname(file);
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300',
+      'Cache-Control': ext === '.html' || file.endsWith('sw.js') ? 'no-cache' : 'public, max-age=300',
     });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);

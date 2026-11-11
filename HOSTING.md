@@ -83,6 +83,11 @@ Oben links steht dann die Adresse, z. B. `https://fitness-tracker.onrender.com`.
 
 ---
 
+## Push-Benachrichtigungen
+Funktionieren ohne weitere Einrichtung: Die nötigen Schlüssel erzeugt der Server beim ersten Start selbst und speichert sie auf der Disk.
+Optional kannst du unter Environment Variables `VAPID_SUBJECT` = `mailto:deine@email.de` setzen (Kontaktadresse für Apple/Google).
+Wichtig für iPhones: Push geht nur, wenn der Klient die Seite über Safari → Teilen → „Zum Home-Bildschirm“ hinzugefügt hat und sie von dort öffnet.
+
 ## Laufender Betrieb
 - **Updates:** Jeder Push auf den gewählten Branch wird automatisch neu deployt. Die Daten auf der Disk bleiben erhalten.
   Während eines Deploys ist die Seite ein paar Sekunden nicht erreichbar (bei Services mit Disk normal).

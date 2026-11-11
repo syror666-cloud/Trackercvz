@@ -1,4 +1,4 @@
-# Thabs Tracker (Coach & Klient)
+# Thabstracker (Coach & Klient)
 
 Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und der Coach jederzeit **Einsicht in alle Einträge** hat.
 
@@ -10,6 +10,8 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - Übersicht: aktuelles Gewicht, Veränderung in 7 Tagen und insgesamt, Ø Schritte und Ø Schlaf der letzten 7 Tage, Serie
 - Diagramme: Gewichtsverlauf mit 7-Tage-Durchschnitt, Schritte und Schlaf als Balken (Zeiträume 30 T / 90 T / 1 J / Alle)
 - **Nachrichten:** eigener Chat mit dem Coach für Wünsche, Fragen und Vorschläge
+- **Push-Benachrichtigungen** (nach Zustimmung): Erinnerungen des Coaches und neue Chat-Nachrichten. Auf dem iPhone nur, wenn die Seite zum Home-Bildschirm hinzugefügt wurde (ab iOS 16.4)
+- **Apple Health:** automatische Übertragung von Schritten (optional Gewicht) über einen Kurzbefehl der Apple-App „Kurzbefehle“ mit persönlichem Schlüssel (Anleitung direkt in der App unter „Einstellungen“)
 
 **Coach**
 - Übersicht aller Klienten: letzter Eintrag (farbig markiert, wenn jemand nicht einträgt), Gewicht und Veränderung, Ø Schritte und Ø Schlaf
@@ -18,6 +20,8 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - Klienten anlegen, umbenennen, Passwort neu vergeben, löschen
 - CSV-Export (öffnet sich direkt in Excel)
 - **Nachrichten:** ein Chat pro Klient; ungelesene Nachrichten werden in der Übersicht und in der Navigation angezeigt
+- **Push-Benachrichtigungen:** einmalig (sofort oder geplant) und wiederkehrend (täglich oder an bestimmten Wochentagen), an alle oder ausgewählte Klienten; Übersicht, wer zugestimmt, abgelehnt oder noch nicht entschieden hat
+- Sehen, ob ein Klient Apple Health verbunden hat und wann zuletzt Daten kamen
 
 Klienten sehen immer nur ihre eigenen Daten und ihren eigenen Chat.
 
@@ -52,6 +56,8 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `DATA_DIR` | Ordner für die Datenbank (Standard `./data`) |
 | `COACH_USERNAME`, `COACH_PASSWORD`, `COACH_NAME` | Coach-Konto beim ersten Start |
 | `NODE_ENV=production` oder `SECURE_COOKIES=true` | Login-Cookie nur über HTTPS (im Live-Betrieb setzen) |
+| `APP_TIMEZONE` | Zeitzone für geplante Push-Nachrichten und Health-Importe (Standard `Europe/Berlin`) |
+| `VAPID_SUBJECT` | optional: Kontakt für Push-Dienste, z. B. `mailto:du@deine-domain.de` (sonst die Adresse der Seite) |
 
 **Mit Docker** (z. B. auf einem eigenen VPS, Railway, Fly.io oder Render mit Persistent Disk):
 

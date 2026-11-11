@@ -154,6 +154,7 @@
       return renderCoachHome();
     }
     if (location.hash === '#/chat') return renderClientChat();
+    if (location.hash === '#/settings') return renderClientSettings();
     return renderClientHome();
   }
 
@@ -161,8 +162,8 @@
     const links =
       me.role === 'coach'
         ? [['#/', 'Klienten', true]]
-        : [['#/', 'Tracker', false], ['#/chat', 'Nachrichten', true]];
-    const current = me.role === 'coach' ? '#/' : location.hash === '#/chat' ? '#/chat' : '#/';
+        : [['#/', 'Tracker', false], ['#/chat', 'Nachrichten', true], ['#/settings', 'Einstellungen', false]];
+    const current = me.role === 'coach' ? '#/' : ['#/chat', '#/settings'].includes(location.hash) ? location.hash : '#/';
     nav.innerHTML = links
       .map(
         ([href, label, badge]) =>
@@ -187,6 +188,7 @@
   window.addEventListener('hashchange', route);
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
+    await push.forgetDevice().catch(() => {});
     await api('POST', '/api/logout').catch(() => {});
     me = null;
     location.hash = '';
@@ -217,7 +219,7 @@
     setView(`
       <div class="login-wrap">
         <form class="card login-card" id="login-form">
-          <img class="login-logo" src="/logo.jpg" alt="Thabs Tracker" width="900" height="600">
+          <img class="login-logo" src="/logo.jpg" alt="Thabstracker" width="900" height="600">
           <div class="field"><label for="u">Benutzername</label>
             <input id="u" name="username" autocomplete="username" autocapitalize="none" required></div>
           <div class="field"><label for="p">Passwort</label>
@@ -252,6 +254,7 @@
       <div class="page-head">
         <div><h1>Hallo ${esc(me.displayName)}</h1><p class="muted" id="streak"></p></div>
       </div>
+      <div id="push-prompt"></div>
       <div class="grid-2">
         <form class="card" id="entry-form" novalidate>
           <div class="row-between" style="margin-bottom:12px">
@@ -364,6 +367,7 @@
     });
     fillForm();
     updateStreak();
+    maybeShowPushPrompt(document.getElementById('push-prompt'));
   }
 
   // ---------- shared dashboard ----------
@@ -558,6 +562,284 @@
     };
   }
 
+  // ---------- push notifications ----------
+  const push = {
+    supported: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+    isIos: () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+    standalone: () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
+
+    /** Why push can't work in this browser, or null if it can. */
+    blocker() {
+      if (push.isIos() && !push.standalone()) return 'ios-home-screen';
+      if (!push.supported()) return 'unsupported';
+      return null;
+    },
+
+    async registration() {
+      if (!('serviceWorker' in navigator)) return null;
+      return navigator.serviceWorker.register('/sw.js');
+    },
+
+    async localSubscription() {
+      if (!push.supported()) return null;
+      const reg = await navigator.serviceWorker.getRegistration();
+      return reg ? reg.pushManager.getSubscription() : null;
+    },
+
+    async enable() {
+      const { publicKey } = await api('GET', '/api/push/config');
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        if (permission === 'denied') {
+          await api('POST', '/api/push/consent', { status: 'denied' });
+          throw new Error('Mitteilungen sind im Browser blockiert. Du kannst sie in den Einstellungen deines Geräts für diese Seite wieder erlauben.');
+        }
+        throw new Error('Mitteilungen wurden nicht erlaubt.');
+      }
+      const reg = await push.registration();
+      await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const raw = atob(publicKey.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (publicKey.length % 4)) % 4));
+        try {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)),
+          });
+        } catch (err) {
+          throw new Error(`Dieser Browser konnte sich nicht für Push-Nachrichten anmelden. Bitte einen anderen Browser oder das Handy verwenden. (${err.message})`);
+        }
+      }
+      await api('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
+    },
+
+    async disable() {
+      await push.forgetDevice();
+      await api('POST', '/api/push/consent', { status: 'denied' });
+    },
+
+    /** Stops pushes to this browser only (e.g. on logout), without changing consent. */
+    async forgetDevice() {
+      const sub = await push.localSubscription();
+      if (!sub) return;
+      await api('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }).catch(() => {});
+      await sub.unsubscribe().catch(() => {});
+    },
+  };
+
+  const IOS_HINT =
+    'Auf dem iPhone funktionieren Push-Nachrichten nur, wenn Thabstracker auf dem Home-Bildschirm liegt: ' +
+    'In Safari unten auf das Teilen-Symbol tippen → „Zum Home-Bildschirm“ → danach Thabstracker über das neue App-Symbol öffnen und hier aktivieren.';
+
+  /** Card with push status + buttons. Used on the client settings page and for the coach. */
+  async function mountPushCard(root, { title, intro }) {
+    const [cfg, local] = await Promise.all([api('GET', '/api/push/config'), push.localSubscription().catch(() => null)]);
+    const blocker = push.blocker();
+    let statusHtml;
+    let buttons = '';
+    if (cfg.status === 'granted' && local) {
+      statusHtml = '<span class="badge good">Aktiv auf diesem Gerät</span>';
+      buttons = `<button type="button" class="btn-secondary" data-push="test">Test senden</button>
+                 <button type="button" class="btn-ghost" data-push="off">Deaktivieren</button>`;
+    } else if (blocker === 'ios-home-screen') {
+      statusHtml = '<span class="badge warn">Erst zum Home-Bildschirm hinzufügen</span>';
+    } else if (blocker === 'unsupported') {
+      statusHtml = '<span class="badge">Von diesem Browser nicht unterstützt</span>';
+    } else {
+      statusHtml =
+        cfg.status === 'denied'
+          ? '<span class="badge bad">Ausgeschaltet</span>'
+          : cfg.status === 'granted'
+            ? `<span class="badge warn">Aktiv auf ${cfg.devices} anderen Gerät${cfg.devices === 1 ? '' : 'en'}</span>`
+            : '<span class="badge">Noch nicht eingerichtet</span>';
+      buttons = '<button type="button" class="btn-primary" data-push="on">Benachrichtigungen aktivieren</button>';
+    }
+    root.innerHTML = `
+      <div class="row-between" style="margin-bottom:8px"><h2>${esc(title)}</h2>${statusHtml}</div>
+      <p class="muted small">${esc(intro)}</p>
+      ${blocker === 'ios-home-screen' ? `<p class="hint-box">${esc(IOS_HINT)}</p>` : ''}
+      <div class="row">${buttons}</div>`;
+    const run = (fn, msg) => async (e) => {
+      e.target.disabled = true;
+      try {
+        await fn();
+        if (msg) toast(msg);
+      } catch (err) {
+        toast(err.message, true);
+      }
+      mountPushCard(root, { title, intro });
+    };
+    const on = root.querySelector('[data-push=on]');
+    if (on) on.addEventListener('click', run(push.enable, 'Benachrichtigungen aktiviert ✓'));
+    const off = root.querySelector('[data-push=off]');
+    if (off) off.addEventListener('click', run(push.disable, 'Benachrichtigungen ausgeschaltet'));
+    const test = root.querySelector('[data-push=test]');
+    if (test) {
+      test.addEventListener('click', run(async () => {
+        const r = await api('POST', '/api/push/test');
+        if (!r.delivered) throw new Error('Test konnte nicht zugestellt werden.');
+      }, 'Test gesendet – kommt gleich an'));
+    }
+  }
+
+  /** One-time question on the tracker page for clients who haven't decided yet. */
+  async function maybeShowPushPrompt(root) {
+    try {
+      const cfg = await api('GET', '/api/push/config');
+      if (cfg.status !== 'unknown' || push.blocker() === 'unsupported') return;
+      const ios = push.blocker() === 'ios-home-screen';
+      try {
+        if (ios && localStorage.getItem('pushPromptLater') === todayStr()) return;
+      } catch {
+        /* storage unavailable */
+      }
+      root.innerHTML = `
+        <div class="card banner">
+          <div><strong>🔔 Erinnerungen &amp; Nachrichten von deinem Coach aufs Handy?</strong>
+            <p class="small muted">${ios ? esc(IOS_HINT) : 'Du kannst das jederzeit unter „Einstellungen“ wieder ändern.'}</p></div>
+          <div class="row">
+            ${ios ? '<button type="button" class="btn-secondary" data-later>Später</button>' : `
+              <button type="button" class="btn-primary" data-yes>Ja, aktivieren</button>
+              <button type="button" class="btn-ghost" data-no>Nein danke</button>`}
+          </div>
+        </div>`;
+      const yes = root.querySelector('[data-yes]');
+      if (yes) {
+        yes.addEventListener('click', async () => {
+          try {
+            await push.enable();
+            toast('Benachrichtigungen aktiviert ✓');
+            root.innerHTML = '';
+          } catch (err) {
+            toast(err.message, true);
+          }
+        });
+      }
+      const no = root.querySelector('[data-no]');
+      if (no) {
+        no.addEventListener('click', async () => {
+          await api('POST', '/api/push/consent', { status: 'denied' }).catch(() => {});
+          root.innerHTML = '';
+        });
+      }
+      const later = root.querySelector('[data-later]');
+      if (later) {
+        later.addEventListener('click', () => {
+          try {
+            localStorage.setItem('pushPromptLater', todayStr());
+          } catch {
+            /* ignore */
+          }
+          root.innerHTML = '';
+        });
+      }
+    } catch {
+      /* not critical */
+    }
+  }
+
+  // ---------- client: settings (push + Apple Health) ----------
+  async function renderClientSettings() {
+    setView(`
+      <div class="page-head"><div><h1>Einstellungen</h1></div></div>
+      <div class="settings-grid">
+        <section class="card" id="push-card"><p class="muted">Lade…</p></section>
+        <section class="card" id="health-card"><p class="muted">Lade…</p></section>
+      </div>`);
+    mountPushCard(document.getElementById('push-card'), {
+      title: 'Push-Benachrichtigungen',
+      intro: 'Erinnerungen deines Coaches und neue Chat-Nachrichten direkt aufs Handy.',
+    }).catch((err) => toast(err.message, true));
+    mountHealthCard(document.getElementById('health-card'));
+  }
+
+  async function mountHealthCard(root, freshToken) {
+    const status = await api('GET', '/api/health/token');
+    const importUrl = `${location.origin}/api/health/import`;
+    const fmtTs = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    let statusHtml = '<span class="badge">Nicht verbunden</span>';
+    if (status.linked) {
+      statusHtml = status.lastUsedAt
+        ? `<span class="badge good">Zuletzt übertragen: ${esc(fmtTs(status.lastUsedAt))}</span>`
+        : '<span class="badge warn">Eingerichtet, noch keine Übertragung</span>';
+    }
+
+    const keyBlock = freshToken
+      ? `<div class="field"><label>Dein persönlicher Schlüssel <span class="muted">(wird nur jetzt angezeigt!)</span></label>
+           <div class="copy-field"><code>${esc(freshToken)}</code><button type="button" class="btn-secondary btn-sm" data-copy="${esc(freshToken)}">Kopieren</button></div></div>`
+      : status.linked
+        ? '<p class="small muted">Dein Schlüssel ist eingerichtet. Hast du ihn verloren oder ein neues Handy? Dann erzeuge einen neuen – der alte wird damit ungültig.</p>'
+        : '';
+
+    root.innerHTML = `
+      <div class="row-between" style="margin-bottom:8px"><h2>Apple Health (iPhone)</h2>${statusHtml}</div>
+      <p class="muted small">Webseiten haben keinen direkten Zugriff auf Apple Health. Über die Apple-App <strong>„Kurzbefehle“</strong>
+        überträgt dein iPhone deine Schritte (und auf Wunsch dein Gewicht) aber automatisch jeden Tag hierher.</p>
+      ${keyBlock}
+      <div class="field"><label>Adresse für den Kurzbefehl</label>
+        <div class="copy-field"><code>${esc(importUrl)}</code><button type="button" class="btn-secondary btn-sm" data-copy="${esc(importUrl)}">Kopieren</button></div></div>
+      <div class="row" style="margin-bottom:12px">
+        <button type="button" class="${status.linked ? 'btn-secondary' : 'btn-primary'}" data-health="new">${status.linked ? 'Neuen Schlüssel erzeugen' : 'Verbindung einrichten'}</button>
+        ${status.linked ? '<button type="button" class="btn-ghost" data-health="off">Verbindung trennen</button>' : ''}
+      </div>
+      <details class="howto"${freshToken ? ' open' : ''}>
+        <summary>Anleitung: Kurzbefehl einrichten (ca. 5 Minuten, einmalig)</summary>
+        <ol>
+          <li>Oben auf <strong>„Verbindung einrichten“</strong> tippen und den Schlüssel kopieren.</li>
+          <li>App <strong>Kurzbefehle</strong> öffnen → unten <strong>„Automation“</strong> → <strong>„+“</strong> → <strong>„Tageszeit“</strong>.
+            Uhrzeit z. B. <strong>21:30</strong>, <strong>Täglich</strong>, und <strong>„Sofort ausführen“</strong> wählen → <strong>Weiter</strong> → <strong>„Neuer leerer Kurzbefehl“</strong>.</li>
+          <li>Aktion <strong>„Health-Stichproben suchen“</strong> <span class="muted">(engl. „Find Health Samples“)</span> hinzufügen:
+            Typ <strong>Schritte</strong>, Filter <strong>„Startdatum ist heute“</strong>, <strong>„Gruppieren nach: Tag“</strong>.</li>
+          <li>Aktion <strong>„Inhalte von URL abrufen“</strong> <span class="muted">(„Get Contents of URL“)</span> hinzufügen und die
+            <strong>Adresse</strong> von oben einfügen. Auf den Pfeil tippen:
+            <ul>
+              <li>Methode: <strong>POST</strong></li>
+              <li>Header hinzufügen: Schlüssel <code>Authorization</code>, Wert <code>Bearer </code> + dein Schlüssel
+                <span class="muted">(Bearer, Leerzeichen, Schlüssel)</span></li>
+              <li>Anforderungstext: <strong>JSON</strong> → Feld hinzufügen → Typ <strong>Zahl</strong>, Schlüssel <code>steps</code>,
+                Wert: Variable <strong>„Health-Stichproben“</strong></li>
+            </ul></li>
+          <li>Fertig. Zum Testen den Kurzbefehl einmal von Hand starten – hier oben erscheint dann „Zuletzt übertragen“.</li>
+        </ol>
+        <p class="small muted"><strong>Gewicht mit übertragen (optional, z. B. von einer smarten Waage):</strong> eine zweite
+          „Health-Stichproben suchen“-Aktion mit Typ <strong>Gewicht</strong>, sortiert nach <strong>Startdatum, Neueste zuerst</strong>,
+          <strong>Limit 1</strong>, und im JSON ein zweites Zahl-Feld <code>weight</code> mit diesem Ergebnis.</p>
+        <p class="small muted">Die Übertragung ergänzt nur Schritte bzw. Gewicht des Tages – deine Notizen und übrigen Werte bleiben erhalten.
+          Läuft die Automation mehrmals am Tag, gilt der letzte Wert.</p>
+        <p class="small muted"><strong>Android:</strong> Eine direkte Anbindung an Google Health Connect ist über eine Webseite ebenfalls nicht möglich.</p>
+      </details>`;
+
+    root.querySelectorAll('[data-copy]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(b.dataset.copy);
+          toast('Kopiert');
+        } catch {
+          toast('Kopieren nicht möglich – bitte manuell markieren', true);
+        }
+      })
+    );
+    root.querySelector('[data-health=new]').addEventListener('click', async () => {
+      if (status.linked && !confirm('Neuen Schlüssel erzeugen? Der bisherige Kurzbefehl funktioniert dann erst wieder mit dem neuen Schlüssel.')) return;
+      try {
+        const { token } = await api('POST', '/api/health/token');
+        mountHealthCard(root, token);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    const off = root.querySelector('[data-health=off]');
+    if (off) {
+      off.addEventListener('click', async () => {
+        if (!confirm('Verbindung trennen? Der Kurzbefehl kann danach keine Daten mehr übertragen.')) return;
+        await api('DELETE', '/api/health/token');
+        toast('Verbindung getrennt');
+        mountHealthCard(root);
+      });
+    }
+  }
+
   // ---------- chat ----------
   function renderClientChat() {
     setView('<div class="page-head"><div><h1>Nachrichten</h1></div></div><div id="chat"></div>');
@@ -704,7 +986,33 @@
       </div>
       ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
         <p>Noch keine Klienten angelegt.</p>
-        <p>Lege einen Zugang an und gib die Zugangsdaten an deinen Klienten weiter.</p></div>`}`);
+        <p>Lege einen Zugang an und gib die Zugangsdaten an deinen Klienten weiter.</p></div>`}
+      <div class="page-head section-head">
+        <div><h2>Push-Benachrichtigungen</h2>
+          <p class="muted small">Einmalige und wiederkehrende Nachrichten an Klienten, die zugestimmt haben.</p></div>
+        <button class="btn-primary" id="btn-new-push" type="button">+ Neue Push-Nachricht</button>
+      </div>
+      <div class="push-grid">
+        <section class="card">
+          <h3 style="margin-bottom:10px">Zustimmung deiner Klienten</h3>
+          <div id="consent-list"></div>
+        </section>
+        <section class="card">
+          <h3 style="margin-bottom:10px">Geplant &amp; gesendet</h3>
+          <div id="notif-list"><p class="muted small">Lade…</p></div>
+        </section>
+        <section class="card" id="coach-push-card"></section>
+      </div>`);
+
+    renderConsentList(document.getElementById('consent-list'), clients);
+    const notifRoot = document.getElementById('notif-list');
+    const reloadNotifications = () => loadNotifications(notifRoot).catch((err) => toast(err.message, true));
+    reloadNotifications();
+    document.getElementById('btn-new-push').addEventListener('click', () => openPushDialog(clients, reloadNotifications));
+    mountPushCard(document.getElementById('coach-push-card'), {
+      title: 'Für dich',
+      intro: 'Lass dich auf diesem Gerät benachrichtigen, wenn ein Klient dir schreibt.',
+    }).catch(() => {});
 
     document.getElementById('btn-new-client').addEventListener('click', () => {
       const pw = randomPassword();
@@ -732,8 +1040,173 @@
     });
   }
 
+  // ---------- coach: push notifications ----------
+  function consentBadge(c) {
+    if (c.pushStatus === 'granted') {
+      return c.pushDevices
+        ? `<span class="badge good">✓ Zugestimmt · ${c.pushDevices} Gerät${c.pushDevices === 1 ? '' : 'e'}</span>`
+        : '<span class="badge warn">Zugestimmt, kein aktives Gerät</span>';
+    }
+    if (c.pushStatus === 'denied') return '<span class="badge bad">✗ Abgelehnt</span>';
+    return '<span class="badge">Noch nicht gefragt</span>';
+  }
+
+  function renderConsentList(root, clients) {
+    if (!clients.length) {
+      root.innerHTML = '<p class="muted small">Noch keine Klienten.</p>';
+      return;
+    }
+    const count = (st) => clients.filter((c) => c.pushStatus === st).length;
+    root.innerHTML = `
+      <p class="small muted" style="margin:0 0 8px">${count('granted')} zugestimmt · ${count('denied')} abgelehnt · ${count('unknown')} offen</p>
+      <ul class="plain-list">${clients
+        .map((c) => `<li><a href="#/client/${c.id}">${esc(c.displayName)}</a>${consentBadge(c)}</li>`)
+        .join('')}</ul>`;
+  }
+
+  async function loadNotifications(root) {
+    const { notifications, timezone } = await api('GET', '/api/notifications');
+    if (!notifications.length) {
+      root.innerHTML = '<p class="muted small">Noch keine Push-Nachrichten. Leg oben deine erste an – z. B. eine tägliche Erinnerung ans Eintragen.</p>';
+      return;
+    }
+    const fmt = (iso) =>
+      new Date(iso).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: timezone });
+    root.innerHTML = `<ul class="notif-list">${notifications
+      .map((n) => {
+        const state = n.active
+          ? n.nextRunAt
+            ? `Nächste: ${esc(fmt(n.nextRunAt))}`
+            : 'Aktiv'
+          : n.schedule === 'once'
+            ? n.lastSentAt ? 'Gesendet' : 'Abgebrochen'
+            : 'Pausiert';
+        const who = n.audience === 'all' ? 'Alle mit Zustimmung' : esc(n.recipientNames.join(', '));
+        return `<li class="notif ${n.active ? '' : 'inactive'}">
+          <div class="row-between"><strong>${esc(n.title)}</strong>
+            <span class="badge ${n.active ? 'good' : ''}">${esc(n.scheduleText)}</span></div>
+          <div class="small">${esc(n.body)}</div>
+          <div class="small muted">An: ${who} · ${state}${n.lastSentAt ? ` · Zuletzt ${esc(fmt(n.lastSentAt))}: ${esc(n.lastResult || '')}` : ''}</div>
+          <div class="row notif-actions">
+            <button type="button" class="btn-ghost btn-sm" data-send="${n.id}">Jetzt senden</button>
+            ${n.schedule !== 'once' ? `<button type="button" class="btn-ghost btn-sm" data-toggle="${n.id}" data-active="${n.active}">${n.active ? 'Pausieren' : 'Fortsetzen'}</button>` : ''}
+            ${n.schedule === 'once' && n.active ? `<button type="button" class="btn-ghost btn-sm" data-toggle="${n.id}" data-active="true">Abbrechen</button>` : ''}
+            <button type="button" class="btn-ghost btn-sm danger-text" data-del="${n.id}">Löschen</button>
+          </div>
+        </li>`;
+      })
+      .join('')}</ul>`;
+
+    const reload = () => loadNotifications(root).catch((err) => toast(err.message, true));
+    root.querySelectorAll('[data-send]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        if (!confirm('Diese Nachricht jetzt an alle Empfänger senden?')) return;
+        try {
+          const { notification } = await api('POST', `/api/notifications/${b.dataset.send}/send`);
+          toast(notification.lastResult || 'Gesendet');
+        } catch (err) {
+          toast(err.message, true);
+        }
+        reload();
+      })
+    );
+    root.querySelectorAll('[data-toggle]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        try {
+          await api('PATCH', `/api/notifications/${b.dataset.toggle}`, { active: b.dataset.active !== 'true' });
+        } catch (err) {
+          toast(err.message, true);
+        }
+        reload();
+      })
+    );
+    root.querySelectorAll('[data-del]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        if (!confirm('Push-Nachricht löschen?')) return;
+        await api('DELETE', `/api/notifications/${b.dataset.del}`).catch((err) => toast(err.message, true));
+        reload();
+      })
+    );
+  }
+
+  function openPushDialog(clients, onSaved) {
+    const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+    const granted = clients.filter((c) => c.pushStatus === 'granted').length;
+    openDialog(
+      `<h2>Neue Push-Nachricht</h2>
+       <div class="field"><label for="n-title">Titel</label><input id="n-title" name="title" maxlength="60" required placeholder="z. B. Zeit zum Eintragen ⏰"></div>
+       <div class="field"><label for="n-body">Text</label><textarea id="n-body" name="body" maxlength="240" required placeholder="z. B. Trag noch schnell Gewicht, Schritte und Schlaf ein 💪"></textarea></div>
+
+       <fieldset class="field"><legend>Empfänger</legend>
+         <label class="check"><input type="radio" name="audience" value="all" checked> Alle Klienten mit Zustimmung (${granted})</label>
+         <label class="check"><input type="radio" name="audience" value="some"> Bestimmte Klienten</label>
+         <div class="choice-list" data-recipients hidden>${clients
+           .map((c) => `<label class="check"><input type="checkbox" name="recipient" value="${c.id}"${c.pushStatus === 'granted' ? '' : ' disabled'}>
+             ${esc(c.displayName)} ${c.pushStatus === 'granted' ? '' : '<span class="muted small">(keine Zustimmung)</span>'}</label>`)
+           .join('')}</div>
+       </fieldset>
+
+       <fieldset class="field"><legend>Wann?</legend>
+         <div class="segmented seg-wide" role="radiogroup">
+           <label><input type="radio" name="schedule" value="once" checked><span>Einmalig</span></label>
+           <label><input type="radio" name="schedule" value="daily"><span>Täglich</span></label>
+           <label><input type="radio" name="schedule" value="weekly"><span>Wöchentlich</span></label>
+         </div>
+         <div data-once>
+           <label class="check"><input type="radio" name="when" value="now" checked> Sofort senden</label>
+           <label class="check"><input type="radio" name="when" value="later"> Zu einem Zeitpunkt:</label>
+           <input type="datetime-local" name="sendAt" disabled>
+         </div>
+         <div data-weekdays hidden>
+           <div class="weekday-picker">${days
+             .map((d, i) => `<label><input type="checkbox" name="weekday" value="${i + 1}"${i === 0 ? ' checked' : ''}><span>${d}</span></label>`)
+             .join('')}</div>
+         </div>
+         <div data-time hidden>
+           <label for="n-time">Uhrzeit <span class="muted">(deutsche Zeit)</span></label>
+           <input id="n-time" type="time" name="time" value="08:00">
+         </div>
+       </fieldset>
+       <div class="dialog-actions">
+         <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+         <button type="submit" class="btn-primary">Speichern</button>
+       </div>`,
+      async (f) => {
+        const schedule = f.schedule.value;
+        const body = {
+          title: f.title.value,
+          body: f.body.value,
+          audience: f.audience.value,
+          recipientIds: [...f.querySelectorAll('[name=recipient]:checked')].map((x) => Number(x.value)),
+          schedule,
+        };
+        if (schedule === 'once' && f.when.value === 'later') {
+          if (!f.sendAt.value) throw new Error('Bitte Datum und Uhrzeit wählen.');
+          body.sendAt = new Date(f.sendAt.value).toISOString();
+        }
+        if (schedule !== 'once') body.time = f.time.value;
+        if (schedule === 'weekly') body.weekdays = [...f.querySelectorAll('[name=weekday]:checked')].map((x) => Number(x.value));
+        const { notification } = await api('POST', '/api/notifications', body);
+        toast(schedule === 'once' && !body.sendAt ? notification.lastResult || 'Gesendet' : 'Push-Nachricht geplant ✓');
+        onSaved();
+      }
+    );
+    const f = dialog.querySelector('form');
+    const sync = () => {
+      const sch = f.schedule.value;
+      f.querySelector('[data-once]').hidden = sch !== 'once';
+      f.querySelector('[data-weekdays]').hidden = sch !== 'weekly';
+      f.querySelector('[data-time]').hidden = sch === 'once';
+      f.querySelector('[data-recipients]').hidden = f.audience.value !== 'some';
+      f.sendAt.disabled = f.when.value !== 'later';
+      f.querySelector('[type=submit]').textContent = sch === 'once' && f.when.value === 'now' ? 'Jetzt senden' : 'Speichern';
+    };
+    f.addEventListener('change', sync);
+    sync();
+  }
+
   function showCredentials(name, username, password, after) {
-    const text = `Dein Zugang zum Thabs Tracker\nAdresse: ${location.origin}\nBenutzername: ${username}\nPasswort: ${password}`;
+    const text = `Dein Zugang zum Thabstracker\nAdresse: ${location.origin}\nBenutzername: ${username}\nPasswort: ${password}`;
     dialog.innerHTML = `<form method="dialog">
       <h2>Zugang für ${esc(name)}</h2>
       <p class="muted small">Schick diese Daten an deinen Klienten. Das Passwort wird danach nicht mehr angezeigt.</p>
@@ -774,7 +1247,9 @@
     const head = `
       <a class="back" href="#/">← Alle Klienten</a>
       <div class="page-head">
-        <div><h1>${esc(client.displayName)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p></div>
+        <div><h1>${esc(client.displayName)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p>
+          <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}
+            ${client.healthLinked ? `<span class="badge good">❤️ Apple Health${client.healthLastUsed ? ` · ${esc(relDay(client.healthLastUsed.slice(0, 10)))}` : ' · noch keine Daten'}</span>` : ''}</div></div>
         <div class="row">
           <a class="btn btn-secondary" href="/api/entries.csv?userId=${id}">CSV exportieren</a>
         </div>
