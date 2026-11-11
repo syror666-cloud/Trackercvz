@@ -151,6 +151,9 @@
     const m = location.hash.match(/^#\/client\/(\d+)(\/chat)?/);
     if (me.role === 'coach') {
       if (m) return renderCoachClient(Number(m[1]), m[2] ? 'chat' : 'overview');
+      if (location.hash === '#/checkin/done') return renderCheckinDone();
+      const ci = location.hash.match(/^#\/checkin(?:\/(\d+))?/);
+      if (ci) return renderCheckin(ci[1] ? Number(ci[1]) : null);
       return renderCoachHome();
     }
     if (location.hash === '#/chat') return renderClientChat();
@@ -161,9 +164,12 @@
   function renderNav() {
     const links =
       me.role === 'coach'
-        ? [['#/', 'Klienten', true]]
+        ? [['#/', 'Klienten', true], ['#/checkin', 'Check-in', false]]
         : [['#/', 'Tracker', false], ['#/chat', 'Nachrichten', true], ['#/settings', 'Einstellungen', false]];
-    const current = me.role === 'coach' ? '#/' : ['#/chat', '#/settings'].includes(location.hash) ? location.hash : '#/';
+    const current =
+      me.role === 'coach'
+        ? location.hash.startsWith('#/checkin') ? '#/checkin' : '#/'
+        : ['#/chat', '#/settings'].includes(location.hash) ? location.hash : '#/';
     nav.innerHTML = links
       .map(
         ([href, label, badge]) =>
@@ -247,14 +253,15 @@
   // ---------- client: daily entry ----------
   async function renderClientHome() {
     setView('<p class="muted">Lade…</p>');
-    const [{ entries }, { goals }] = await Promise.all([api('GET', '/api/entries'), api('GET', '/api/goals')]);
-    const state = { entries, goals };
+    const [{ entries }, { goals, history }] = await Promise.all([api('GET', '/api/entries'), api('GET', '/api/goals')]);
+    const state = { entries, goals, history };
 
     setView(`
       <div class="page-head">
         <div><h1>Hallo ${esc(me.displayName)}</h1><p class="muted" id="streak"></p></div>
       </div>
       <div id="push-prompt"></div>
+      <div id="checkin-card"></div>
       <div class="grid-2">
         <form class="card" id="entry-form" novalidate>
           <div class="row-between" style="margin-bottom:12px">
@@ -350,6 +357,7 @@
     const dash = mountDashboard(document.getElementById('dashboard'), {
       entries: state.entries,
       goals: state.goals,
+      history: state.history,
       onEdit(date) {
         form.date.value = date;
         fillForm();
@@ -368,6 +376,118 @@
     fillForm();
     updateStreak();
     maybeShowPushPrompt(document.getElementById('push-prompt'));
+    mountClientCheckin(document.getElementById('checkin-card'), async () => {
+      const g = await api('GET', '/api/goals');
+      dash.setGoals(g.goals, g.history);
+    });
+  }
+
+  // ---------- client: latest check-in ----------
+  async function mountClientCheckin(root, onAccepted) {
+    let checkins;
+    try {
+      ({ checkins } = await api('GET', '/api/checkins'));
+    } catch {
+      return;
+    }
+    const ci = checkins[0];
+    const recent = ci && Date.now() - Date.parse(ci.createdAt) < 8 * 86400000;
+    if (!ci || !(recent || (ci.status === 'open' && ci.changes.length))) {
+      root.innerHTML = '';
+      return;
+    }
+    const date = new Date(ci.createdAt).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+    const hasChanges = ci.changes.length > 0;
+    const changesHtml = hasChanges
+      ? `<div class="proposal"><div class="small muted" style="margin-bottom:6px">Vorgeschlagene Anpassungen für deinen Plan</div>
+          <ul class="change-list">${Object.keys(ci.proposal)
+            .map((k) => `<li><span>${PLAN_LABELS[k]}</span><span><s class="muted">${esc(fmtPlan(k, ci.previous[k]))}</s> → <strong>${esc(fmtPlan(k, ci.proposal[k]))}</strong></span></li>`)
+            .join('')}</ul></div>`
+      : '';
+    const state =
+      ci.status === 'accepted'
+        ? `<p class="good small" style="margin:10px 0 0"><strong>✓ Angenommen</strong> am ${esc(new Date(ci.acceptedAt).toLocaleDateString('de-DE'))} – dein Plan ist aktualisiert.</p>`
+        : '';
+    root.innerHTML = `
+      <section class="card checkin-card">
+        <div class="row-between"><h2>📋 Check-in von deinem Coach</h2><span class="badge">${esc(date)}</span></div>
+        <p class="checkin-msg">${esc(ci.message)}</p>
+        ${changesHtml}
+        ${state}
+        <div class="row" style="margin-top:12px">
+          ${hasChanges && ci.status === 'open' ? '<button type="button" class="btn-primary" data-accept>✓ Anpassungen annehmen</button>' : ''}
+          <button type="button" class="btn-secondary" data-reply>${ci.repliedAt ? 'Nochmal antworten' : 'Antworten'}</button>
+        </div>
+        <form class="reply-form" hidden>
+          <textarea name="body" maxlength="2000" placeholder="Deine Antwort an den Coach…"></textarea>
+          <div class="row" style="margin-top:8px"><button type="submit" class="btn-primary">Antwort senden</button>
+            <button type="button" class="btn-ghost" data-cancel>Abbrechen</button></div>
+        </form>
+        ${ci.repliedAt ? '<p class="small muted" style="margin:8px 0 0">Deine Antwort ist im Chat unter „Nachrichten“.</p>' : ''}
+      </section>`;
+
+    const form = root.querySelector('.reply-form');
+    root.querySelector('[data-reply]').addEventListener('click', () => {
+      form.hidden = false;
+      form.body.focus();
+    });
+    root.querySelector('[data-cancel]').addEventListener('click', () => (form.hidden = true));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!form.body.value.trim()) return;
+      try {
+        await api('POST', `/api/checkins/${ci.id}/reply`, { body: form.body.value });
+        toast('Antwort gesendet');
+        mountClientCheckin(root, onAccepted);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    const accept = root.querySelector('[data-accept]');
+    if (accept) {
+      accept.addEventListener('click', async () => {
+        accept.disabled = true;
+        try {
+          await api('POST', `/api/checkins/${ci.id}/accept`);
+          toast('Plan aktualisiert ✓');
+          await onAccepted();
+          mountClientCheckin(root, onAccepted);
+        } catch (err) {
+          accept.disabled = false;
+          toast(err.message, true);
+        }
+      });
+    }
+  }
+
+  // ---------- plan (goals) helpers ----------
+  const PLAN_LABELS = {
+    caloriesGoal: 'Kalorien pro Tag',
+    stepsGoal: 'Schritte pro Tag',
+    sleepGoal: 'Schlaf pro Nacht',
+    targetWeight: 'Zielgewicht',
+  };
+  function fmtPlan(key, v) {
+    if (v === null || v === undefined) return '–';
+    if (key === 'caloriesGoal') return `${num(v)} kcal`;
+    if (key === 'stepsGoal') return `${num(v)} Schritte`;
+    if (key === 'sleepGoal') return fmtSleep(v);
+    return `${num(v, 1)} kg`;
+  }
+
+  /** Daily values of a plan field between from and to, from the history of plan changes. */
+  function planSeries(history, key, from, to) {
+    const changes = (history || []).map((h) => {
+      const d = new Date(h.changedAt);
+      return { date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, value: h[key] };
+    });
+    const out = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      let v = null;
+      for (const c of changes) if (c.date <= d) v = c.value;
+      if (v !== null && v !== undefined) out.push({ date: d, value: v });
+    }
+    return out;
   }
 
   // ---------- shared dashboard ----------
@@ -378,7 +498,7 @@
     ['all', 'Alle'],
   ];
 
-  function mountDashboard(root, { entries, goals, onEdit, onDelete }) {
+  function mountDashboard(root, { entries, goals, history, onEdit, onDelete }) {
     let rangeKey = '30';
     let all = entries;
 
@@ -397,6 +517,10 @@
       </div>
       <div class="card chart-card"><h3>Schritte</h3><div class="chart-steps" data-chart="steps"></div></div>
       <div class="card chart-card"><h3>Schlaf</h3><div class="chart-sleep" data-chart="sleep"></div></div>
+      <div class="card chart-card">
+        <div class="row-between"><h3>Kalorienvorgabe</h3><span class="kcal-now" data-kcal-now></span></div>
+        <div class="chart-kcal" data-chart="kcal"></div>
+      </div>
       <div class="card">
         <h3 style="margin-bottom:8px">Einträge</h3>
         <div class="table-wrap" data-table></div>
@@ -502,6 +626,13 @@
         data: series('sleep'), from, to, type: 'bar', decimals: 1,
         goal: goals.sleepGoal, label: 'Schlafdauer', formatValue: fmtSleep,
       });
+      root.querySelector('[data-kcal-now]').innerHTML = goals.caloriesGoal
+        ? `<strong>${num(goals.caloriesGoal)}</strong> kcal / Tag`
+        : '<span class="muted small">Noch keine Vorgabe</span>';
+      Charts.render(root.querySelector('[data-chart=kcal]'), {
+        data: planSeries(history, 'caloriesGoal', from, to), from, to,
+        type: 'line', dots: false, stepped: true, unit: 'kcal', label: 'Verlauf der Kalorienvorgabe', height: 160,
+      });
     }
 
     function drawTable() {
@@ -555,8 +686,9 @@
         all = newEntries;
         draw();
       },
-      setGoals(g) {
+      setGoals(g, h) {
         goals = g;
+        if (h) history = h;
         draw();
       },
     };
@@ -1040,6 +1172,204 @@
     });
   }
 
+  // ---------- coach: weekly check-in ----------
+  async function renderCheckin(selectedId) {
+    setView('<p class="muted">Lade…</p>');
+    const { clients } = await api('GET', '/api/checkins/queue');
+    if (!clients.length) {
+      setView('<div class="page-head"><h1>Check-in</h1></div><div class="card empty-state">Noch keine Klienten angelegt.</div>');
+      return;
+    }
+    const done = clients.filter((c) => c.doneThisWeek).length;
+    const selected = clients.find((c) => c.id === selectedId) || clients.find((c) => !c.doneThisWeek) || clients[0];
+    const idx = clients.indexOf(selected);
+
+    setView(`
+      <div class="page-head">
+        <div><h1>Wöchentlicher Check-in</h1>
+          <p class="muted">${done} von ${clients.length} diese Woche erledigt</p></div>
+        <div class="progress" aria-hidden="true"><span style="width:${Math.round((done / clients.length) * 100)}%"></span></div>
+      </div>
+      <nav class="queue" aria-label="Klienten">
+        ${clients
+          .map(
+            (c, i) => `<a href="#/checkin/${c.id}" class="queue-item ${c.doneThisWeek ? 'done' : ''}"${c.id === selected.id ? ' aria-current="page"' : ''}>
+              <span class="queue-num">${c.doneThisWeek ? '✓' : i + 1}</span><span>${esc(c.displayName)}</span></a>`
+          )
+          .join('')}
+      </nav>
+      <div id="checkin-body"><p class="muted">Lade…</p></div>`);
+    const current = document.querySelector('.queue [aria-current]');
+    if (current) current.scrollIntoView({ block: 'nearest', inline: 'center' });
+
+    const rv = await api('GET', `/api/checkins/review?userId=${selected.id}`);
+    const { comparison: cmp, goals } = rv;
+    const cur = cmp.current;
+    const prev = cmp.previous;
+    const shortD = (d) => fmtDate(d, { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+    const deltaCell = (d, fmt, goodDir) => {
+      if (d === null || d === undefined) return '<td class="num muted">–</td>';
+      const cls = d === 0 ? '' : Math.sign(d) === goodDir ? 'good' : 'bad';
+      return `<td class="num ${cls}">${d > 0 ? '+' : d < 0 ? '−' : '±'}${fmt(Math.abs(d))}</td>`;
+    };
+    const weightDir = goals.targetWeight !== null && cur.weightAvg !== null && goals.targetWeight > cur.weightAvg ? 1 : -1;
+    const hit = (n, total) => (n === null ? '–' : `${n}/${total}`);
+    const rows = [
+      ['Gewicht Ø', `${num(prev.weightAvg, 1)} kg`, `${num(cur.weightAvg, 1)} kg`, deltaCell(cmp.delta.weightAvg, (v) => `${num(v, 1)} kg`, weightDir)],
+      ['Gewicht min – max', prev.weighIns ? `${num(prev.weightMin, 1)} – ${num(prev.weightMax, 1)}` : '–', cur.weighIns ? `${num(cur.weightMin, 1)} – ${num(cur.weightMax, 1)}` : '–', '<td></td>'],
+      ['Wiegungen', prev.weighIns, cur.weighIns, deltaCell(cur.weighIns - prev.weighIns, (v) => num(v), 1)],
+      ['Schritte Ø', num(prev.stepsAvg), num(cur.stepsAvg), deltaCell(cmp.delta.stepsAvg, (v) => num(v), 1)],
+      ['Schrittziel erreicht', hit(prev.stepsGoalDays, 7), hit(cur.stepsGoalDays, 7), '<td></td>'],
+      ['Schlaf Ø', fmtSleep(prev.sleepAvg), fmtSleep(cur.sleepAvg), deltaCell(cmp.delta.sleepAvg, (v) => fmtSleep(v), 1)],
+      ['Schlafziel erreicht', hit(prev.sleepGoalDays, 7), hit(cur.sleepGoalDays, 7), '<td></td>'],
+      ['Tage eingetragen', `${prev.daysLogged}/7`, `${cur.daysLogged}/7`, deltaCell(cmp.delta.daysLogged, (v) => num(v), 1)],
+    ];
+
+    const dayTable = (days) => `<table class="day-table">
+      <thead><tr><th>Tag</th><th class="num">Gewicht</th><th class="num">Schritte</th><th class="num">Schlaf</th><th>Notiz</th></tr></thead>
+      <tbody>${days
+        .map((d) => `<tr class="${d.weight === null && d.steps === null && d.sleep === null && !d.note ? 'empty-day' : ''}">
+          <td>${esc(shortD(d.date))}</td>
+          <td class="num">${d.weight !== null ? num(d.weight, 1) : '–'}</td>
+          <td class="num ${goals.stepsGoal && d.steps !== null ? (d.steps >= goals.stepsGoal ? 'good' : '') : ''}">${num(d.steps)}</td>
+          <td class="num">${fmtSleep(d.sleep)}</td>
+          <td class="note">${esc(d.note || '')}</td></tr>`)
+        .join('')}</tbody></table>`;
+
+    const last = rv.checkins[0];
+    const lastHtml = last
+      ? `<div class="small muted">Letzter Check-in: ${esc(new Date(last.createdAt).toLocaleDateString('de-DE'))} ·
+          ${last.status === 'accepted' ? '<span class="good">Anpassungen angenommen</span>' : last.changes.length ? '<span class="warn">Anpassungen noch offen</span>' : 'ohne Anpassungen'}
+          ${last.seenAt ? ' · gelesen' : ' · noch nicht gelesen'}</div>`
+      : '<div class="small muted">Erster Check-in für diesen Klienten.</div>';
+    const msgsHtml = rv.clientMessages.length
+      ? `<div class="client-msgs"><div class="small muted" style="margin-bottom:6px">Nachrichten von ${esc(rv.client.displayName)} seit dem letzten Check-in</div>
+          ${rv.clientMessages.map((m) => `<div class="msg theirs">${esc(m.body)}<time>${esc(new Date(m.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</time></div>`).join('')}
+          <a class="small" href="#/client/${selected.id}/chat">Zum Chat →</a></div>`
+      : '';
+
+    const nextOpen = clients.slice(idx + 1).find((c) => !c.doneThisWeek) || clients.find((c, i) => i !== idx && !c.doneThisWeek);
+    const fieldRow = (key, label, unit, mode, placeholder) => `
+      <div class="field plan-field"><label for="p-${key}">${label} <span class="muted small">aktuell: ${esc(fmtPlan(key, goals[key]))}</span></label>
+        <div class="input-unit"><input id="p-${key}" name="${key}" inputmode="${mode}" placeholder="${placeholder}"
+          value="${goals[key] === null || goals[key] === undefined ? '' : String(goals[key]).replace('.', ',')}"><span>${unit}</span></div></div>`;
+
+    document.getElementById('checkin-body').innerHTML = `
+      <div class="checkin-grid">
+        <div class="stack">
+          <section class="card">
+            <div class="row-between" style="margin-bottom:8px">
+              <h2>${esc(rv.client.displayName)} – Wochenvergleich</h2>
+              <a class="small" href="#/client/${selected.id}">Alle Daten →</a>
+            </div>
+            <p class="small muted" style="margin:0 0 10px">Diese Woche: ${esc(shortD(cur.from))} – ${esc(shortD(cur.to))} · Vorwoche: ${esc(shortD(prev.from))} – ${esc(shortD(prev.to))}</p>
+            <div class="table-wrap"><table class="compare">
+              <thead><tr><th></th><th class="num">Vorwoche</th><th class="num">Diese Woche</th><th class="num">Veränderung</th></tr></thead>
+              <tbody>${rows.map(([l, a, b, d]) => `<tr><td>${l}</td><td class="num">${a}</td><td class="num"><strong>${b}</strong></td>${d}</tr>`).join('')}</tbody>
+            </table></div>
+          </section>
+          <section class="card chart-card"><h3>Gewicht – 14 Tage</h3><div class="chart-weight" data-chart="ci-weight"></div></section>
+          <section class="card chart-card"><h3>Schritte – 14 Tage</h3><div class="chart-steps" data-chart="ci-steps"></div></section>
+          <section class="card">
+            <h3 style="margin-bottom:8px">Diese Woche im Detail</h3>
+            <div class="table-wrap">${dayTable(cmp.days.slice(7).reverse())}</div>
+          </section>
+          <details class="card">
+            <summary><strong>Vorwoche im Detail</strong></summary>
+            <div class="table-wrap" style="margin-top:8px">${dayTable(cmp.days.slice(0, 7).reverse())}</div>
+          </details>
+        </div>
+        <form class="card checkin-form" id="checkin-form" novalidate>
+          <h2>Check-in schreiben</h2>
+          ${lastHtml}
+          ${msgsHtml}
+          <div class="field" style="margin-top:12px"><label for="ci-msg">Nachricht an ${esc(rv.client.displayName)}</label>
+            <textarea id="ci-msg" name="message" maxlength="4000" rows="6" placeholder="Wie lief die Woche? Was war gut, was nehmen wir uns vor?"></textarea></div>
+          <h3 style="margin:4px 0 8px">Plan anpassen <span class="muted small">(optional)</span></h3>
+          ${fieldRow('caloriesGoal', 'Kalorien pro Tag', 'kcal', 'numeric', 'z. B. 2200')}
+          ${fieldRow('stepsGoal', 'Schritte pro Tag', 'Schritte', 'numeric', 'z. B. 10000')}
+          ${fieldRow('sleepGoal', 'Schlaf pro Nacht', 'Std.', 'decimal', 'z. B. 7,5')}
+          ${fieldRow('targetWeight', 'Zielgewicht', 'kg', 'decimal', 'z. B. 80')}
+          <p class="hint" data-changes>Keine Änderungen am Plan – nur Feedback.</p>
+          <button class="btn-primary btn-block" type="submit">Check-in senden${nextOpen ? ' & weiter →' : ''}</button>
+          ${nextOpen ? `<a class="btn btn-ghost btn-block" href="#/checkin/${nextOpen.id}">Überspringen → ${esc(nextOpen.displayName)}</a>` : ''}
+          <p class="error" hidden></p>
+          <p class="hint">Der Klient sieht den Check-in oben in seiner Übersicht und kann antworten oder die Anpassungen mit einem Klick annehmen.</p>
+        </form>
+      </div>`;
+
+    const from = cmp.days[0].date;
+    const to = cmp.days[13].date;
+    const drawCiCharts = () => {
+      Charts.render(document.querySelector('[data-chart=ci-weight]'), {
+        data: cmp.days.map((d) => ({ date: d.date, value: d.weight })), from, to, type: 'line',
+        goal: goals.targetWeight, unit: 'kg', decimals: 1, height: 170,
+      });
+      Charts.render(document.querySelector('[data-chart=ci-steps]'), {
+        data: cmp.days.map((d) => ({ date: d.date, value: d.steps })), from, to, type: 'bar',
+        goal: goals.stepsGoal, unit: 'Schritte', height: 170,
+      });
+    };
+    drawCiCharts();
+    window.addEventListener('resize', drawCiCharts);
+    onCleanup(() => window.removeEventListener('resize', drawCiCharts));
+
+    const form = document.getElementById('checkin-form');
+    const keys = ['caloriesGoal', 'stepsGoal', 'sleepGoal', 'targetWeight'];
+    const readProposal = () => {
+      const p = {};
+      for (const k of keys) {
+        const v = parseNum(form[k].value);
+        if (Number.isNaN(v)) throw new Error('Bitte nur Zahlen eingeben.');
+        if (v !== null && v !== goals[k]) p[k] = v;
+      }
+      return p;
+    };
+    const showChanges = () => {
+      const hint = form.querySelector('[data-changes]');
+      let p = {};
+      try {
+        p = readProposal();
+      } catch {
+        /* shown on submit */
+      }
+      for (const k of keys) form[k].closest('.plan-field').classList.toggle('changed', k in p);
+      const list = Object.keys(p).map((k) => `${PLAN_LABELS[k]}: ${fmtPlan(k, goals[k])} → ${fmtPlan(k, p[k])}`);
+      hint.innerHTML = list.length
+        ? `<strong>Vorschlag an den Klienten:</strong><br>${list.map(esc).join('<br>')}`
+        : 'Keine Änderungen am Plan – nur Feedback.';
+    };
+    form.addEventListener('input', showChanges);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = form.querySelector('.error');
+      errEl.hidden = true;
+      const btn = form.querySelector('[type=submit]');
+      btn.disabled = true;
+      try {
+        if (!form.message.value.trim()) throw new Error('Bitte eine Nachricht schreiben.');
+        await api('POST', `/api/checkins?userId=${selected.id}`, { message: form.message.value, proposal: readProposal() });
+        toast(`Check-in an ${rv.client.displayName} gesendet ✓`);
+        location.hash = nextOpen ? `#/checkin/${nextOpen.id}` : '#/checkin/done';
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.hidden = false;
+        btn.disabled = false;
+      }
+    });
+  }
+
+  async function renderCheckinDone() {
+    const { clients } = await api('GET', '/api/checkins/queue');
+    if (clients.some((c) => !c.doneThisWeek)) return renderCheckin(null);
+    setView(`<div class="page-head"><h1>Wöchentlicher Check-in</h1></div>
+      <div class="card empty-state"><p style="font-size:2rem;margin:0">🎉</p>
+        <h2>Alle ${clients.length} Check-ins für diese Woche erledigt!</h2>
+        <p>Die Antworten deiner Klienten findest du im Chat.</p>
+        <a class="btn btn-secondary" href="#/">Zur Übersicht</a></div>`);
+  }
+
   // ---------- coach: push notifications ----------
   function consentBadge(c) {
     if (c.pushStatus === 'granted') {
@@ -1231,11 +1561,15 @@
   async function renderCoachClient(id, tab) {
     setView('<p class="muted">Lade…</p>');
     let clients, entries, goals;
+    let goalHistory = [];
     try {
       [{ clients }, { entries }, { goals }] = await Promise.all([
         api('GET', '/api/clients'),
         tab === 'chat' ? { entries: [] } : api('GET', `/api/entries?userId=${id}`),
-        tab === 'chat' ? { goals: {} } : api('GET', `/api/goals?userId=${id}`),
+        tab === 'chat' ? { goals: {} } : api('GET', `/api/goals?userId=${id}`).then((g) => {
+          goalHistory = g.history;
+          return g;
+        }),
       ]);
       if (!clients.some((c) => c.id === id)) throw new Error('Klient nicht gefunden');
     } catch (err) {
@@ -1277,16 +1611,18 @@
       <div class="grid-2">
         <div class="stack">
           <form class="card" id="goals-form" novalidate>
-            <h2 style="margin-bottom:12px">Ziele</h2>
+            <h2 style="margin-bottom:12px">Plan &amp; Ziele</h2>
+            <div class="field"><label for="g-kcal">Kalorien pro Tag</label>
+              <div class="input-unit"><input id="g-kcal" name="caloriesGoal" inputmode="numeric" placeholder="z. B. 2200"><span>kcal</span></div></div>
             <div class="field"><label for="g-w">Zielgewicht</label>
               <div class="input-unit"><input id="g-w" name="targetWeight" inputmode="decimal"><span>kg</span></div></div>
             <div class="field"><label for="g-s">Schritte pro Tag</label>
               <div class="input-unit"><input id="g-s" name="stepsGoal" inputmode="numeric"><span>Schritte</span></div></div>
             <div class="field"><label for="g-sl">Schlaf pro Nacht</label>
               <div class="input-unit"><input id="g-sl" name="sleepGoal" inputmode="decimal" placeholder="z. B. 7,5"><span>Std.</span></div></div>
-            <button class="btn-primary btn-block" type="submit">Ziele speichern</button>
+            <button class="btn-primary btn-block" type="submit">Plan speichern</button>
             <p class="error" hidden></p>
-            <p class="hint">Die Ziele sieht dein Klient in seiner Übersicht.</p>
+            <p class="hint">Den Plan sieht dein Klient in seiner Übersicht. Änderungen mit Erklärung schickst du am besten über den <a href="#/checkin/${id}">Check-in</a>.</p>
           </form>
           <div class="card">
             <h2 style="margin-bottom:12px">Zugang verwalten</h2>
@@ -1300,13 +1636,14 @@
         <div id="dashboard" class="stack"></div>
       </div>`);
 
-    const dash = mountDashboard(document.getElementById('dashboard'), { entries, goals });
+    const dash = mountDashboard(document.getElementById('dashboard'), { entries, goals, history: goalHistory });
 
     const gf = document.getElementById('goals-form');
     const show = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
     gf.targetWeight.value = show(goals.targetWeight);
     gf.stepsGoal.value = show(goals.stepsGoal);
     gf.sleepGoal.value = show(goals.sleepGoal);
+    gf.caloriesGoal.value = show(goals.caloriesGoal);
     gf.addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = gf.querySelector('.error');
@@ -1316,11 +1653,13 @@
           targetWeight: parseNum(gf.targetWeight.value),
           stepsGoal: parseNum(gf.stepsGoal.value),
           sleepGoal: parseNum(gf.sleepGoal.value),
+          caloriesGoal: parseNum(gf.caloriesGoal.value),
         };
         if (Object.values(body).some(Number.isNaN)) throw new Error('Bitte nur Zahlen eingeben.');
-        const res = await api('PUT', `/api/goals?userId=${id}`, body);
-        dash.setGoals(res.goals);
-        toast('Ziele gespeichert');
+        await api('PUT', `/api/goals?userId=${id}`, body);
+        const fresh = await api('GET', `/api/goals?userId=${id}`);
+        dash.setGoals(fresh.goals, fresh.history);
+        toast('Plan gespeichert');
       } catch (err) {
         errEl.textContent = err.message;
         errEl.hidden = false;

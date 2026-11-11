@@ -7,6 +7,7 @@ const { hashPassword, verifyPassword, createUser } = require('./db');
 const { createNotifier } = require('./notify');
 const { isAllowedEndpoint } = require('./push');
 const { nextRecurringRun, localDate } = require('./schedule');
+const { weekComparison } = require('./weekstats');
 
 const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -130,7 +131,28 @@ function goalsRow(r) {
     targetWeight: r ? r.target_weight : null,
     stepsGoal: r ? r.steps_goal : null,
     sleepGoal: r ? r.sleep_goal : null,
+    caloriesGoal: r ? r.calories_goal : null,
   };
+}
+
+const PLAN_FIELDS = {
+  caloriesGoal: { name: 'Kalorien', min: 800, max: 8000, integer: true, unit: 'kcal', label: 'Kalorien pro Tag' },
+  stepsGoal: { name: 'Schrittziel', min: 0, max: 200000, integer: true, unit: 'Schritte', label: 'Schritte pro Tag' },
+  sleepGoal: { name: 'Schlafziel', min: 0, max: 24, unit: 'Std.', label: 'Schlaf pro Nacht' },
+  targetWeight: { name: 'Zielgewicht', min: 20, max: 400, unit: 'kg', label: 'Zielgewicht' },
+};
+
+function fmtPlanValue(key, v) {
+  if (v === null || v === undefined) return '–';
+  const d = key === 'sleepGoal' || key === 'targetWeight' ? 1 : 0;
+  return `${Number(v).toLocaleString('de-DE', { maximumFractionDigits: d })} ${PLAN_FIELDS[key].unit}`;
+}
+
+/** Readable list of proposed plan changes, e.g. "Kalorien pro Tag: 2.200 kcal → 2.000 kcal". */
+function describeProposal(previous, proposal) {
+  return Object.keys(PLAN_FIELDS)
+    .filter((k) => k in proposal)
+    .map((k) => `${PLAN_FIELDS[k].label}: ${fmtPlanValue(k, previous[k])} → ${fmtPlanValue(k, proposal[k])}`);
 }
 
 const publicUser = (u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role });
@@ -255,9 +277,39 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
        WHERE u.role = 'client' AND m.read_at IS NULL`
     ),
     upsertGoals: db.prepare(
-      `INSERT INTO goals (user_id, target_weight, steps_goal, sleep_goal) VALUES (?, ?, ?, ?)
+      `INSERT INTO goals (user_id, target_weight, steps_goal, sleep_goal, calories_goal) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (user_id) DO UPDATE SET
-         target_weight = excluded.target_weight, steps_goal = excluded.steps_goal, sleep_goal = excluded.sleep_goal`
+         target_weight = excluded.target_weight, steps_goal = excluded.steps_goal,
+         sleep_goal = excluded.sleep_goal, calories_goal = excluded.calories_goal`
+    ),
+    insertGoalHistory: db.prepare(
+      'INSERT INTO goal_history (user_id, target_weight, steps_goal, sleep_goal, calories_goal, source) VALUES (?, ?, ?, ?, ?, ?)'
+    ),
+    goalHistory: db.prepare('SELECT * FROM goal_history WHERE user_id = ? ORDER BY id ASC'),
+    allEntries: db.prepare('SELECT * FROM entries WHERE user_id = ? ORDER BY date ASC'),
+    insertCheckin: db.prepare(
+      'INSERT INTO checkins (client_id, coach_id, message, proposal, previous) VALUES (?, ?, ?, ?, ?)'
+    ),
+    checkin: db.prepare('SELECT * FROM checkins WHERE id = ?'),
+    checkinsOf: db.prepare('SELECT * FROM checkins WHERE client_id = ? ORDER BY id DESC LIMIT ?'),
+    lastCheckin: db.prepare('SELECT * FROM checkins WHERE client_id = ? ORDER BY id DESC LIMIT 1'),
+    acceptCheckin: db.prepare(
+      "UPDATE checkins SET status = 'accepted', accepted_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"
+    ),
+    seenCheckins: db.prepare(
+      "UPDATE checkins SET seen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE client_id = ? AND seen_at IS NULL"
+    ),
+    repliedCheckin: db.prepare(
+      "UPDATE checkins SET replied_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"
+    ),
+    clientsBasic: db.prepare(
+      `SELECT u.id, u.display_name, u.username,
+         (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry
+       FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
+    ),
+    messagesSince: db.prepare(
+      `SELECT m.*, u.role AS sender_role FROM messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.client_id = ? AND m.created_at >= ? ORDER BY m.id ASC LIMIT 50`
     ),
   };
 
@@ -286,6 +338,28 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       nextRunAt: n.active && n.next_run_at ? new Date(n.next_run_at).toISOString() : null,
       lastSentAt: n.last_sent_at ? new Date(n.last_sent_at).toISOString() : null,
       lastResult: n.last_result,
+    };
+  }
+
+  function saveGoals(userId, g, source) {
+    q.upsertGoals.run(userId, g.targetWeight ?? null, g.stepsGoal ?? null, g.sleepGoal ?? null, g.caloriesGoal ?? null);
+    q.insertGoalHistory.run(userId, g.targetWeight ?? null, g.stepsGoal ?? null, g.sleepGoal ?? null, g.caloriesGoal ?? null, source);
+  }
+
+  function checkinRow(ci) {
+    const proposal = JSON.parse(ci.proposal);
+    const previous = JSON.parse(ci.previous);
+    return {
+      id: ci.id,
+      message: ci.message,
+      proposal,
+      previous,
+      changes: describeProposal(previous, proposal),
+      status: ci.status,
+      createdAt: ci.created_at,
+      seenAt: ci.seen_at,
+      repliedAt: ci.replied_at,
+      acceptedAt: ci.accepted_at,
     };
   }
 
@@ -453,19 +527,140 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     }],
 
     // ---- Goals ----
-    ['GET', /^\/api\/goals$/, async (ctx) => ({ goals: goalsRow(q.goals.get(targetClient(ctx).id)) })],
+    ['GET', /^\/api\/goals$/, async (ctx) => {
+      const c = targetClient(ctx);
+      return {
+        goals: goalsRow(q.goals.get(c.id)),
+        history: q.goalHistory.all(c.id).map((h) => ({ ...goalsRow(h), source: h.source, changedAt: h.changed_at })),
+      };
+    }],
 
     ['PUT', /^\/api\/goals$/, async (ctx) => {
       requireCoach(ctx);
       const c = targetClient(ctx);
       const body = await readBody(ctx.req);
-      const g = {
-        targetWeight: numberField(body.targetWeight, { name: 'Zielgewicht', min: 20, max: 400 }) ?? null,
-        stepsGoal: numberField(body.stepsGoal, { name: 'Schrittziel', min: 0, max: 200000, integer: true }) ?? null,
-        sleepGoal: numberField(body.sleepGoal, { name: 'Schlafziel', min: 0, max: 24 }) ?? null,
-      };
-      q.upsertGoals.run(c.id, g.targetWeight, g.stepsGoal, g.sleepGoal);
+      const g = {};
+      for (const [k, spec] of Object.entries(PLAN_FIELDS)) g[k] = numberField(body[k], spec) ?? null;
+      saveGoals(c.id, g, 'coach');
       return { goals: g };
+    }],
+
+    // ---- Weekly check-ins ----
+    ['GET', /^\/api\/checkins\/queue$/, async (ctx) => {
+      requireCoach(ctx);
+      const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString();
+      return {
+        clients: q.clientsBasic.all().map((c) => {
+          const last = q.lastCheckin.get(c.id);
+          return {
+            id: c.id,
+            displayName: c.display_name,
+            username: c.username,
+            lastEntry: c.last_entry,
+            lastCheckin: last ? checkinRow(last) : null,
+            doneThisWeek: Boolean(last && last.created_at >= weekAgo),
+          };
+        }),
+      };
+    }],
+
+    ['GET', /^\/api\/checkins\/review$/, async (ctx) => {
+      requireCoach(ctx);
+      const c = targetClient(ctx);
+      const goals = q.goals.get(c.id);
+      const today = localDate(Date.now(), notifier.timezone);
+      const last = q.lastCheckin.get(c.id);
+      const since = last ? last.created_at : new Date(Date.now() - 14 * 86400000).toISOString();
+      return {
+        client: { id: c.id, displayName: c.display_name, username: c.username },
+        goals: goalsRow(goals),
+        comparison: weekComparison(q.allEntries.all(c.id), today, goals),
+        checkins: q.checkinsOf.all(c.id, 5).map(checkinRow),
+        clientMessages: q.messagesSince
+          .all(c.id, since)
+          .filter((m) => m.sender_role === 'client')
+          .map((m) => ({ id: m.id, body: m.body, createdAt: m.created_at })),
+      };
+    }],
+
+    ['GET', /^\/api\/checkins$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const c = targetClient(ctx);
+      if (u.role === 'client') q.seenCheckins.run(c.id);
+      return { checkins: q.checkinsOf.all(c.id, 10).map(checkinRow) };
+    }],
+
+    ['POST', /^\/api\/checkins$/, async (ctx) => {
+      const coach = requireCoach(ctx);
+      const c = targetClient(ctx);
+      const body = await readBody(ctx.req);
+      const message = textField(body.message, { name: 'Nachricht', max: 4000 });
+      if (!message) throw new HttpError(400, 'Bitte eine Nachricht für den Check-in schreiben');
+      const current = goalsRow(q.goals.get(c.id));
+      const proposal = {};
+      const raw = body.proposal && typeof body.proposal === 'object' ? body.proposal : {};
+      for (const [k, spec] of Object.entries(PLAN_FIELDS)) {
+        const v = numberField(raw[k], spec);
+        if (v !== undefined && v !== null && v !== current[k]) proposal[k] = v;
+      }
+      const id = Number(
+        q.insertCheckin.run(c.id, coach.id, message, JSON.stringify(proposal), JSON.stringify(current)).lastInsertRowid
+      );
+
+      // Also post it to the chat so the conversation stays in one place.
+      const changes = describeProposal(current, proposal);
+      const chatText = `📋 Wöchentlicher Check-in\n\n${message}${
+        changes.length ? `\n\nVorgeschlagene Anpassungen:\n${changes.map((l) => `• ${l}`).join('\n')}` : ''
+      }`;
+      q.insertMessage.run(c.id, coach.id, chatText);
+      notifier
+        .sendToUsers([c.id], {
+          title: 'Dein Check-in ist da 📋',
+          body: changes.length ? 'Dein Coach hat Feedback und Anpassungen für deinen Plan.' : 'Dein Coach hat dir Feedback geschickt.',
+          url: '/#/',
+        })
+        .catch((err) => console.error(err));
+      ctx.res.statusCode = 201;
+      return { checkin: checkinRow(q.checkin.get(id)) };
+    }],
+
+    ['POST', /^\/api\/checkins\/(\d+)\/accept$/, async (ctx, [, id]) => {
+      const u = requireUser(ctx);
+      const ci = q.checkin.get(Number(id));
+      if (!ci || u.role !== 'client' || ci.client_id !== u.id) throw new HttpError(404, 'Check-in nicht gefunden');
+      if (ci.status === 'accepted') throw new HttpError(409, 'Bereits angenommen');
+      const proposal = JSON.parse(ci.proposal);
+      if (!Object.keys(proposal).length) throw new HttpError(400, 'Dieser Check-in enthält keine Anpassungen');
+      const goals = { ...goalsRow(q.goals.get(u.id)), ...proposal };
+      saveGoals(u.id, goals, 'checkin');
+      q.acceptCheckin.run(ci.id);
+      q.insertMessage.run(u.id, u.id, `✅ Anpassungen angenommen:\n${describeProposal(JSON.parse(ci.previous), proposal).map((l) => `• ${l}`).join('\n')}`);
+      notifier
+        .sendToUsers(notifier.coachIds(), {
+          title: `${u.display_name} hat die Anpassungen angenommen ✅`,
+          body: describeProposal(JSON.parse(ci.previous), proposal).join(' · '),
+          url: `/#/client/${u.id}/chat`,
+        })
+        .catch((err) => console.error(err));
+      return { checkin: checkinRow(q.checkin.get(ci.id)), goals };
+    }],
+
+    ['POST', /^\/api\/checkins\/(\d+)\/reply$/, async (ctx, [, id]) => {
+      const u = requireUser(ctx);
+      const ci = q.checkin.get(Number(id));
+      if (!ci || u.role !== 'client' || ci.client_id !== u.id) throw new HttpError(404, 'Check-in nicht gefunden');
+      const body = textField((await readBody(ctx.req)).body, { name: 'Antwort', max: 2000 });
+      if (!body) throw new HttpError(400, 'Antwort darf nicht leer sein');
+      q.insertMessage.run(u.id, u.id, `↩️ Antwort auf den Check-in:\n${body}`);
+      q.repliedCheckin.run(ci.id);
+      notifier
+        .sendToUsers(notifier.coachIds(), {
+          title: `${u.display_name} hat auf den Check-in geantwortet`,
+          body: body.length > 120 ? `${body.slice(0, 117)}…` : body,
+          url: `/#/client/${u.id}/chat`,
+        })
+        .catch((err) => console.error(err));
+      return { checkin: checkinRow(q.checkin.get(ci.id)) };
     }],
 
     // ---- Messages (one thread per client, between client and coach) ----

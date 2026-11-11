@@ -91,8 +91,38 @@ CREATE TABLE IF NOT EXISTS goals (
   user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   target_weight REAL,
   steps_goal    INTEGER,
-  sleep_goal    REAL
+  sleep_goal    REAL,
+  calories_goal INTEGER
 );
+
+-- Every change of a client's plan, for the history charts.
+CREATE TABLE IF NOT EXISTS goal_history (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_weight REAL,
+  steps_goal    INTEGER,
+  sleep_goal    REAL,
+  calories_goal INTEGER,
+  source        TEXT NOT NULL DEFAULT 'coach',
+  changed_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS goal_history_user ON goal_history (user_id, id);
+
+-- Weekly check-ins: coach feedback + proposed plan changes the client can accept.
+CREATE TABLE IF NOT EXISTS checkins (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  coach_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  message      TEXT NOT NULL,
+  proposal     TEXT NOT NULL DEFAULT '{}',
+  previous     TEXT NOT NULL DEFAULT '{}',
+  status       TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'accepted')),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  seen_at      TEXT,
+  replied_at   TEXT,
+  accepted_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS checkins_client ON checkins (client_id, id);
 `;
 
 function openDb(file) {
@@ -100,6 +130,9 @@ function openDb(file) {
   db.exec('PRAGMA foreign_keys = ON;');
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  // Databases created before the calorie goal existed get the new column.
+  const goalCols = db.prepare('PRAGMA table_info(goals)').all().map((c) => c.name);
+  if (!goalCols.includes('calories_goal')) db.exec('ALTER TABLE goals ADD COLUMN calories_goal INTEGER');
   return db;
 }
 

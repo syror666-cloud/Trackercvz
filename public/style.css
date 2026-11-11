@@ -359,3 +359,44 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 .weekday-picker span { display: block; text-align: center; padding: 8px 0; border-radius: 8px; border: 1px solid var(--border); font-size: 0.85rem; font-weight: 600; cursor: pointer; color: var(--muted); }
 .weekday-picker input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+/* ---- Check-in ---- */
+.progress { width: 220px; max-width: 100%; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.queue { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; margin-bottom: 8px; scrollbar-width: thin; }
+.queue-item {
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 8px 14px 8px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); text-decoration: none; font-weight: 600; font-size: 0.9rem;
+}
+.queue-item:hover { border-color: var(--accent); }
+.queue-item[aria-current="page"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.queue-num {
+  width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--muted); font-size: 0.8rem; font-weight: 700;
+}
+.queue-item.done .queue-num { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.queue-item.done { color: var(--muted); }
+.checkin-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 960px) {
+  .checkin-grid { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); align-items: start; }
+  .checkin-form { position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; }
+}
+.checkin-form h2 { margin-bottom: 6px; }
+.compare td:first-child { color: var(--muted); }
+.day-table .empty-day td { color: var(--muted); opacity: 0.6; }
+.plan-field.changed input { border-color: var(--accent); background: var(--accent-soft); }
+.client-msgs { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.client-msgs .msg { max-width: 100%; }
+details.card summary { cursor: pointer; }
+.checkin-card { margin-bottom: 16px; border-color: var(--accent); }
+.checkin-card h2 { font-size: 1.05rem; }
+.checkin-msg { white-space: pre-wrap; margin: 10px 0; }
+.proposal { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.change-list { list-style: none; margin: 0; padding: 0; }
+.change-list li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; flex-wrap: wrap; font-size: 0.95rem; }
+.change-list s { text-decoration-thickness: 1px; }
+.reply-form { margin-top: 12px; }
+.kcal-now { font-size: 0.95rem; }
+.kcal-now strong { font-size: 1.2rem; }
+.chart-kcal { --series: var(--accent); }

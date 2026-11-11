@@ -133,9 +133,11 @@
         }, svg);
       }
     } else {
-      const d = pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join('');
+      const d = opts.stepped
+        ? pts.map((p, i) => (i ? `H${sx(p.x).toFixed(1)}V${sy(p.y).toFixed(1)}` : `M${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`)).join('')
+        : pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join('');
       el('path', { d, class: opts.trend ? 'line line-raw' : 'line' }, svg);
-      if (pts.length <= 90) {
+      if (opts.dots !== false && pts.length <= 90) {
         for (const p of pts) el('circle', { cx: sx(p.x), cy: sy(p.y), r: 2.5, class: 'dot' }, svg);
       }
       if (opts.trend && pts.length > 2) {
