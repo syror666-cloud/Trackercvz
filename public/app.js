@@ -195,8 +195,23 @@
     } catch {
       me = null;
     }
-    route();
+    try {
+      await route();
+    } finally {
+      hideSplash();
+    }
   }
+
+  /** Start screen with the logo (in index.html) – fades out once the first page is ready. */
+  function hideSplash() {
+    const splash = document.getElementById('splash');
+    if (!splash) return;
+    splash.classList.add('hide');
+    setTimeout(() => splash.remove(), 400);
+  }
+
+  /** Placeholder while a page loads: the small pulsing logo instead of an empty page. */
+  const LOADING = '<div class="page-loading" role="status" aria-label="Lädt"><img src="/icon-192.png" alt=""><span></span></div>';
 
   function setView(html) {
     cleanups.forEach((fn) => fn());
@@ -480,7 +495,7 @@
 
   // ---------- client: daily entry ----------
   async function renderClientHome() {
-    setView('<p class="muted">Lade…</p>');
+    setView(LOADING);
     const [{ entries }, { goals, history }, { metrics }] = await Promise.all([
       api('GET', '/api/entries'),
       api('GET', '/api/goals'),
@@ -1649,7 +1664,7 @@
 
   // ---------- coach: overview ----------
   async function renderCoachHome() {
-    setView('<p class="muted">Lade…</p>');
+    setView(LOADING);
     const [{ clients }, queue] = await Promise.all([api('GET', '/api/clients'), api('GET', '/api/checkins/queue')]);
 
     const cards = clients
@@ -1741,7 +1756,7 @@
 
   // ---------- coach: weekly check-in ----------
   async function renderCheckin(selectedId) {
-    setView('<p class="muted">Lade…</p>');
+    setView(LOADING);
     const { clients } = await api('GET', '/api/checkins/queue');
     if (!clients.length) {
       setView('<div class="page-head"><h1>Check-in</h1></div><div class="card empty-state">Noch keine Klienten angelegt.</div>');
@@ -1765,7 +1780,7 @@
           )
           .join('')}
       </nav>
-      <div id="checkin-body"><p class="muted">Lade…</p></div>`);
+      <div id="checkin-body">${LOADING}</div>`);
     const current = document.querySelector('.queue [aria-current]');
     if (current) current.scrollIntoView({ block: 'nearest', inline: 'center' });
 
@@ -2127,7 +2142,7 @@
 
   // ---------- client: nutrition plan ----------
   async function renderClientNutrition() {
-    setView('<p class="muted">Lade…</p>');
+    setView(LOADING);
     const [plan, { goals }] = await Promise.all([api('GET', '/api/nutrition'), api('GET', '/api/goals')]);
     drawClientNutrition(plan, goals);
   }
@@ -2452,7 +2467,7 @@
 
   // ---------- coach: admin tool ----------
   async function renderAdmin() {
-    setView('<p class="muted">Lade…</p>');
+    setView(LOADING);
     const [ov] = await Promise.all([api('GET', '/api/admin/overview'), loadFoods(true)]);
     setView(`
       <div class="page-head"><div>${eyebrow('Werkzeuge')}<h1>Admin</h1><p class="muted">Aktivität deiner Klienten, automatische Erinnerungen und Lebensmittel-Datenbank.</p></div></div>
@@ -2936,8 +2951,9 @@
   }
 
   // ---------- coach: client detail ----------
+  let goalsPanelOpenFor = null; // keeps the goals panel open while editing (e.g. after changing the category)
   async function renderCoachClient(id, tab) {
-    setView('<p class="muted">Lade…</p>');
+    setView(LOADING);
     let clients, entries, goals;
     let goalHistory = [];
     let measurements = [];
@@ -2985,7 +3001,7 @@
       </nav>`;
 
     if (tab === 'nutrition') {
-      setView(`${head}<div id="nutrition"><p class="muted">Lade…</p></div>`);
+      setView(`${head}<div id="nutrition">${LOADING}</div>`);
       mountCoachNutrition(document.getElementById('nutrition'), client, goals);
       return;
     }
@@ -3003,8 +3019,8 @@
 
     setView(`
       ${head}
-      <div class="grid-2">
-        <div class="stack">
+      <div class="goals-panel" id="goals-panel" ${goalsPanelOpenFor === id ? '' : 'hidden'}>
+        <div class="goals-panel-grid">
           <section class="card" id="category-card">
             <div class="row-between" style="margin-bottom:10px"><h2>Kategorie</h2><span class="muted small">nur für dich sichtbar</span></div>
             <div class="cat-picker" role="radiogroup" aria-label="Kategorie">
@@ -3044,10 +3060,27 @@
             </div>
           </div>
         </div>
-        <div id="dashboard" class="stack"></div>
-      </div>`);
+      </div>
+      <div id="dashboard" class="stack"></div>`);
 
-    stickyColumn(document.querySelector('.grid-2 > .stack'));
+    // "Ziele ändern" opens the panel with category, plan & goals and account settings.
+    const headRow = app.querySelector('.page-head a[href^="/api/entries.csv"]').parentElement;
+    headRow.insertAdjacentHTML('afterbegin', `<button type="button" class="btn-primary" id="btn-goals" aria-controls="goals-panel"></button>`);
+    const goalsBtn = document.getElementById('btn-goals');
+    const goalsPanel = document.getElementById('goals-panel');
+    const syncGoalsBtn = () => {
+      const open = !goalsPanel.hidden;
+      goalsBtn.textContent = open ? 'Schließen' : 'Ziele ändern';
+      goalsBtn.className = open ? 'btn-secondary' : 'btn-primary';
+      goalsBtn.setAttribute('aria-expanded', String(open));
+      goalsPanelOpenFor = open ? id : null;
+    };
+    goalsBtn.addEventListener('click', () => {
+      goalsPanel.hidden = !goalsPanel.hidden;
+      syncGoalsBtn();
+      if (!goalsPanel.hidden) goalsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    syncGoalsBtn();
     const dash = mountDashboard(document.getElementById('dashboard'), { entries, goals, history: goalHistory, measurements });
     document.querySelectorAll('[data-cat]').forEach((b) =>
       b.addEventListener('click', async () => {
