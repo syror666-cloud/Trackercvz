@@ -32,7 +32,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 
 Klienten sehen immer nur ihre eigenen Daten und ihren eigenen Chat.
 
-Design: redaktionell und fast monochrom – Graphit auf warmem Grau/Weiß, Ember-Orange als einziger Akzent, Brass als zweiter. Überschriften in Space Grotesk, Text in Inter (beide selbst gehostet, keine Verbindung zu Google Fonts). Dark Mode in Schwarz/Orange, folgt automatisch der Geräteeinstellung.
+Design: Farbschema Soft Blue (#B6DFED), Midnight Navy (#002941) und Coral (#FD6E6E) – Navy für Text und Hauptaktionen, Coral als Akzent, Soft Blue für hervorgehobene Flächen. Überschriften in Space Grotesk, Text in Inter (beide selbst gehostet, keine Verbindung zu Google Fonts). Dark Mode in Navy mit Coral, folgt automatisch der Geräteeinstellung.
 
 ## Lokal starten
 

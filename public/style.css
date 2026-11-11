@@ -1,7 +1,7 @@
 /* ==========================================================================
    Thabstracker – design system
-   Editorial, warm and almost monochrome: graphite type on ash/white surfaces,
-   one ember-orange accent used like a highlighter, brass as quiet second accent.
+   Editorial and calm: Midnight Navy type on white and Soft Blue surfaces,
+   one Coral accent used like a highlighter, a muted blue as quiet second accent.
    Three radii create rhythm: sharp buttons · asymmetric cards · round pills/data cards.
    ========================================================================== */
 
@@ -19,28 +19,28 @@
 }
 
 :root {
-  /* Light: warm paper, graphite, ember */
-  --bg: #efefef;            /* Ash – page */
-  --surface: #ffffff;       /* Canvas – cards */
-  --surface-2: #f5f5f5;     /* Fog – nested */
-  --ivory: #ebe6dd;         /* paper wash for featured blocks */
-  --text: #202020;          /* Graphite */
-  --steel: #4d4d4d;
-  --muted: #828282;         /* Slate */
-  --border: #e8e8e8;        /* Mist */
-  --line: #d6d3cd;          /* input outlines */
-  --accent: #ff682c;        /* Ember */
-  --accent-soft: #ffe7dc;
-  --accent-text: #202020;
-  --brass: #816729;
-  --btn-bg: #202020;
+  /* Light: Soft Blue · Midnight Navy · Coral */
+  --bg: #edf5f8;            /* page – a whisper of Soft Blue */
+  --surface: #ffffff;       /* cards */
+  --surface-2: #f4f9fb;     /* nested */
+  --ivory: #b6dfed;         /* Soft Blue – featured blocks */
+  --text: #002941;          /* Midnight Navy */
+  --steel: #2c4a5e;
+  --muted: #687f8f;
+  --border: #e1ebf0;
+  --line: #c6d7e0;
+  --accent: #fd6e6e;        /* Coral */
+  --accent-soft: #ffe4e4;
+  --accent-text: #002941;
+  --brass: #3b6f88;         /* quiet second accent between navy and soft blue */
+  --btn-bg: #002941;
   --btn-text: #ffffff;
-  --weight: #ff682c;
-  --steps: #202020;
-  --sleep: #816729;
-  --good: #4b7a3e;
-  --warn: #8a6516;
-  --bad: #b3261e;
+  --weight: #fd6e6e;
+  --steps: #002941;
+  --sleep: #4f9cbb;
+  --good: #2f7d5b;
+  --warn: #b7791f;
+  --bad: #c0392b;
 
   --font-display: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -56,29 +56,29 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  /* Dark: black and ember */
+  /* Dark: Midnight Navy with Coral and Soft Blue */
   :root {
-    --bg: #111111;
-    --surface: #1b1b1b;
-    --surface-2: #242424;
-    --ivory: #262320;
-    --text: #f1ede6;
-    --steel: #c8c3ba;
-    --muted: #9a958c;
-    --border: #2c2c2c;
-    --line: #3a3a3a;
-    --accent: #ff6a2e;
-    --accent-soft: #3a1d10;
-    --accent-text: #111111;
-    --brass: #c9a45a;
-    --btn-bg: #ff6a2e;
-    --btn-text: #111111;
-    --weight: #ff6a2e;
-    --steps: #f1ede6;
-    --sleep: #c9a45a;
-    --good: #8fc070;
-    --warn: #e0b04a;
-    --bad: #ff6b5b;
+    --bg: #001a2b;
+    --surface: #002941;
+    --surface-2: #08344f;
+    --ivory: #0d3f5e;
+    --text: #eaf5fa;
+    --steel: #c4dbe6;
+    --muted: #8fb0c2;
+    --border: #0f3c58;
+    --line: #1e4f6c;
+    --accent: #fd6e6e;
+    --accent-soft: #4a2333;
+    --accent-text: #002941;
+    --brass: #b6dfed;
+    --btn-bg: #fd6e6e;
+    --btn-text: #002941;
+    --weight: #fd6e6e;
+    --steps: #b6dfed;
+    --sleep: #7cc3dc;
+    --good: #7fd1a0;
+    --warn: #f2c46d;
+    --bad: #ff8f8f;
     color-scheme: dark;
   }
 }
@@ -97,7 +97,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Links: base colour with an ember underline */
+/* Links: base colour with a coral underline */
 a {
   color: inherit;
   text-decoration: underline;
@@ -286,7 +286,7 @@ button, .btn {
   transition: background-color 0.12s, color 0.12s, border-color 0.12s;
 }
 .btn-primary { background: var(--btn-bg); color: var(--btn-text); }
-.btn-primary:hover { background: var(--accent); color: #111; }
+.btn-primary:hover { background: var(--accent); color: var(--accent-text); }
 .btn-secondary { background: transparent; color: var(--text); border-color: var(--text); }
 .btn-secondary:hover { background: var(--text); color: var(--surface); }
 .btn-danger { background: transparent; color: var(--bad); border-color: var(--bad); }
@@ -457,7 +457,7 @@ dialog {
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
 }
-dialog::backdrop { background: rgba(20, 18, 16, 0.55); }
+dialog::backdrop { background: rgba(0, 26, 43, 0.55); }
 dialog h2 { margin-bottom: 16px; font-size: 1.45rem; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .sub-dialog { z-index: 100; }
@@ -537,7 +537,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 .weekday-picker span { display: block; text-align: center; padding: 9px 0; border: 1px solid var(--line); font: 400 0.88rem var(--font-display); cursor: pointer; color: var(--muted); }
 .weekday-picker input:checked + span { background: var(--text); border-color: var(--text); color: var(--surface); }
 
-/* Yes / no choices: square, graphite when chosen */
+/* Yes / no choices: square, navy when chosen */
 .choice { display: flex; gap: 8px; }
 .choice label { flex: 1; margin: 0; position: relative; }
 .choice input { position: absolute; opacity: 0; pointer-events: none; }
@@ -579,7 +579,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
   width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
   background: var(--surface-2); color: var(--muted); font: 500 0.76rem var(--font-body);
 }
-.queue-item[aria-current="page"] .queue-num { background: var(--accent); color: #111; }
+.queue-item[aria-current="page"] .queue-num { background: var(--accent); color: var(--accent-text); }
 .queue-item.done .queue-num { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
 .queue-item.done { color: var(--muted); }
 .queue-item.done[aria-current="page"] { color: var(--surface); }
