@@ -194,7 +194,9 @@ test('push consent, coach notifications and chat push', async (t) => {
   await coach('POST', `/api/messages?userId=${annaId}`, { body: 'Super Woche!' });
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(sent.length, 3);
-  assert.equal(JSON.parse(decrypt(Buffer.from(sent[2].opts.body), sub.ecdh, sub.auth)).title, 'Neue Nachricht von deinem Coach');
+  const chatPush = JSON.parse(decrypt(Buffer.from(sent[2].opts.body), sub.ecdh, sub.auth));
+  assert.equal(chatPush.body, 'Du hast eine neue Nachricht von deinem Coach');
+  assert.ok(!JSON.stringify(chatPush).includes('Super Woche'), 'the message text must not be in the notification');
 
   // Expired subscriptions (410) are removed.
   db.prepare("UPDATE push_subscriptions SET endpoint = 'https://fcm.googleapis.com/gone' WHERE user_id = ?").run(annaId);

@@ -164,6 +164,33 @@ test('chat between client and coach', async (t) => {
   assert.equal((await ben('GET', `/api/messages?userId=${a}`)).data.messages.length, 0);
 });
 
+test('coach inbox lists all conversations, newest first', async (t) => {
+  const { server, client } = await setup();
+  t.after(() => server.close());
+  const coach = client();
+  await coach('POST', '/api/login', { username: 'coach', password: 'coachpass123' });
+  const a = (await coach('POST', '/api/clients', { username: 'anna', displayName: 'Anna', password: 'annapass123' })).data.client.id;
+  const b = (await coach('POST', '/api/clients', { username: 'ben', displayName: 'Ben', password: 'benpass1234' })).data.client.id;
+  await coach('POST', '/api/clients', { username: 'cara', displayName: 'Cara', password: 'carapass123' });
+
+  const anna = client();
+  await anna('POST', '/api/login', { username: 'anna', password: 'annapass123' });
+  await anna('POST', '/api/messages', { body: 'Hallo!' });
+  await coach('POST', `/api/messages?userId=${b}`, { body: 'Wie geht es dir, Ben?' });
+  await anna('POST', '/api/messages', { body: 'Noch eine Frage zum Plan' });
+
+  const inbox = (await coach('GET', '/api/messages/inbox')).data.conversations;
+  assert.deepEqual(inbox.map((c) => c.displayName), ['Anna', 'Ben', 'Cara']);
+  assert.equal(inbox[0].unread, 2);
+  assert.deepEqual([inbox[0].lastMessage.body, inbox[0].lastMessage.fromCoach], ['Noch eine Frage zum Plan', false]);
+  assert.equal(inbox[1].lastMessage.fromCoach, true);
+  assert.equal(inbox[2].lastMessage, null);
+  assert.equal((await anna('GET', '/api/messages/inbox')).status, 403);
+
+  await coach('GET', `/api/messages?userId=${a}`);
+  assert.equal((await coach('GET', '/api/messages/inbox')).data.conversations[0].unread, 0);
+});
+
 test('rejects non-JSON writes and serves the app shell', async (t) => {
   const { server, base } = await setup();
   t.after(() => server.close());

@@ -18,10 +18,11 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Ernährungsplan** vom Coach mit Mengen und Kalorien; einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen (Coach entscheidet)
 - **Check-in vom Coach** oben in der Übersicht: Feedback lesen, antworten oder vorgeschlagene Plananpassungen mit einem Klick annehmen. Check-in und Annahme laufen im Hintergrund; nur die Antwort des Klienten landet im Chat
 - **Kalorien:** Zielkalorien als Range (z. B. 2.200–2.300 kcal) mit Diagramm: Range als Band, Mittelwert als Linie, pro Tag eingehalten/nicht eingehalten
-- **Push-Benachrichtigungen** (nach Zustimmung): Erinnerungen des Coaches und neue Chat-Nachrichten. Auf dem iPhone nur, wenn die Seite zum Home-Bildschirm hinzugefügt wurde (ab iOS 16.4)
+- **Push-Benachrichtigungen** (nach Zustimmung; Chat-Nachrichten des Coaches erscheinen nur als „Du hast eine neue Nachricht von deinem Coach“, ohne Inhalt): Erinnerungen des Coaches und neue Chat-Nachrichten. Auf dem iPhone nur, wenn die Seite zum Home-Bildschirm hinzugefügt wurde (ab iOS 16.4)
 - **Apple Health:** automatische Übertragung von Schritten (optional Gewicht) über einen Kurzbefehl der Apple-App „Kurzbefehle“ mit persönlichem Schlüssel (Anleitung direkt in der App unter „Einstellungen“)
 
 **Coach**
+- Reiter **Nachrichten** mit allen Chats auf einer Seite (Liste mit Vorschau und ungelesenen Nachrichten, Chat daneben; am Handy Liste → Chat)
 - Dashboard über den Klienten: ungelesene Nachrichten, offene Check-ins (nur Samstag/Sonntag), Tauschwünsche, nicht angenommene Plananpassungen, Klienten ohne Eintrag seit 2+ Tagen
 - Übersicht aller Klienten: letzter Eintrag (farbig markiert, wenn jemand nicht einträgt), Gewicht und Veränderung, Ø Schritte und Ø Schlaf
 - Detailansicht je Klient mit allen Diagrammen und Einträgen (nur lesen)

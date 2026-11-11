@@ -227,6 +227,8 @@
     if (me.role === 'coach') {
       if (m) return renderCoachClient(Number(m[1]), m[2] || 'overview');
       if (location.hash === '#/admin') return renderAdmin();
+      const inbox = location.hash.match(/^#\/messages(?:\/(\d+))?$/);
+      if (inbox) return renderInbox(inbox[1] ? Number(inbox[1]) : null);
       if (location.hash === '#/checkin/done') return renderCheckinDone();
       const ci = location.hash.match(/^#\/checkin(?:\/(\d+))?/);
       if (ci) return renderCheckin(ci[1] ? Number(ci[1]) : null);
@@ -241,11 +243,11 @@
   function renderNav() {
     const links =
       me.role === 'coach'
-        ? [['#/', 'Klienten', true], ['#/checkin', 'Check-in', false], ['#/admin', 'Admin', false]]
+        ? [['#/', 'Klienten', false], ['#/messages', 'Nachrichten', true], ['#/checkin', 'Check-in', false], ['#/admin', 'Admin', false]]
         : [['#/', 'Tracker', false], ['#/nutrition', 'Ernährung', false], ['#/chat', 'Nachrichten', true], ['#/settings', 'Einstellungen', false]];
     let current =
       me.role === 'coach'
-        ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash === '#/admin' ? '#/admin' : '#/'
+        ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash.startsWith('#/messages') ? '#/messages' : location.hash === '#/admin' ? '#/admin' : '#/'
         : ['#/chat', '#/settings', '#/nutrition'].includes(location.hash) ? location.hash : '#/';
     if (location.hash === '#/account') current = null; // the account page lives in the profile menu
     nav.innerHTML = links
@@ -1457,10 +1459,10 @@
     });
   }
 
-  function mountChat(root, { query, title, subtitle, empty }) {
+  function mountChat(root, { query, title, subtitle, empty, headExtra, onUpdate }) {
     root.innerHTML = `
       <section class="card chat">
-        <div class="chat-head"><h2>${esc(title)}</h2><p class="muted small">${esc(subtitle)}</p></div>
+        <div class="chat-head">${headExtra || ''}<div><h2>${esc(title)}</h2><p class="muted small">${esc(subtitle)}</p></div></div>
         <div class="chat-log" aria-live="polite"><p class="chat-empty">Lade…</p></div>
         <form class="chat-form">
           <textarea name="body" rows="1" maxlength="2000" placeholder="Nachricht schreiben…" aria-label="Nachricht"></textarea>
@@ -1511,6 +1513,7 @@
           if (fresh.length) lastId = fresh[fresh.length - 1].id;
           draw();
           refreshUnread();
+          if (onUpdate) onUpdate();
         }
       } catch {
         /* retry on next poll */
@@ -1554,6 +1557,94 @@
       stopped = true;
       clearInterval(timer);
     });
+  }
+
+  // ---------- coach: all chats in one place ----------
+  async function renderInbox(selectedId) {
+    setView(`
+      <div class="page-head inbox-head"><div>${eyebrow('Coaching')}<h1>Nachrichten</h1></div></div>
+      <div class="inbox ${selectedId ? 'has-chat' : ''}">
+        <aside class="card inbox-list" aria-label="Chats"><p class="muted small">Lade…</p></aside>
+        <div class="inbox-chat"></div>
+      </div>`);
+    const listEl = app.querySelector('.inbox-list');
+    const chatEl = app.querySelector('.inbox-chat');
+    let convs = [];
+    let filter = '';
+
+    const when = (iso) => {
+      const d = new Date(iso);
+      const local = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      const diff = daysBetween(local, todayStr());
+      if (diff === 0) return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      if (diff === 1) return 'gestern';
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    };
+    const initials = (name) => name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+    const avatarOf = (c) =>
+      c.avatar ? `<img class="inbox-avatar" src="${esc(c.avatar)}" alt="">` : `<span class="inbox-avatar initials">${esc(initials(c.displayName))}</span>`;
+
+    function drawList() {
+      const term = filter.trim().toLowerCase();
+      const shown = convs.filter((c) => !term || c.displayName.toLowerCase().includes(term));
+      const totalUnread = convs.reduce((a, c) => a + c.unread, 0);
+      listEl.innerHTML = `
+        <div class="inbox-list-head"><h2>Chats</h2>${totalUnread ? `<span class="unread-badge">${totalUnread} ungelesen</span>` : ''}</div>
+        <input type="search" class="inbox-search" placeholder="Klient suchen" value="${esc(filter)}" aria-label="Klient suchen">
+        <ul class="inbox-items">${shown
+          .map((c) => `<li><a href="#/messages/${c.clientId}" class="inbox-item ${c.clientId === selectedId ? 'active' : ''} ${c.unread ? 'unread' : ''}"${c.clientId === selectedId ? ' aria-current="true"' : ''}>
+              ${avatarOf(c)}
+              <span class="inbox-main">
+                <span class="inbox-top"><span class="inbox-name">${esc(c.displayName)} ${catTag(c.category)}</span>${c.lastMessage ? `<time>${esc(when(c.lastMessage.createdAt))}</time>` : ''}</span>
+                <span class="inbox-preview">${c.lastMessage ? `${c.lastMessage.fromCoach ? '<span class="muted">Du: </span>' : ''}${esc(c.lastMessage.body)}` : '<span class="muted">Noch keine Nachrichten</span>'}</span>
+              </span>
+              ${c.unread ? `<span class="count">${c.unread}</span>` : ''}
+            </a></li>`)
+          .join('') || '<li class="muted small" style="padding:12px 4px">Keine Treffer.</li>'}</ul>`;
+      const search = listEl.querySelector('.inbox-search');
+      search.addEventListener('input', () => {
+        filter = search.value;
+        const pos = search.selectionStart;
+        drawList();
+        const s2 = listEl.querySelector('.inbox-search');
+        s2.focus();
+        s2.setSelectionRange(pos, pos);
+      });
+    }
+
+    async function loadList() {
+      try {
+        convs = (await api('GET', '/api/messages/inbox')).conversations;
+        if (!listEl.querySelector('.inbox-search:focus')) drawList();
+      } catch {
+        /* next poll */
+      }
+    }
+
+    await loadList();
+    const timer = setInterval(loadList, 12000);
+    onCleanup(() => clearInterval(timer));
+
+    if (!selectedId) {
+      chatEl.innerHTML = `<div class="card inbox-empty"><p style="font-size:2rem;margin:0">💬</p>
+        <p>${convs.length ? 'Wähle links einen Chat aus.' : 'Noch keine Klienten.'}</p></div>`;
+      return;
+    }
+    const c = convs.find((x) => x.clientId === selectedId);
+    if (!c) {
+      chatEl.innerHTML = '<div class="card empty-state">Klient nicht gefunden.</div>';
+      return;
+    }
+    mountChat(chatEl, {
+      query: `?userId=${c.clientId}`,
+      title: c.displayName,
+      subtitle: `@${c.username}`,
+      empty: `${c.displayName} hat dir noch nicht geschrieben. Du kannst das Gespräch auch selbst beginnen.`,
+      headExtra: `<a class="inbox-back" href="#/messages" aria-label="Alle Chats">←</a>${avatarOf(c)}`,
+      onUpdate: loadList,
+    });
+    const head = chatEl.querySelector('.chat-head');
+    head.insertAdjacentHTML('beforeend', `<a class="small inbox-profile" href="#/client/${c.clientId}">Profil →</a>`);
   }
 
   // ---------- coach: overview ----------
@@ -2792,7 +2883,7 @@
           : `<p class="dash-empty small">${empty}</p>`}
       </section>`;
 
-    const messages = clients.filter((c) => c.unreadMessages).map((c) => ({ href: `#/client/${c.id}/chat`, label: who(c), meta: `${c.unreadMessages} neu` }));
+    const messages = clients.filter((c) => c.unreadMessages).map((c) => ({ href: `#/messages/${c.id}`, label: who(c), meta: `${c.unreadMessages} neu` }));
     const swaps = clients.filter((c) => c.openSwaps).map((c) => ({ href: `#/client/${c.id}/nutrition`, label: who(c), meta: `${c.openSwaps} offen` }));
     const pendingPlans = clients
       .filter((c) => {

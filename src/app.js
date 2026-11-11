@@ -356,6 +356,15 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
          WHERE m.client_id = ? ORDER BY m.id DESC LIMIT 300
        ) ORDER BY id ASC`
     ),
+    inbox: db.prepare(
+      `SELECT u.id, u.display_name, u.username, u.category, u.avatar IS NOT NULL AS has_avatar, u.avatar_updated,
+         lm.id AS last_id, lm.body AS last_body, lm.created_at AS last_at, (lm.sender_id <> u.id) AS last_from_coach,
+         (SELECT COUNT(*) FROM messages m WHERE m.client_id = u.id AND m.sender_id = u.id AND m.read_at IS NULL) AS unread
+       FROM users u
+       LEFT JOIN messages lm ON lm.id = (SELECT MAX(id) FROM messages m2 WHERE m2.client_id = u.id)
+       WHERE u.role = 'client'
+       ORDER BY lm.id IS NULL, lm.id DESC, u.display_name COLLATE NOCASE`
+    ),
     insertMessage: db.prepare('INSERT INTO messages (client_id, sender_id, body) VALUES (?, ?, ?)'),
     markRead: db.prepare(
       `UPDATE messages SET read_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
@@ -837,6 +846,24 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     }],
 
     // ---- Messages (one thread per client, between client and coach) ----
+    // Coach inbox: every client with the latest message and unread count, newest conversation first.
+    ['GET', /^\/api\/messages\/inbox$/, async (ctx) => {
+      requireCoach(ctx);
+      return {
+        conversations: q.inbox.all().map((r) => ({
+          clientId: r.id,
+          displayName: r.display_name,
+          username: r.username,
+          category: r.category,
+          avatar: r.has_avatar ? `/api/avatar/${r.id}?v=${encodeURIComponent(r.avatar_updated || '1')}` : null,
+          unread: r.unread,
+          lastMessage: r.last_id
+            ? { body: r.last_body.length > 90 ? `${r.last_body.slice(0, 87)}…` : r.last_body, createdAt: r.last_at, fromCoach: r.last_from_coach === 1 }
+            : null,
+        })),
+      };
+    }],
+
     ['GET', /^\/api\/messages\/unread$/, async (ctx) => {
       const u = requireUser(ctx);
       const n = u.role === 'coach' ? q.unreadForCoach.get().n : q.unreadForClient.get(u.id, u.id).n;
@@ -872,9 +899,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
       const push =
         u.role === 'coach'
-          ? notifier.sendToUsers([c.id], { title: 'Neue Nachricht von deinem Coach', body: preview, url: '/#/chat' })
+          ? // No message text in the notification – it may show on a locked screen.
+            notifier.sendToUsers([c.id], { title: 'Thabstracker', body: 'Du hast eine neue Nachricht von deinem Coach', url: '/#/chat' })
           : notifier.sendToUsers(notifier.coachIds(), {
-              title: `Nachricht von ${c.display_name}`, body: preview, url: `/#/client/${c.id}/chat`,
+              title: `Nachricht von ${c.display_name}`, body: preview, url: `/#/messages/${c.id}`,
             });
       push.catch((err) => console.error(err));
       ctx.res.statusCode = 201;
