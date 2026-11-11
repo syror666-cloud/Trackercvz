@@ -186,10 +186,38 @@
       marker.setAttribute('visibility', 'hidden');
       tip.hidden = true;
     }
-    overlay.addEventListener('pointermove', show);
-    overlay.addEventListener('pointerdown', show);
-    overlay.addEventListener('pointerleave', hide);
+    bindTooltip(container, overlay, show, hide);
   }
+
+  /**
+   * Mouse: the value follows the pointer. Tap or click: the value stays open until you tap
+   * another day or anywhere outside the chart.
+   */
+  function bindTooltip(container, overlay, show, hide) {
+    let pinned = false;
+    overlay.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse' || e.pressure > 0) show(e);
+    });
+    overlay.addEventListener('pointerdown', (e) => {
+      pinned = true;
+      show(e);
+    });
+    overlay.addEventListener('pointerleave', (e) => {
+      if (!pinned && e.pointerType === 'mouse') hide();
+    });
+    container.addEventListener('contextmenu', (e) => e.preventDefault());
+    container._closeTip = () => {
+      pinned = false;
+      hide();
+    };
+  }
+
+  // A tap outside a chart closes its open value.
+  document.addEventListener('pointerdown', (e) => {
+    document.querySelectorAll('.chart').forEach((c) => {
+      if (c._closeTip && !c.contains(e.target)) c._closeTip();
+    });
+  });
 
   /**
    * Calorie chart: target range as a band, its midpoint as a stepped line (labelled with the current value),
@@ -305,9 +333,7 @@
       const left = (sx(x) / width) * rect.width;
       tip.style.left = `${Math.min(Math.max(left, 80), rect.width - 80)}px`;
     };
-    overlay.addEventListener('pointermove', show);
-    overlay.addEventListener('pointerdown', show);
-    overlay.addEventListener('pointerleave', () => {
+    bindTooltip(container, overlay, show, () => {
       cursor.setAttribute('visibility', 'hidden');
       tip.hidden = true;
     });
