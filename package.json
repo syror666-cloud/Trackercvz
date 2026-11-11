@@ -1,0 +1,16 @@
+{
+  "name": "trackercvz",
+  "version": "1.0.0",
+  "description": "Fitness-Tracker für Coach und Klienten: Gewicht, Schritte, Schlaf",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server.js",
+    "create-coach": "node --no-warnings=ExperimentalWarning scripts/create-coach.js",
+    "test": "node --no-warnings=ExperimentalWarning --test \"test/*.test.js\""
+  },
+  "license": "UNLICENSED"
+}

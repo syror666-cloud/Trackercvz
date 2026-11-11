@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Fitness Tracker</title>
+  <meta name="theme-color" content="#0f766e">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar" id="topbar" hidden>
+    <a class="brand" href="#/">
+      <img src="/icon.svg" alt="" width="28" height="28">
+      <span>Fitness Tracker</span>
+    </a>
+    <div class="topbar-user">
+      <span id="whoami"></span>
+      <button class="btn-ghost" id="btn-password" type="button">Passwort</button>
+      <button class="btn-ghost" id="btn-logout" type="button">Abmelden</button>
+    </div>
+  </header>
+  <main id="app" class="container"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog"></dialog>
+  <script src="/charts.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
