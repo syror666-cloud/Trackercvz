@@ -510,11 +510,15 @@
       </div>
       <div id="push-prompt"></div>
       <div id="checkin-card"></div>
+      <section class="card today-card" id="today-card" aria-label="Heute"></section>
+      <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
       <div class="grid-2">
-        <form class="card" id="entry-form" novalidate>
+        <form class="card entry-sheet" id="entry-form" novalidate aria-label="Tageseintrag">
+          <div class="sheet-grabber" aria-hidden="true"></div>
           <div class="row-between" style="margin-bottom:12px">
             <h2>Tageseintrag</h2>
-            <span class="badge" id="entry-status"></span>
+            <span class="row" style="gap:6px"><span class="badge" id="entry-status"></span>
+              <button type="button" class="sheet-close" data-sheet-close aria-label="Schließen">✕</button></span>
           </div>
           <div class="field"><label for="f-date">Datum</label>
             <input id="f-date" name="date" type="date" required></div>
@@ -556,6 +560,61 @@
     const today = todayStr();
     form.date.max = today;
     form.date.value = today;
+
+    // ---- Phones: the form opens as a sheet from the "Heute" card ----
+    const compact = () => matchMedia('(max-width: 720px)').matches;
+    const backdrop = document.getElementById('sheet-backdrop');
+    function openSheet(date) {
+      if (date) form.date.value = date;
+      fillForm();
+      if (!compact()) {
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      document.body.classList.add('sheet-open');
+      backdrop.hidden = false;
+      form.scrollTop = 0;
+    }
+    function closeSheet() {
+      document.body.classList.remove('sheet-open');
+      backdrop.hidden = true;
+    }
+    backdrop.addEventListener('click', closeSheet);
+    form.querySelector('[data-sheet-close]').addEventListener('click', closeSheet);
+    const onKey = (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('sheet-open')) closeSheet();
+    };
+    document.addEventListener('keydown', onKey);
+    onCleanup(() => {
+      closeSheet();
+      document.removeEventListener('keydown', onKey);
+    });
+
+    /** Today at a glance: what is already tracked, and one button to add the rest. */
+    function drawToday() {
+      const card = document.getElementById('today-card');
+      const e = state.entries.find((x) => x.date === today) || null;
+      const chip = (label, done, value) =>
+        `<li class="${done ? 'done' : ''}"><span class="tc-mark" aria-hidden="true">${done ? '✓' : ''}</span><span class="tc-label">${label}</span><span class="tc-value">${done ? value : 'offen'}</span></li>`;
+      const items = [
+        chip('Gewicht', e && e.weight !== null, e && e.weight !== null ? `${num(e.weight, 1)} kg` : ''),
+        chip('Schritte', e && e.steps !== null, e && e.steps !== null ? num(e.steps) : ''),
+        chip('Schlaf', e && e.sleep !== null, e && e.sleep !== null ? fmtSleep(e.sleep) : ''),
+        chip('Training', e && e.training !== null && e.training !== undefined, e && e.training ? 'Ja' : 'Nein'),
+      ];
+      if (hasKcal(state.goals)) {
+        items.push(chip('Kalorien', e && e.caloriesOk !== null && e.caloriesOk !== undefined, e && e.caloriesOk ? 'eingehalten' : e && e.calories ? `${num(e.calories)} kcal` : 'nicht eingehalten'));
+      }
+      const done = items.filter((x) => x.startsWith('<li class="done"')).length;
+      card.innerHTML = `
+        <div class="row-between today-head">
+          <div><h2>Heute</h2><p class="small muted" style="margin:2px 0 0">${done} von ${items.length} eingetragen</p></div>
+          <span class="today-ring" style="--p:${Math.round((done / items.length) * 100)}" aria-hidden="true"><b>${done}/${items.length}</b></span>
+        </div>
+        <ul class="today-list">${items.join('')}</ul>
+        <button type="button" class="btn-primary btn-block" data-open-sheet>${done ? 'Eintrag ergänzen' : 'Tag eintragen'}</button>`;
+      card.querySelector('[data-open-sheet]').addEventListener('click', () => openSheet(today));
+    }
 
     function fillForm() {
       const e = state.entries.find((x) => x.date === form.date.value);
@@ -671,8 +730,10 @@
         state.entries.sort((a, b) => a.date.localeCompare(b.date));
         if (entry || metricsChanged) savedHud('Gespeichert', fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' }));
         else toast('Eintrag entfernt');
+        closeSheet();
         fillForm();
         updateStreak();
+        drawToday();
         dash.update(state.entries);
         if (metricsChanged) dash.setMeasurements(state.metrics);
       } catch (err) {
@@ -700,9 +761,7 @@
         return state.metrics;
       },
       onEdit(date) {
-        form.date.value = date;
-        fillForm();
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        openSheet(date);
       },
       async onDelete(date) {
         if (!confirm(`Eintrag vom ${fmtDate(date)} löschen?`)) return;
@@ -711,11 +770,13 @@
         toast('Eintrag gelöscht');
         fillForm();
         updateStreak();
+        drawToday();
         dash.update(state.entries);
       },
     });
     fillForm();
     updateStreak();
+    drawToday();
     maybeShowPushPrompt(document.getElementById('push-prompt'));
     mountClientCheckin(document.getElementById('checkin-card'), async () => {
       const g = await api('GET', '/api/goals');
@@ -855,40 +916,61 @@
     ['all', 'Alle'],
   ];
 
+  /** Tiny trend graphics for the metric rows (glanceable, decorative – the value is always in text). */
+  function sparkLine(values) {
+    const pts = values.map((v, i) => [i, v]).filter(([, v]) => v !== null && v !== undefined);
+    if (pts.length < 2) return '';
+    const W = 96, H = 34, P = 3;
+    const ys = pts.map(([, v]) => v);
+    const lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
+    const x = (i) => P + (i / Math.max(1, values.length - 1)) * (W - 2 * P);
+    const y = (v) => H - P - ((v - lo) / span) * (H - 2 * P);
+    const d = pts.map(([i, v], k) => `${k ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+    const [li, lv] = pts[pts.length - 1];
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d}"/><circle cx="${x(li).toFixed(1)}" cy="${y(lv).toFixed(1)}" r="2.6"/></svg>`;
+  }
+  function sparkBars(values, goal) {
+    const max = Math.max(goal || 0, ...values.filter((v) => v !== null && v !== undefined), 1);
+    const W = 96, H = 34, n = values.length, bw = W / n;
+    const bars = values
+      .map((v, i) => {
+        if (v === null || v === undefined) return `<rect x="${(i * bw + 1).toFixed(1)}" y="${H - 2}" width="${(bw - 2).toFixed(1)}" height="2" class="empty"/>`;
+        const h = Math.max(2, (v / max) * (H - 2));
+        return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${h.toFixed(1)}" class="${goal && v >= goal ? 'hit' : ''}"/>`;
+      })
+      .join('');
+    return `<svg class="spark bars" viewBox="0 0 ${W} ${H}" aria-hidden="true">${bars}</svg>`;
+  }
+  /** Last 7 days as small marks: ✓ kept / ✕ missed / · no answer (shape, not only colour). */
+  function weekMarks(days, fn) {
+    const names = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    return `<span class="week-marks" aria-hidden="true">${days
+      .map((d) => {
+        const v = fn(d.entry);
+        const cls = v === true ? 'yes' : v === false ? 'no' : 'none';
+        return `<span class="wm ${cls}"><i>${v === true ? '✓' : v === false ? '✕' : ''}</i><small>${names[new Date(`${d.date}T12:00:00`).getDay()]}</small></span>`;
+      })
+      .join('')}</span>`;
+  }
+
   function mountDashboard(root, { entries, goals, history, measurements, onEdit, onDelete, onPrAdd, onPrDelete }) {
     let rangeKey = '30';
     let all = entries;
+    const open = new Set(['weight']); // expanded metric rows
 
     root.innerHTML = `
-      <div class="row-between">
-        <h2>Verlauf</h2>
-        <div class="segmented" role="group" aria-label="Zeitraum">
+      <div class="row-between dash-head">
+        <div><h2>Verlauf</h2><p class="dash-summary small" data-summary></p></div>
+        <div class="segmented" role="group" aria-label="Zeitraum der Diagramme">
           ${RANGES.map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${k === rangeKey}">${l}</button>`).join('')}
         </div>
       </div>
-      <div class="stats" data-stats></div>
-      <div class="card chart-card">
-        <div class="row-between"><h3>Gewicht</h3>
-          <div class="legend"><span><i class="faint"></i>Tageswert</span><span><i></i>Ø 7 Tage</span></div></div>
-        <div class="chart-weight" data-chart="weight"></div>
-      </div>
-      <div class="card chart-card">
-        <div class="row-between"><h3>Kalorien</h3><span class="kcal-now" data-kcal-now></span></div>
-        <div class="legend" style="margin:4px 0 6px;flex-wrap:wrap">
-          <span><i class="lg-band"></i>Vorgabe (Range)</span><span><i></i>Mittelwert</span>
-          <span><i class="lg-dot" style="background:var(--good)"></i>eingehalten</span>
-          <span><i class="lg-dot" style="background:var(--bad)"></i>nicht eingehalten</span>
-        </div>
-        <div class="chart-kcal" data-chart="kcal"></div>
-      </div>
-      <div class="stack" data-metric-charts></div>
+      <div class="metric-list" data-metrics></div>
       <div data-pr></div>
-      <div class="card chart-card"><h3>Schritte</h3><div class="chart-steps" data-chart="steps"></div></div>
-      <div class="card chart-card"><h3>Schlaf</h3><div class="chart-sleep" data-chart="sleep"></div></div>
-      <div class="card">
-        <h3 style="margin-bottom:8px">Einträge</h3>
+      <details class="card entries-details">
+        <summary><span>Alle Einträge</span><span class="muted small" data-entries-count></span></summary>
         <div class="table-wrap" data-table></div>
-      </div>`;
+      </details>`;
 
     root.querySelectorAll('[data-range]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -904,120 +986,163 @@
       return { from: addDays(to, -(Number(rangeKey) - 1)), to };
     }
 
-    function drawStats() {
+    /** One row per metric: value + context + sparkline; tapping reveals the full chart. */
+    function buildMetrics() {
       const today = todayStr();
-      const last7 = all.filter((e) => daysBetween(e.date, today) < 7 && daysBetween(e.date, today) >= 0);
+      const byDate = new Map(all.map((e) => [e.date, e]));
+      const lastDays = (n) => Array.from({ length: n }, (_, i) => addDays(today, i - n + 1)).map((date) => ({ date, entry: byDate.get(date) || null }));
+      const last7 = lastDays(7).map((d) => d.entry).filter(Boolean);
+      const spark14 = (k) => lastDays(14).map((d) => (d.entry ? d.entry[k] : null));
+      const list = [];
+
+      // Weight
       const weights = all.filter((e) => e.weight !== null);
-      const cur = weights.length ? weights[weights.length - 1] : null;
-      const start = weights.length ? weights[0] : null;
-      // Compare against the latest weigh-in at least 7 days older than the current one.
+      const cur = weights[weights.length - 1] || null;
       let ref7 = null;
       if (cur) for (const w of weights) if (daysBetween(w.date, cur.date) >= 7) ref7 = w;
-
       const goodDir = goals.targetWeight !== null && cur && goals.targetWeight > cur.weight ? 1 : -1;
-      const deltaCls = (d) => (d === 0 ? '' : Math.sign(d) === goodDir ? 'down' : 'up');
+      const deltaHtml = (d, label) => `<span class="${d === 0 ? '' : Math.sign(d) === goodDir ? 'down' : 'up'}">${signed(d)} kg</span> ${label}`;
+      const wSub = [];
+      if (cur && ref7) wSub.push(deltaHtml(cur.weight - ref7.weight, 'in 7 Tagen'));
+      if (goals.targetWeight !== null && cur) {
+        wSub.push(Math.abs(cur.weight - goals.targetWeight) < 0.05 ? '<span class="good">Ziel erreicht</span>' : `noch ${num(Math.abs(cur.weight - goals.targetWeight), 1)} kg bis ${num(goals.targetWeight, 1)} kg`);
+      }
+      list.push({
+        key: 'weight', label: 'Gewicht', cls: 'm-weight',
+        value: cur ? `${num(cur.weight, 1)}<small>kg</small>` : '–',
+        sub: cur ? wSub.join(' · ') || `am ${fmtDate(cur.date, { day: '2-digit', month: '2-digit' })}` : 'Noch kein Gewicht eingetragen',
+        spark: sparkLine(spark14('weight')),
+        legend: '<div class="legend"><span><i class="faint"></i>Tageswert</span><span><i></i>Ø 7 Tage</span></div>',
+        render(el, from, to, inRange) {
+          Charts.render(el, { data: inRange.map((e) => ({ date: e.date, value: e.weight })), from, to, type: 'line', trend: true, goal: goals.targetWeight, unit: 'kg', decimals: 1, label: 'Gewichtsverlauf' });
+        },
+      });
 
-      let weightSub = 'Noch kein Gewicht eingetragen';
-      if (cur) {
-        const parts = [];
-        if (ref7) {
-          const d = cur.weight - ref7.weight;
-          parts.push(`<span class="${deltaCls(d)}">${signed(d)} kg</span> in 7 T`);
-        }
-        if (start && start.date !== cur.date) {
-          const d = cur.weight - start.weight;
-          parts.push(`<span class="${deltaCls(d)}">${signed(d)} kg</span> gesamt`);
-        }
-        weightSub = parts.join(' · ') || `am ${fmtDate(cur.date, { day: '2-digit', month: '2-digit' })}`;
+      // Calories (only with a plan or answers)
+      const kcalAnswered = last7.filter((e) => e.caloriesOk !== null && e.caloriesOk !== undefined);
+      if (hasKcal(goals) || kcalAnswered.length) {
+        list.push({
+          key: 'kcal', label: 'Kalorien', cls: 'm-kcal',
+          value: hasKcal(goals) ? `${num(kcalMid(goals))}<small>kcal</small>` : '–',
+          sub: [
+            hasKcal(goals) && goals.caloriesMin !== goals.caloriesMax ? `Range ${esc(fmtKcal(goals.caloriesMin, goals.caloriesMax))}` : hasKcal(goals) ? 'Vorgabe' : 'Keine Vorgabe',
+            kcalAnswered.length ? `${kcalAnswered.filter((e) => e.caloriesOk).length}/${kcalAnswered.length} Tage eingehalten` : '',
+          ].filter(Boolean).join(' · '),
+          spark: weekMarks(lastDays(7), (e) => (e ? e.caloriesOk : null)),
+          legend: `<div class="legend"><span><i class="lg-band"></i>Range</span><span><i></i>Mittelwert</span><span><i class="lg-dot" style="background:var(--good)"></i>eingehalten</span><span><i class="lg-dot" style="background:var(--bad)"></i>nicht eingehalten</span></div>`,
+          render(el, from, to, inRange) {
+            Charts.renderCalories(el, { from, to, height: 190, targets: kcalTargets(history, from, to), days: inRange.map((e) => ({ date: e.date, ok: e.caloriesOk, kcal: e.calories })) });
+          },
+        });
       }
 
+      // Steps & sleep
       const steps7 = avg(last7.filter((e) => e.steps !== null).map((e) => e.steps));
-      const sleep7 = avg(last7.filter((e) => e.sleep !== null).map((e) => e.sleep));
       const stepsHit = goals.stepsGoal ? last7.filter((e) => e.steps !== null && e.steps >= goals.stepsGoal).length : null;
+      list.push({
+        key: 'steps', label: 'Schritte', cls: 'm-steps', note: 'Ø 7 Tage',
+        value: num(steps7),
+        sub: goals.stepsGoal ? `Ziel ${num(goals.stepsGoal)} · an ${stepsHit} von 7 Tagen erreicht` : 'Kein Schrittziel',
+        spark: sparkBars(spark14('steps'), goals.stepsGoal),
+        render(el, from, to, inRange) {
+          Charts.render(el, { data: inRange.map((e) => ({ date: e.date, value: e.steps })), from, to, type: 'bar', goal: goals.stepsGoal, unit: 'Schritte', label: 'Schritte pro Tag' });
+        },
+      });
+      const sleep7 = avg(last7.filter((e) => e.sleep !== null).map((e) => e.sleep));
       const sleepHit = goals.sleepGoal ? last7.filter((e) => e.sleep !== null && e.sleep >= goals.sleepGoal).length : null;
+      list.push({
+        key: 'sleep', label: 'Schlaf', cls: 'm-sleep', note: 'Ø 7 Tage',
+        value: fmtSleep(sleep7).replace(' h', '<small>h</small>'),
+        sub: goals.sleepGoal ? `Ziel ${fmtSleep(goals.sleepGoal)} · in ${sleepHit} von 7 Nächten erreicht` : 'Kein Schlafziel',
+        spark: sparkBars(spark14('sleep'), goals.sleepGoal),
+        render(el, from, to, inRange) {
+          Charts.render(el, { data: inRange.map((e) => ({ date: e.date, value: e.sleep })), from, to, type: 'bar', decimals: 1, goal: goals.sleepGoal, label: 'Schlafdauer', formatValue: fmtSleep });
+        },
+      });
 
-      let targetSub = 'Kein Zielgewicht festgelegt';
-      if (goals.targetWeight !== null) {
-        targetSub = cur
-          ? Math.abs(cur.weight - goals.targetWeight) < 0.05
-            ? '<span class="good">Ziel erreicht 🎉</span>'
-            : `noch ${num(Math.abs(cur.weight - goals.targetWeight), 1)} kg`
-          : '';
-        targetSub = `Ziel ${num(goals.targetWeight, 1)} kg · ${targetSub}`;
+      // Training (no chart – the week marks say it all)
+      list.push({
+        key: 'training', label: 'Training', cls: 'm-training',
+        value: `${last7.filter((e) => e.training === true).length}<small>× in 7 Tagen</small>`,
+        sub: '',
+        spark: weekMarks(lastDays(7), (e) => (e && e.training !== null && e.training !== undefined ? e.training : null)),
+      });
+
+      // Extra measurements of the client's category
+      for (const m of (measurements || []).filter((x) => x.kind === 'number')) {
+        const vals = m.values || [];
+        const last = vals[vals.length - 1];
+        const { from } = rangeBounds();
+        const first = vals.find((v) => v.date >= from) || vals[0];
+        const delta = last && first && last.date !== first.date ? last.value - first.value : null;
+        list.push({
+          key: `metric-${m.id}`, label: m.name, cls: 'm-extra',
+          value: last ? `${num(last.value, 1)}<small>${esc(m.unit)}</small>` : '–',
+          sub: last ? (delta !== null ? `${signed(delta)} ${esc(m.unit)} im Zeitraum` : `am ${fmtDate(last.date, { day: '2-digit', month: '2-digit' })}`) : 'Noch kein Wert',
+          spark: sparkLine(vals.slice(-14).map((v) => v.value)),
+          render(el, f, to) {
+            Charts.render(el, { data: vals.filter((v) => v.date >= f && v.date <= to), from: f, to, type: 'line', unit: m.unit, decimals: 1, height: 170, label: m.name });
+          },
+        });
       }
-
-      const daysLogged = new Set(last7.map((e) => e.date)).size;
-      const consistencyCls = daysLogged >= 6 ? 'good' : daysLogged >= 4 ? 'warn' : 'bad';
-      const kcalAnswered = last7.filter((e) => e.caloriesOk !== null && e.caloriesOk !== undefined).length;
-      const kcalKept = last7.filter((e) => e.caloriesOk === true).length;
-      const trainingDays = last7.filter((e) => e.training === true).length;
-
-      root.querySelector('[data-stats]').innerHTML = `
-        <div class="card stat">
-          <div class="stat-label"><span class="dot-key" style="background:var(--weight)"></span>Gewicht</div>
-          <div class="stat-value">${cur ? num(cur.weight, 1) : '–'} <small>kg</small></div>
-          <div class="stat-sub">${weightSub}</div>
-          <div class="stat-sub">${targetSub}</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-label"><span class="dot-key" style="background:var(--steps)"></span>Schritte Ø 7 T</div>
-          <div class="stat-value">${num(steps7)}</div>
-          <div class="stat-sub">${goals.stepsGoal ? `Ziel ${num(goals.stepsGoal)} · ${stepsHit}/7 Tage erreicht` : 'Kein Schrittziel'}</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-label"><span class="dot-key" style="background:var(--sleep)"></span>Schlaf Ø 7 T</div>
-          <div class="stat-value">${fmtSleep(sleep7)}</div>
-          <div class="stat-sub">${goals.sleepGoal ? `Ziel ${fmtSleep(goals.sleepGoal)} · ${sleepHit}/7 Nächte erreicht` : 'Kein Schlafziel'}</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-label"><span class="dot-key" style="background:var(--accent)"></span>Kalorien / Tag</div>
-          <div class="stat-value">${hasKcal(goals) ? num(kcalMid(goals)) : '–'} <small>kcal</small></div>
-          <div class="stat-sub">${hasKcal(goals) ? (goals.caloriesMin !== goals.caloriesMax ? `Range ${esc(fmtKcal(goals.caloriesMin, goals.caloriesMax))}` : 'Vorgabe deines Coaches') : 'Noch keine Vorgabe'}</div>
-          <div class="stat-sub">${kcalAnswered ? `${kcalKept}/${kcalAnswered} Tage eingehalten (7 T)` : ''}</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-label">🏋️ Training</div>
-          <div class="stat-value">${trainingDays}<small>×</small></div>
-          <div class="stat-sub">Trainingstage in den letzten 7 Tagen</div>
-        </div>
-        <div class="card stat">
-          <div class="stat-label">Konsequenz</div>
-          <div class="stat-value ${consistencyCls}">${daysLogged}<small>/7</small></div>
-          <div class="stat-sub">Tage eingetragen (letzte Woche)</div>
-          <div class="stat-sub">Letzter Eintrag: ${relDay(all.length ? all[all.length - 1].date : null)}</div>
-        </div>`;
+      return list;
     }
 
-    function drawCharts() {
+    function drawMetrics() {
+      const slot = root.querySelector('[data-metrics]');
       const { from, to } = rangeBounds();
       const inRange = all.filter((e) => e.date >= from && e.date <= to);
-      const series = (k) => inRange.map((e) => ({ date: e.date, value: e[k] }));
-      Charts.render(root.querySelector('[data-chart=weight]'), {
-        data: series('weight'), from, to, type: 'line', trend: true,
-        goal: goals.targetWeight, unit: 'kg', decimals: 1, label: 'Gewichtsverlauf',
-      });
-      Charts.render(root.querySelector('[data-chart=steps]'), {
-        data: series('steps'), from, to, type: 'bar',
-        goal: goals.stepsGoal, unit: 'Schritte', label: 'Schritte pro Tag',
-      });
-      Charts.render(root.querySelector('[data-chart=sleep]'), {
-        data: series('sleep'), from, to, type: 'bar', decimals: 1,
-        goal: goals.sleepGoal, label: 'Schlafdauer', formatValue: fmtSleep,
-      });
-      root.querySelector('[data-kcal-now]').innerHTML = hasKcal(goals)
-        ? `<strong>${esc(fmtKcal(goals.caloriesMin, goals.caloriesMax))}</strong>${goals.caloriesMin !== goals.caloriesMax ? ` <span class="muted small">Ø ${num(kcalMid(goals))}</span>` : ''}`
-        : '<span class="muted small">Noch keine Vorgabe</span>';
-      Charts.renderCalories(root.querySelector('[data-chart=kcal]'), {
-        from, to, height: 190,
-        targets: kcalTargets(history, from, to),
-        days: inRange.map((e) => ({ date: e.date, ok: e.caloriesOk, kcal: e.calories })),
-      });
+      const metrics = buildMetrics();
+      slot.innerHTML = metrics
+        .map((m) => {
+          const expandable = Boolean(m.render);
+          const isOpen = expandable && open.has(m.key);
+          const head = `
+            <span class="metric-info">
+              <span class="metric-label"><i class="metric-dot"></i>${esc(m.label)}${m.note ? `<span class="muted"> · ${m.note}</span>` : ''}</span>
+              <span class="metric-value">${m.value}</span>
+              ${m.sub ? `<span class="metric-sub">${m.sub}</span>` : ''}
+            </span>
+            <span class="metric-visual">${m.spark || ''}</span>
+            ${expandable ? '<span class="metric-chev" aria-hidden="true"></span>' : ''}`;
+          return `<section class="card metric ${m.cls} ${isOpen ? 'open' : ''}" data-metric="${m.key}">
+            ${expandable
+              ? `<button type="button" class="metric-row" aria-expanded="${isOpen}" aria-controls="md-${m.key}">${head}</button>`
+              : `<div class="metric-row static">${head}</div>`}
+            ${expandable ? `<div class="metric-detail" id="md-${m.key}" ${isOpen ? '' : 'hidden'}>${m.legend || ''}<div class="chart-${m.key.startsWith('metric-') ? 'metric' : m.key}" data-chart></div></div>` : ''}
+          </section>`;
+        })
+        .join('');
+      const renderOpen = () => {
+        for (const m of metrics) {
+          if (!m.render || !open.has(m.key)) continue;
+          const el = slot.querySelector(`[data-metric="${m.key}"] [data-chart]`);
+          if (el) m.render(el, from, to, inRange);
+        }
+      };
+      renderOpen();
+      slot.querySelectorAll('.metric-row[aria-expanded]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          const key = btn.closest('[data-metric]').dataset.metric;
+          if (open.has(key)) open.delete(key);
+          else open.add(key);
+          drawMetrics();
+        })
+      );
+      drawMetrics.renderOpen = renderOpen;
+
+      // One line of context instead of a "consistency" tile
+      const today = todayStr();
+      const days7 = new Set(all.filter((e) => daysBetween(e.date, today) >= 0 && daysBetween(e.date, today) < 7).map((e) => e.date)).size;
+      const lastEntry = all.length ? all[all.length - 1].date : null;
+      root.querySelector('[data-summary]').innerHTML = `<span class="${days7 >= 6 ? 'good' : days7 >= 4 ? '' : 'bad'}"><strong>${days7}/7</strong> Tage eingetragen</span> · letzter Eintrag ${esc(relDay(lastEntry))}`;
     }
 
     function drawTable() {
       const { from, to } = rangeBounds();
       const rows = all.filter((e) => e.date >= from && e.date <= to).slice().reverse();
       const wrap = root.querySelector('[data-table]');
+      root.querySelector('[data-entries-count]').textContent = rows.length ? `${rows.length} im Zeitraum` : '';
       if (!rows.length) {
         wrap.innerHTML = '<div class="empty-state">Keine Einträge in diesem Zeitraum.</div>';
         return;
@@ -1044,32 +1169,6 @@
         wrap.querySelectorAll('[data-del]').forEach((b) =>
           b.addEventListener('click', () => onDelete(b.dataset.del).catch((err) => toast(err.message, true)))
         );
-      }
-    }
-
-    // Extra measurements: one chart per number metric (follows the range), PR card for strength records.
-    function drawMetricCharts() {
-      const slot = root.querySelector('[data-metric-charts]');
-      const list = (measurements || []).filter((m) => m.kind === 'number');
-      const { from, to } = rangeBounds();
-      slot.hidden = !list.length;
-      slot.innerHTML = list
-        .map((m) => {
-          const vals = m.values || [];
-          const last = vals[vals.length - 1];
-          const first = vals.find((v) => v.date >= from) || vals[0];
-          const delta = last && first && last.date !== first.date ? last.value - first.value : null;
-          return `<div class="card chart-card">
-            <div class="row-between"><h3>${esc(m.name)}</h3>
-              <span class="kcal-now">${last ? `<strong>${num(last.value, 1)}</strong> ${esc(m.unit)}${delta !== null ? ` <span class="muted small">${signed(delta)} im Zeitraum</span>` : ''}` : '<span class="muted small">Noch kein Wert</span>'}</span></div>
-            <div class="chart-metric" data-metric-chart="${m.id}"></div></div>`;
-        })
-        .join('');
-      for (const m of list) {
-        Charts.render(slot.querySelector(`[data-metric-chart="${m.id}"]`), {
-          data: (m.values || []).filter((v) => v.date >= from && v.date <= to), from, to,
-          type: 'line', unit: m.unit, decimals: 1, height: 170, label: m.name,
-        });
       }
     }
 
@@ -1148,19 +1247,14 @@
     }
 
     function draw() {
-      drawStats();
-      drawCharts();
-      drawMetricCharts();
+      drawMetrics();
       drawTable();
     }
 
     let resizeTimer;
     const resizeHandler = () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        drawCharts();
-        drawMetricCharts();
-      }, 150);
+      resizeTimer = setTimeout(() => drawMetrics.renderOpen && drawMetrics.renderOpen(), 150);
     };
     window.addEventListener('resize', resizeHandler);
     onCleanup(() => window.removeEventListener('resize', resizeHandler));
@@ -1174,7 +1268,7 @@
       },
       setMeasurements(m) {
         measurements = m;
-        drawMetricCharts();
+        drawMetrics();
         drawPrs();
       },
       setGoals(g, h) {
@@ -1663,9 +1757,10 @@
   }
 
   // ---------- coach: overview ----------
+  let pushOpen = false; // remembers whether the push section was expanded
   async function renderCoachHome() {
     setView(LOADING);
-    const [{ clients }, queue, { weightAutomation }] = await Promise.all([
+    const [{ clients }, queue, { weightAutomation, automation }] = await Promise.all([
       api('GET', '/api/clients'),
       api('GET', '/api/checkins/queue'),
       api('GET', '/api/notifications'),
@@ -1705,9 +1800,15 @@
       ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
         <p>Noch keine Klienten angelegt.</p>
         <p>Lege einen Zugang an und gib die Zugangsdaten an deinen Klienten weiter.</p></div>`}
-      <div class="page-head section-head">
-        <div><h2>Push-Benachrichtigungen</h2>
-          <p class="muted small">Einmalige und wiederkehrende Nachrichten an Klienten, die zugestimmt haben.</p></div>
+      <details class="push-section" ${pushOpen ? 'open' : ''}>
+      <summary class="push-summary">
+        <span><span class="push-title">Push-Benachrichtigungen</span>
+          <span class="muted small">${[automation && automation.enabled, weightAutomation && weightAutomation.enabled].filter(Boolean).length} Automatik${[automation && automation.enabled, weightAutomation && weightAutomation.enabled].filter(Boolean).length === 1 ? '' : 'en'} aktiv · Zustimmung, geplante Nachrichten</span></span>
+        <span class="metric-chev" aria-hidden="true"></span>
+      </summary>
+      <div class="push-body">
+      <div class="row-between" style="margin-bottom:14px">
+        <p class="muted small" style="margin:0">Einmalige und wiederkehrende Nachrichten an Klienten, die zugestimmt haben.</p>
         <button class="btn-primary" id="btn-new-push" type="button">+ Neue Push-Nachricht</button>
       </div>
       <div class="push-grid">
@@ -1720,7 +1821,12 @@
           <div id="notif-list"><p class="muted small">Lade…</p></div>
         </section>
         <section class="card" id="coach-push-card"></section>
-      </div>`);
+      </div>
+      </div>
+      </details>`);
+    app.querySelector('.push-section').addEventListener('toggle', (e) => {
+      pushOpen = e.target.open;
+    });
 
     renderConsentList(document.getElementById('consent-list'), clients);
     const notifRoot = document.getElementById('notif-list');
@@ -2991,26 +3097,33 @@
     const openCheckins = queue.isWeekend
       ? clients.filter((c) => byId.get(c.id) && !byId.get(c.id).doneThisWeek).map((c) => ({ href: `#/checkin/${c.id}`, label: who(c) }))
       : [];
-    const checkinTile = queue.isWeekend
-      ? tile({ key: 'checkins', title: 'Offene Check-ins', items: openCheckins, empty: 'Alle Check-ins erledigt ✓', note: `${clients.length - openCheckins.length} von ${clients.length} erledigt` })
-      : tile({ key: 'checkins', title: 'Check-ins', items: [], total: '–', empty: 'Unter der Woche gibt es keine Check-ins. Ab Samstag erscheinen hier die offenen.', cls: 'is-off' });
 
-    return `<div class="dash-grid">
-      ${tile({ key: 'messages', title: 'Ungelesene Nachrichten', items: messages, total: clients.reduce((a, c) => a + (c.unreadMessages || 0), 0), empty: 'Keine neuen Nachrichten ✓' })}
-      ${tile({
-        key: 'weight',
-        title: 'Gewicht heute offen',
-        items: clients.filter((c) => c.weightToday === null || c.weightToday === undefined).map((c) => ({ href: `#/client/${c.id}`, label: who(c) })),
-        empty: 'Alle haben heute gewogen ✓',
-        note: weightAutomation && weightAutomation.enabled
-          ? `${clients.filter((c) => c.weightToday !== null && c.weightToday !== undefined).length} von ${clients.length} eingetragen · Erinnerung um ${esc(weightAutomation.time)} Uhr`
-          : `${clients.filter((c) => c.weightToday !== null && c.weightToday !== undefined).length} von ${clients.length} eingetragen`,
-      })}
-      ${checkinTile}
-      ${tile({ key: 'swaps', title: 'Tauschwünsche', items: swaps, total: clients.reduce((a, c) => a + (c.openSwaps || 0), 0), empty: 'Keine offenen Wünsche ✓' })}
-      ${tile({ key: 'plans', title: 'Plananpassungen offen', items: pendingPlans, empty: 'Alle Anpassungen angenommen ✓' })}
-      ${tile({ key: 'inactive', title: 'Ohne Eintrag (2+ Tage)', items: inactive, empty: 'Alle tracken fleißig ✓' })}
-    </div>
+    const weightOpen = clients.filter((c) => c.weightToday === null || c.weightToday === undefined).map((c) => ({ href: `#/client/${c.id}`, label: who(c) }));
+    const weightDone = clients.length - weightOpen.length;
+    const todos = [
+      { key: 'messages', title: 'Ungelesene Nachrichten', short: 'Nachrichten', items: messages, total: clients.reduce((a, c) => a + (c.unreadMessages || 0), 0) },
+      {
+        key: 'weight', title: 'Gewicht heute offen', short: 'Gewicht heute', items: weightOpen,
+        note: `${weightDone} von ${clients.length} eingetragen${weightAutomation && weightAutomation.enabled ? ` · Erinnerung um ${esc(weightAutomation.time)} Uhr` : ''}`,
+      },
+      ...(queue.isWeekend
+        ? [{ key: 'checkins', title: 'Offene Check-ins', short: 'Check-ins', items: openCheckins, note: `${clients.length - openCheckins.length} von ${clients.length} erledigt` }]
+        : []),
+      { key: 'swaps', title: 'Tauschwünsche', short: 'Tauschwünsche', items: swaps, total: clients.reduce((a, c) => a + (c.openSwaps || 0), 0) },
+      { key: 'plans', title: 'Plananpassungen offen', short: 'Plananpassungen', items: pendingPlans },
+      { key: 'inactive', title: 'Ohne Eintrag seit 2+ Tagen', short: 'Alle tracken', items: inactive },
+    ];
+    const openTodos = todos.filter((t) => t.items.length);
+    const doneTodos = todos.filter((t) => !t.items.length);
+    return `
+    <section class="todo-section" aria-label="Zu erledigen">
+      <div class="row-between todo-head"><h2>Zu erledigen</h2>${openTodos.length ? `<span class="muted small">${openTodos.reduce((a, t) => a + t.items.length, 0)} offen</span>` : ''}</div>
+      ${openTodos.length ? `<div class="dash-grid">${openTodos.map((t) => tile(t)).join('')}</div>` : '<div class="card all-done"><strong>Alles erledigt.</strong> <span class="muted">Gerade wartet nichts auf dich.</span></div>'}
+      <ul class="done-chips">
+        ${doneTodos.map((t) => `<li>✓ ${esc(t.short)}</li>`).join('')}
+        ${queue.isWeekend ? '' : '<li class="off">Check-ins ab Samstag</li>'}
+      </ul>
+    </section>
     <div class="row-between list-head"><h2>Alle Klienten</h2></div>`;
   }
 
@@ -3274,7 +3387,7 @@
     let armed = false;
     let busy = false;
 
-    const enabled = () => me && innerWidth <= 720 && !dialog.open && !document.querySelector('.sub-dialog[open]');
+    const enabled = () => me && innerWidth <= 720 && !dialog.open && !document.querySelector('.sub-dialog[open]') && !document.body.classList.contains('sheet-open');
     const blockedBy = (target) => {
       const scroller = target.closest('.chat-log, .food-results, .user-menu, .food-table-wrap');
       return scroller && scroller.scrollTop > 0;
