@@ -964,3 +964,5 @@ h2 .cat, h3 .cat { position: relative; top: -2px; }
 @media (min-width: 900px) { .goals-panel-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .goals-panel:not([hidden]) { animation: panel-in 0.22s ease-out; }
 @keyframes panel-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (min-width: 980px) { .dash-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.dash-list li > span { flex-shrink: 0; white-space: nowrap; }

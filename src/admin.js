@@ -20,6 +20,16 @@ const DEFAULT_REMINDER = {
   lastResult: null,
 };
 
+const DEFAULT_WEIGHT_REMINDER = {
+  enabled: true,
+  time: '18:00',
+  title: '⚖️ Gewicht eintragen',
+  body: 'Hey {name}, du hast heute noch kein Gewicht eingetragen – kurz auf die Waage und eintragen!',
+  lastRunDate: null,
+  lastRunAt: null,
+  lastResult: null,
+};
+
 function createReminders(db, notifier) {
   const tz = notifier.timezone;
   const q = {
@@ -35,6 +45,18 @@ function createReminders(db, notifier) {
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
          (SELECT last_sent_date FROM reminder_state rs WHERE rs.user_id = u.id) AS last_reminder,
          (SELECT last_result FROM reminder_state rs WHERE rs.user_id = u.id) AS last_reminder_result
+       FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
+    ),
+    getWeight: db.prepare("SELECT value FROM settings WHERE key = 'weight_reminder'"),
+    setWeight: db.prepare(
+      `INSERT INTO settings (key, value) VALUES ('weight_reminder', ?)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value`
+    ),
+    weightToday: db.prepare(
+      `SELECT u.id, u.display_name,
+         (SELECT weight FROM entries e WHERE e.user_id = u.id AND e.date = ?) AS weight_today,
+         (SELECT status FROM push_consent pc WHERE pc.user_id = u.id) AS push_status,
+         (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices
        FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
     ),
     setState: db.prepare(
@@ -113,7 +135,53 @@ function createReminders(db, notifier) {
     return `${r.delivered} von ${r.recipients} erinnert (${r.names.join(', ')})`;
   }
 
-  return { config, save, evaluate, runScheduled, runNow, timezone: tz, today: (now = Date.now()) => localDate(now, tz) };
+  // ---- Daily weight reminder: everyone without a weight entry today, at a fixed time (default 18:00) ----
+  function weightConfig() {
+    const row = q.getWeight.get();
+    return { ...DEFAULT_WEIGHT_REMINDER, ...(row ? JSON.parse(row.value) : {}) };
+  }
+  function saveWeight(cfg) {
+    q.setWeight.run(JSON.stringify(cfg));
+    return cfg;
+  }
+  function weightEvaluate(today) {
+    return q.weightToday.all(today).map((c) => ({
+      id: c.id,
+      name: c.display_name,
+      state: c.weight_today !== null && c.weight_today !== undefined ? 'done' : c.push_status !== 'granted' || !c.push_devices ? 'no-push' : 'due',
+    }));
+  }
+  async function weightSend(cfg, today) {
+    const list = weightEvaluate(today).filter((c) => c.state === 'due');
+    let delivered = 0;
+    for (const c of list) {
+      const fill = (t) => t.replace(/\{name\}/g, c.name);
+      const r = await notifier.sendToUsers([c.id], { title: fill(cfg.title), body: fill(cfg.body), url: '/' });
+      if (r.delivered) delivered++;
+    }
+    return { recipients: list.length, delivered, names: list.map((c) => c.name) };
+  }
+  async function runWeightScheduled(now = Date.now()) {
+    const cfg = weightConfig();
+    if (!cfg.enabled) return null;
+    const today = localDate(now, tz);
+    if (cfg.lastRunDate === today || zonedToUtc(today, cfg.time, tz) > now) return null;
+    saveWeight({ ...cfg, lastRunDate: today });
+    const r = await weightSend(cfg, today);
+    saveWeight({ ...weightConfig(), lastRunAt: new Date(now).toISOString(), lastResult: describe(r) });
+    return r;
+  }
+  async function runWeightNow(now = Date.now()) {
+    const r = await weightSend(weightConfig(), localDate(now, tz));
+    saveWeight({ ...weightConfig(), lastRunAt: new Date(now).toISOString(), lastResult: describe(r) });
+    return r;
+  }
+
+  return {
+    config, save, evaluate, runScheduled, runNow,
+    weightConfig, saveWeight, weightEvaluate, runWeightScheduled, runWeightNow,
+    timezone: tz, today: (now = Date.now()) => localDate(now, tz),
+  };
 }
 
 function adminRoutes({ db, reminders, HttpError, readBody, textField, numberField, requireCoach }) {
@@ -159,7 +227,13 @@ function adminRoutes({ db, reminders, HttpError, readBody, textField, numberFiel
         lastReminderResult: ev.lastReminderResult,
       };
     });
-    return { reminder: cfg, clients, timezone: reminders.timezone };
+    return {
+      reminder: cfg,
+      weightReminder: reminders.weightConfig(),
+      weightToday: reminders.weightEvaluate(today),
+      clients,
+      timezone: reminders.timezone,
+    };
   }
 
   return [
@@ -194,6 +268,37 @@ function adminRoutes({ db, reminders, HttpError, readBody, textField, numberFiel
       if (b.repeatDaily !== undefined) cfg.repeatDaily = Boolean(b.repeatDaily);
       reminders.save(cfg);
       return overview();
+    }],
+
+    ['PUT', /^\/api\/admin\/weight-reminder$/, async (ctx) => {
+      requireCoach(ctx);
+      const b = await readBody(ctx.req);
+      const cfg = reminders.weightConfig();
+      if (b.enabled !== undefined) {
+        if (typeof b.enabled !== 'boolean') throw new HttpError(400, 'Ungültiger Wert');
+        cfg.enabled = b.enabled;
+      }
+      if (b.time !== undefined) {
+        if (typeof b.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(b.time)) throw new HttpError(400, 'Bitte eine gültige Uhrzeit angeben');
+        if (b.time !== cfg.time) cfg.lastRunDate = null;
+        cfg.time = b.time;
+      }
+      if (b.title !== undefined) {
+        cfg.title = textField(b.title, { name: 'Titel', max: 60 });
+        if (!cfg.title) throw new HttpError(400, 'Titel darf nicht leer sein');
+      }
+      if (b.body !== undefined) {
+        cfg.body = textField(b.body, { name: 'Text', max: 240 });
+        if (!cfg.body) throw new HttpError(400, 'Text darf nicht leer sein');
+      }
+      reminders.saveWeight(cfg);
+      return overview();
+    }],
+
+    ['POST', /^\/api\/admin\/weight-reminder\/run$/, async (ctx) => {
+      requireCoach(ctx);
+      const result = await reminders.runWeightNow();
+      return { result, ...overview() };
     }],
 
     ['POST', /^\/api\/admin\/reminder\/run$/, async (ctx) => {

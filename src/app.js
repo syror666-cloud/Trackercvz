@@ -292,7 +292,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
          (SELECT last_used_at FROM health_tokens ht WHERE ht.user_id = u.id) AS health_last_used,
          (SELECT COUNT(*) FROM health_tokens ht WHERE ht.user_id = u.id) AS health_linked,
-         (SELECT COUNT(*) FROM swap_requests sr WHERE sr.client_id = u.id AND sr.status = 'open') AS open_swaps
+         (SELECT COUNT(*) FROM swap_requests sr WHERE sr.client_id = u.id AND sr.status = 'open') AS open_swaps,
+         (SELECT weight FROM entries e WHERE e.user_id = u.id AND e.date = :today) AS weight_today
        FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
     ),
     entries: db.prepare('SELECT * FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC'),
@@ -632,7 +633,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     ['GET', /^\/api\/clients$/, async (ctx) => {
       requireCoach(ctx);
       return {
-        clients: q.clients.all().map((r) => ({
+        clients: q.clients.all({ today: localDate(Date.now(), notifier.timezone) }).map((r) => ({
           id: r.id,
           username: r.username,
           displayName: r.display_name,
@@ -651,6 +652,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           healthLinked: Boolean(r.health_linked),
           healthLastUsed: r.health_last_used,
           openSwaps: r.open_swaps,
+          weightToday: r.weight_today,
         })),
       };
     }],
@@ -966,6 +968,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         timezone: notifier.timezone,
         notifications: q.notifications.all().map(notificationRow),
         automation: reminders.config(),
+        weightAutomation: reminders.weightConfig(),
       };
     }],
 

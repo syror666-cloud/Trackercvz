@@ -48,6 +48,7 @@ const reminders = createReminders(db, notifier);
 setInterval(() => {
   notifier.runDue().catch((err) => console.error(err));
   reminders.runScheduled().catch((err) => console.error(err));
+  reminders.runWeightScheduled().catch((err) => console.error(err));
 }, 30000).unref();
 
 const app = createApp({

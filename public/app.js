@@ -1665,7 +1665,11 @@
   // ---------- coach: overview ----------
   async function renderCoachHome() {
     setView(LOADING);
-    const [{ clients }, queue] = await Promise.all([api('GET', '/api/clients'), api('GET', '/api/checkins/queue')]);
+    const [{ clients }, queue, { weightAutomation }] = await Promise.all([
+      api('GET', '/api/clients'),
+      api('GET', '/api/checkins/queue'),
+      api('GET', '/api/notifications'),
+    ]);
 
     const cards = clients
       .map((c) => {
@@ -1697,7 +1701,7 @@
         <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}</p></div>
         <button class="btn-primary" id="btn-new-client" type="button">+ Neuer Klient</button>
       </div>
-      ${clients.length ? coachDashboard(clients, queue) : ''}
+      ${clients.length ? coachDashboard(clients, queue, weightAutomation) : ''}
       ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
         <p>Noch keine Klienten angelegt.</p>
         <p>Lege einen Zugang an und gib die Zugangsdaten an deinen Klienten weiter.</p></div>`}
@@ -2473,12 +2477,14 @@
       <div class="page-head"><div>${eyebrow('Werkzeuge')}<h1>Admin</h1><p class="muted">Aktivität deiner Klienten, automatische Erinnerungen und Lebensmittel-Datenbank.</p></div></div>
       <div class="stack">
         <section class="card" id="activity"></section>
+        <section class="card" id="weight-reminder"></section>
         <section class="card" id="reminder"></section>
         <section class="card" id="metrics"></section>
         <section class="card" id="foods"></section>
       </div>`);
     drawActivity(ov);
     drawReminder(ov);
+    drawWeightReminder(ov);
     drawFoods();
     drawMetricsAdmin();
   }
@@ -2585,6 +2591,69 @@
           </tr>`)
           .join('') || '<tr><td colspan="9" class="muted">Noch keine Klienten.</td></tr>'}</tbody>
       </table></div>`;
+  }
+
+  function drawWeightReminder(ov) {
+    const root = document.getElementById('weight-reminder');
+    const cfg = ov.weightReminder;
+    const due = ov.weightToday.filter((c) => c.state === 'due');
+    const noPush = ov.weightToday.filter((c) => c.state === 'no-push');
+    const done = ov.weightToday.filter((c) => c.state === 'done');
+    root.innerHTML = `
+      <form novalidate>
+        <div class="row-between" style="margin-bottom:8px">
+          <h2>⚖️ Gewichts-Erinnerung</h2>
+          <label class="switch"><input type="checkbox" name="enabled" ${cfg.enabled ? 'checked' : ''}><span></span><b>${cfg.enabled ? 'Aktiv' : 'Aus'}</b></label>
+        </div>
+        <p class="small muted" style="margin:0 0 12px">Jeden Tag zur eingestellten Uhrzeit bekommen alle, die noch kein Gewicht eingetragen haben, eine Push-Nachricht.</p>
+        <div class="reminder-grid">
+          <div class="field"><label for="w-time">Uhrzeit <span class="muted">(deutsche Zeit)</span></label>
+            <input id="w-time" type="time" name="time" value="${esc(cfg.time)}"></div>
+          <div class="field"><label for="w-title">Titel</label><input id="w-title" name="title" maxlength="60" value="${esc(cfg.title)}"></div>
+        </div>
+        <div class="field"><label for="w-body">Text</label><textarea id="w-body" name="body" maxlength="240">${esc(cfg.body)}</textarea>
+          <div class="hint">Platzhalter: <code>{name}</code> = Name des Klienten</div></div>
+        <div class="row">
+          <button type="submit" class="btn-primary">Speichern</button>
+          <button type="button" class="btn-secondary" data-run>Jetzt senden</button>
+        </div>
+        <p class="error" hidden></p>
+        <div class="hint-box small" style="margin-top:12px">
+          <div><strong>Heute noch ohne Gewicht:</strong> ${due.length ? due.map((c) => esc(c.name)).join(', ') : 'niemand mit Push'} · <span class="muted">${done.length} von ${ov.weightToday.length} haben schon gewogen</span></div>
+          ${noPush.length ? `<div class="muted">Ohne Push-Zustimmung (bekommen nichts): ${noPush.map((c) => esc(c.name)).join(', ')}</div>` : ''}
+          <div class="muted">Letzter Lauf: ${cfg.lastRunAt ? `${esc(fmtTs(cfg.lastRunAt))} – ${esc(cfg.lastResult || '')}` : 'noch nie'}</div>
+        </div>
+      </form>`;
+    const f = root.querySelector('form');
+    const showErr = (err) => {
+      const e = f.querySelector('.error');
+      e.textContent = err.message;
+      e.hidden = false;
+    };
+    const save = async (body, msg) => {
+      try {
+        const next = await api('PUT', '/api/admin/weight-reminder', body);
+        toast(msg);
+        drawWeightReminder(next);
+      } catch (err) {
+        showErr(err);
+      }
+    };
+    f.enabled.addEventListener('change', () => save({ enabled: f.enabled.checked }, f.enabled.checked ? 'Gewichts-Erinnerung aktiv ✓' : 'Gewichts-Erinnerung aus'));
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      save({ enabled: f.enabled.checked, time: f.time.value, title: f.title.value, body: f.body.value }, 'Gespeichert ✓');
+    });
+    f.querySelector('[data-run]').addEventListener('click', async () => {
+      if (!confirm('Erinnerung jetzt an alle ohne Gewicht von heute senden?')) return;
+      try {
+        const next = await api('POST', '/api/admin/weight-reminder/run');
+        toast(next.result.recipients ? `${next.result.delivered} von ${next.result.recipients} erinnert` : 'Niemand fällig');
+        drawWeightReminder(next);
+      } catch (err) {
+        showErr(err);
+      }
+    });
   }
 
   function drawReminder(ov) {
@@ -2736,7 +2805,7 @@
   }
 
   async function loadNotifications(root) {
-    const { notifications, timezone, automation: auto } = await api('GET', '/api/notifications');
+    const { notifications, timezone, automation: auto, weightAutomation: wa } = await api('GET', '/api/notifications');
     const autoHtml = `
       <div class="notif automation">
         <div class="row-between"><strong>🤖 Automatisch: Erinnerung bei fehlendem Eintrag</strong>
@@ -2744,6 +2813,14 @@
         <div class="small muted">${auto.enabled
           ? `Geht an Klienten, die ${auto.days} ${auto.days === 1 ? 'Tag' : 'Tage'} nichts eingetragen haben.${auto.lastResult ? ` Zuletzt: ${esc(auto.lastResult)}` : ''}`
           : 'Schickt automatisch eine Push-Nachricht an Klienten, die eine Weile nichts eingetragen haben.'}</div>
+        <a class="small" href="#/admin">Im Admin-Tool einstellen →</a>
+      </div>
+      <div class="notif automation">
+        <div class="row-between"><strong>⚖️ Automatisch: Gewichts-Erinnerung</strong>
+          <span class="badge ${wa.enabled ? 'good' : ''}">${wa.enabled ? `Täglich ${esc(wa.time)} Uhr` : 'Aus'}</span></div>
+        <div class="small muted">${wa.enabled
+          ? `Geht an alle, die bis ${esc(wa.time)} Uhr noch kein Gewicht eingetragen haben.${wa.lastResult ? ` Zuletzt: ${esc(wa.lastResult)}` : ''}`
+          : 'Erinnert täglich alle, die noch kein Gewicht eingetragen haben.'}</div>
         <a class="small" href="#/admin">Im Admin-Tool einstellen →</a>
       </div>`;
     if (!notifications.length) {
@@ -2886,7 +2963,7 @@
   }
 
   /** "To do" tiles above the client list: messages, check-ins (weekend only), swaps, pending plans, inactivity. */
-  function coachDashboard(clients, queue) {
+  function coachDashboard(clients, queue, weightAutomation) {
     const byId = new Map(queue.clients.map((q) => [q.id, q]));
     const who = (c) => `${c.avatar ? `<img class="mini-avatar" src="${esc(c.avatar)}" alt="">` : ''}${esc(c.displayName)}`;
     const tile = ({ key, title, items, empty, total, note, cls }) => `
@@ -2920,6 +2997,15 @@
 
     return `<div class="dash-grid">
       ${tile({ key: 'messages', title: 'Ungelesene Nachrichten', items: messages, total: clients.reduce((a, c) => a + (c.unreadMessages || 0), 0), empty: 'Keine neuen Nachrichten ✓' })}
+      ${tile({
+        key: 'weight',
+        title: 'Gewicht heute offen',
+        items: clients.filter((c) => c.weightToday === null || c.weightToday === undefined).map((c) => ({ href: `#/client/${c.id}`, label: who(c) })),
+        empty: 'Alle haben heute gewogen ✓',
+        note: weightAutomation && weightAutomation.enabled
+          ? `${clients.filter((c) => c.weightToday !== null && c.weightToday !== undefined).length} von ${clients.length} eingetragen · Erinnerung um ${esc(weightAutomation.time)} Uhr`
+          : `${clients.filter((c) => c.weightToday !== null && c.weightToday !== undefined).length} von ${clients.length} eingetragen`,
+      })}
       ${checkinTile}
       ${tile({ key: 'swaps', title: 'Tauschwünsche', items: swaps, total: clients.reduce((a, c) => a + (c.openSwaps || 0), 0), empty: 'Keine offenen Wünsche ✓' })}
       ${tile({ key: 'plans', title: 'Plananpassungen offen', items: pendingPlans, empty: 'Alle Anpassungen angenommen ✓' })}

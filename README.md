@@ -23,7 +23,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 
 **Coach**
 - Reiter **Nachrichten** mit allen Chats auf einer Seite (Liste mit Vorschau und ungelesenen Nachrichten, Chat daneben; am Handy Liste → Chat)
-- Dashboard über den Klienten: ungelesene Nachrichten, offene Check-ins (nur Samstag/Sonntag), Tauschwünsche, nicht angenommene Plananpassungen, Klienten ohne Eintrag seit 2+ Tagen
+- Dashboard über den Klienten: ungelesene Nachrichten, Gewicht heute offen, offene Check-ins (nur Samstag/Sonntag), Tauschwünsche, nicht angenommene Plananpassungen, Klienten ohne Eintrag seit 2+ Tagen
 - Übersicht aller Klienten: letzter Eintrag (farbig markiert, wenn jemand nicht einträgt), Gewicht und Veränderung, Ø Schritte und Ø Schlaf
 - Detailansicht je Klient mit allen Diagrammen und Einträgen (nur lesen)
 - Ziele festlegen (Zielgewicht, Schritte pro Tag, Schlaf pro Nacht); der Klient sieht sie in seiner Übersicht
@@ -34,7 +34,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Ernährungsplan** pro Klient: Mahlzeiten aus der Lebensmittel-Datenbank zusammenstellen, Tauschwünsche per Klick kcal-gleich übernehmen, selbst anpassen oder ablehnen (Push bei neuen Wünschen)
 - **Kategorien** (nur für den Coach sichtbar): Diät, Reverse Diät, Aufbau, Maintenance – als farbige Markierung in Übersicht, Check-in und Admin-Tool
 - **Zusatzmaße je Kategorie**, im Admin-Tool zuordenbar: Zahlenwerte wie Bauchumfang (Feld im Tageseintrag + Verlaufsdiagramm) und Kraft-PRs (Übung, Gewicht, Wiederholungen; Rekorde werden erkannt, Push an den Coach); beides auch im Check-in-Wochenvergleich
-- **Admin-Tool:** Logins, App-Nutzung und Tage ohne Eintrag je Klient; automatische Push-Erinnerung nach X Tagen ohne Eintrag (täglich zu fester Uhrzeit, auch in der Push-Übersicht verlinkt); Lebensmittel-Datenbank mit ca. 100 üblichen Lebensmitteln (kcal pro 100 g/ml), eigene Lebensmittel anlegen und bearbeiten
+- **Admin-Tool:** Logins, App-Nutzung und Tage ohne Eintrag je Klient; automatische Gewichts-Erinnerung (täglich, Standard 18 Uhr, an alle ohne Gewicht von heute); automatische Push-Erinnerung nach X Tagen ohne Eintrag (täglich zu fester Uhrzeit, auch in der Push-Übersicht verlinkt); Lebensmittel-Datenbank mit ca. 100 üblichen Lebensmitteln (kcal pro 100 g/ml), eigene Lebensmittel anlegen und bearbeiten
 - **Nachrichten:** ein Chat pro Klient; ungelesene Nachrichten werden in der Übersicht und in der Navigation angezeigt
 - **Push-Benachrichtigungen:** einmalig (sofort oder geplant) und wiederkehrend (täglich oder an bestimmten Wochentagen), an alle oder ausgewählte Klienten; Übersicht, wer zugestimmt, abgelehnt oder noch nicht entschieden hat
 - Sehen, ob ein Klient Apple Health verbunden hat und wann zuletzt Daten kamen
