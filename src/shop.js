@@ -29,12 +29,35 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
     items: db.prepare('SELECT * FROM fridge_items WHERE client_id = ? ORDER BY id'),
     spent: db.prepare('SELECT COALESCE(SUM(cost), 0) AS n FROM fridge_items WHERE client_id = ?'),
     insert: db.prepare('INSERT INTO fridge_items (client_id, flavor, cost) VALUES (?, ?, ?)'),
+    newest: db.prepare('SELECT * FROM fridge_items WHERE client_id = ? ORDER BY id DESC LIMIT 1'),
+    remove: db.prepare('DELETE FROM fridge_items WHERE id = ?'),
   };
+
+  /**
+   * Tokens come from medals, and medals can disappear again (e.g. an entry of 100 000 steps is corrected).
+   * Whatever was bought with tokens that no longer exist goes back: the newest purchases first, until the
+   * spent tokens are covered by the earned ones again. Returns the items taken back.
+   */
+  function reconcile(clientId, earned) {
+    const revoked = [];
+    let spent = q.spent.get(clientId).n;
+    while (spent > earned) {
+      const item = q.newest.get(clientId);
+      if (!item) break;
+      q.remove.run(item.id);
+      spent -= item.cost;
+      const f = FLAVORS.find((x) => x.key === item.flavor);
+      revoked.push({ flavor: item.flavor, name: f ? f.name : item.flavor, cost: item.cost });
+    }
+    return revoked;
+  }
 
   function stateOf(clientId) {
     const earned = achievements.evaluate(clientId).summary.tokens;
+    const revoked = reconcile(clientId, earned);
     const spent = q.spent.get(clientId).n;
     return {
+      revoked,
       flavors: FLAVORS,
       rarities: RARITIES,
       balance: { earned, spent, available: Math.max(0, earned - spent) },
@@ -42,7 +65,12 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
     };
   }
 
-  return [
+  /** After a client's data changed: take back purchases that are no longer covered. */
+  function reconcileFor(clientId) {
+    return reconcile(clientId, achievements.evaluate(clientId).summary.tokens);
+  }
+
+  const routes = [
     ['GET', /^\/api\/shop$/, async (ctx) => stateOf(targetClient(ctx).id)],
     ['POST', /^\/api\/shop\/buy$/, async (ctx) => {
       const u = requireUser(ctx);
@@ -65,6 +93,8 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
       return stateOf(u.id);
     }],
   ];
+
+  return { routes, reconcileFor };
 }
 
 module.exports = { shopRoutes, FLAVORS, RARITIES };

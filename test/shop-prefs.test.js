@@ -100,3 +100,34 @@ test('Apple Health import is switched off', async (t) => {
   t.after(() => server.close());
   assert.equal((await max('GET', '/api/health/token')).status, 404);
 });
+
+test('security: correcting an entry that earned a medal takes back what was bought with it', async (t) => {
+  const { server, max, coach, id } = await withClient();
+  t.after(() => server.close());
+  // 100 000 steps on one day = steps bronze = 1 token
+  await max('PUT', `/api/entries/${day(0)}`, { steps: 100000 });
+  assert.equal((await max('GET', '/api/shop')).data.balance.available, 1);
+  assert.equal((await max('POST', '/api/shop/buy', { flavor: 'white' })).status, 201);
+  // the client corrects the steps: the medal and its token are gone, so is the can
+  const r = await max('PUT', `/api/entries/${day(0)}`, { steps: 5000 });
+  assert.deepEqual(r.data.revoked.map((x) => x.flavor), ['white']);
+  const shop = (await max('GET', '/api/shop')).data;
+  assert.equal(shop.items.length, 0);
+  assert.deepEqual(shop.balance, { earned: 0, spent: 0, available: 0 });
+  assert.equal((await coach('GET', `/api/shop?userId=${id}`)).data.items.length, 0);
+});
+
+test('security: only as much is taken back as needed, newest purchases first', async (t) => {
+  const { server, max } = await withClient();
+  t.after(() => server.close());
+  // 10 days with 12 000 steps: streak, steps total and step goal bronze = 3 tokens
+  for (let i = 0; i < 10; i++) await max('PUT', `/api/entries/${day(i)}`, { steps: 12000 });
+  await max('POST', '/api/shop/buy', { flavor: 'white' });
+  await max('POST', '/api/shop/buy', { flavor: 'red' });
+  // deleting one day breaks the streak and drops below 10 step-goal days: only 1 token left
+  const r = await max('DELETE', `/api/entries/${day(4)}`);
+  assert.deepEqual(r.data.revoked.map((x) => x.flavor), ['red']);
+  const shop = (await max('GET', '/api/shop')).data;
+  assert.deepEqual(shop.items.map((i) => i.flavor), ['white']);
+  assert.deepEqual(shop.balance, { earned: 1, spent: 1, available: 0 });
+});

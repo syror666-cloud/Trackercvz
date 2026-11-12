@@ -194,6 +194,17 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-buy-fx', date: 'November 2026',
+      client: [
+        ['🎆', 'Große Kaufanimation', 'Jeder Kauf im Shop wird gefeiert – je seltener das Getränk, desto spektakulärer.'],
+        ['⚖️', 'Faire Token', 'Fällt eine Medaille durch eine Korrektur weg, verschwindet auch das, was du mit ihren Token gekauft hast.'],
+      ],
+      coach: [
+        ['🎆', 'Kaufanimation im Shop', 'Klienten sehen beim Kauf eine Vollbild-Animation, die mit der Seltenheit wächst.'],
+        ['⚖️', 'Kein Token-Trick mehr', 'Korrigiert ein Klient Werte und verliert dadurch eine Medaille, wird der Kauf damit zurückgenommen.'],
+      ],
+    },
+    {
       id: '2026-11-mythic', date: 'November 2026',
       client: [
         ['🥤', 'Neu im Shop', "Ein McDonald's Becher (legendär) und als erste mythische Belohnung ein Vial Testosteron-Öl."],
@@ -877,9 +888,10 @@
         const metricInputs = [...form.querySelectorAll('[data-metric]')].map((inp) => ({ id: Number(inp.dataset.metric), value: parseNum(inp.value) }));
         if (metricInputs.some((x) => Number.isNaN(x.value))) throw new Error('Bitte bei den Zusatzmaßen nur Zahlen eingeben.');
         const date = form.date.value;
-        const { entry } = await api('PUT', `/api/entries/${date}`, {
+        const { entry, revoked } = await api('PUT', `/api/entries/${date}`, {
           weight, steps, sleep, note: form.note.value, training: choice('training'), caloriesOk, calories,
         });
+        if (revoked && revoked.length) setTimeout(() => notifyRevoked(revoked), 1700); // after the "saved" check mark
         let metricsChanged = false;
         for (const x of metricInputs) {
           const m = state.metrics.find((y) => y.id === x.id);
@@ -929,9 +941,10 @@
       },
       async onDelete(date) {
         if (!confirm(`Eintrag vom ${fmtDate(date)} löschen?`)) return;
-        await api('DELETE', `/api/entries/${date}`);
+        const del = await api('DELETE', `/api/entries/${date}`);
         state.entries = state.entries.filter((x) => x.date !== date);
         toast('Eintrag gelöscht');
+        if (del.revoked && del.revoked.length) setTimeout(() => notifyRevoked(del.revoked), 1500);
         fillForm();
         updateStreak();
         drawToday();
@@ -4285,6 +4298,7 @@
     let shop;
     try {
       shop = await api('GET', `/api/shop${query}`);
+      if (!opts.coach && shop.revoked && shop.revoked.length) notifyRevoked(shop.revoked);
     } catch (err) {
       root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
       return;
@@ -4337,10 +4351,94 @@
     setTimeout(() => stage.classList.add('play'), hidden && !reduce ? 450 : 0);
   }
 
+  /**
+   * Full-screen celebration after buying. The rarer the item, the bigger the show:
+   * common – drop and sparks · rare – glow and light rays · epic – spin, shock wave, shake ·
+   * legendary – charge-up silhouette, flash, coin rain · mythic – heartbeat in the dark, prism rays, double wave.
+   * Tap or Escape skips it; with reduced motion only a calm card is shown.
+   */
+  const BUY_FX = {
+    common: { pre: 0, total: 2600, particles: 14, colors: ['#ffffff', '#c3ced5', '#8fa1ad'] },
+    rare: { pre: 0, total: 3000, particles: 26, colors: ['#bfe0ff', '#3a8ee8', '#ffffff'] },
+    epic: { pre: 0, total: 3400, particles: 40, colors: ['#e6d6ff', '#a463e0', '#ffffff', '#ff8fd8'] },
+    legendary: { pre: 0.9, total: 4600, particles: 60, colors: ['#fff1a8', '#f2c230', '#ffffff', '#ffb627'], coins: 22 },
+    mythic: { pre: 1.6, total: 5800, particles: 96, colors: ['#ff3d6e', '#a463e0', '#3a8ee8', '#7ed957', '#f2c230', '#ffffff'], coins: 0 },
+  };
+  function playPurchaseFx(f) {
+    const cfg = BUY_FX[f.rarity] || BUY_FX.common;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const particles = reduce ? '' : Array.from({ length: cfg.particles }, (_, i) => {
+      const angle = (360 / cfg.particles) * i + rnd(-8, 8);
+      const color = cfg.colors[i % cfg.colors.length];
+      return `<i style="--a:${angle.toFixed(1)}deg;--d:${Math.round(rnd(140, f.rarity === 'mythic' ? 520 : 380))}px;--c:${color};--s:${rnd(5, f.rarity === 'common' ? 9 : 13).toFixed(1)}px;--t:${rnd(0, 0.25).toFixed(2)}s"></i>`;
+    }).join('');
+    const coins = reduce || !cfg.coins ? '' : Array.from({ length: cfg.coins }, () =>
+      `<i class="fx-coin" style="left:${rnd(2, 98).toFixed(1)}%;--t:${rnd(0, 1.2).toFixed(2)}s;--r:${Math.round(rnd(-360, 360))}deg;--z:${rnd(0.7, 1.3).toFixed(2)}"></i>`).join('');
+    const stars = !reduce && f.rarity === 'mythic' ? Array.from({ length: 40 }, () =>
+      `<i style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(0, 100).toFixed(1)}%;--t:${rnd(0, 2).toFixed(2)}s"></i>`).join('') : '';
+    const fx = document.createElement('div');
+    fx.className = `buy-fx r-${f.rarity} ${reduce ? 'calm' : ''}`;
+    fx.style.setProperty('--pre', `${cfg.pre}s`);
+    fx.setAttribute('role', 'status');
+    fx.setAttribute('aria-live', 'assertive');
+    fx.innerHTML = `
+      <div class="fx-backdrop"></div>
+      ${stars ? `<div class="fx-stars" aria-hidden="true">${stars}</div>` : ''}
+      <div class="fx-stage" aria-hidden="true">
+        <div class="fx-rays"></div>
+        <div class="fx-glow"></div>
+        <div class="fx-rings"><i></i><i></i></div>
+        <div class="fx-particles">${particles}</div>
+        <div class="fx-item">${coldCan(f)}</div>
+      </div>
+      <div class="fx-coins" aria-hidden="true">${coins}</div>
+      <div class="fx-text">
+        <span class="fx-rarity">${esc(RARITY[f.rarity].name)}</span>
+        <strong class="fx-name">${esc(f.name)}</strong>
+        <span class="fx-sub">Ab in deinen Kühlschrank</span>
+      </div>
+      <div class="fx-flash" aria-hidden="true"></div>
+      <p class="fx-skip">Tippen zum Schließen</p>`;
+    document.body.appendChild(fx);
+    document.body.classList.add('fx-open');
+    if (!reduce && navigator.vibrate) {
+      const pattern = { legendary: [30, 50, 30, 50, 120], mythic: [20, 80, 20, 80, 20, 80, 200], epic: [40, 40, 60] }[f.rarity];
+      if (pattern) setTimeout(() => navigator.vibrate(pattern), cfg.pre * 1000);
+    }
+    return new Promise((resolve) => {
+      let done = false;
+      const close = () => {
+        if (done) return;
+        done = true;
+        fx.classList.add('fx-out');
+        document.removeEventListener('keydown', onKey);
+        setTimeout(() => {
+          fx.remove();
+          document.body.classList.remove('fx-open');
+          resolve();
+        }, 350);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') close();
+      };
+      fx.addEventListener('click', close);
+      document.addEventListener('keydown', onKey);
+      setTimeout(close, reduce ? 2200 : cfg.total);
+    });
+  }
+
+  /** Medals went away after a correction, so did what was bought with their tokens. */
+  function notifyRevoked(revoked) {
+    const names = revoked.map((r) => r.name).join(', ');
+    toast(`Aus deinem Kühlschrank genommen: ${names} – die Medaille dafür ist durch die Korrektur weggefallen.`, true);
+  }
+
   async function mountShop(root, opts) {
     let shop;
     try {
       shop = await api('GET', '/api/shop');
+      if (shop.revoked && shop.revoked.length) notifyRevoked(shop.revoked);
     } catch (err) {
       root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
       return;
@@ -4369,7 +4467,7 @@
         try {
           shop = await api('POST', '/api/shop/buy', { flavor: f.key });
           draw();
-          savedHud('Ab in den Kühlschrank', f.name);
+          playPurchaseFx(f);
         } catch (err) {
           toast(err.message, true);
           btn.disabled = false;

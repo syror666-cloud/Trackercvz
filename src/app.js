@@ -280,6 +280,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
+  let shop; // likewise
   const q = {
     setPrefs: db.prepare('UPDATE users SET prefs = ? WHERE id = ?'),
     setSeenRelease: db.prepare('UPDATE users SET seen_release = ? WHERE id = ?'),
@@ -1231,20 +1232,21 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       for (const k of Object.keys(incoming)) merged[k] = incoming[k] !== undefined ? incoming[k] : existing[k] ?? null;
       if (Object.values(merged).every((v) => v === null)) {
         q.deleteEntry.run(u.id, date);
-        return { entry: null };
+        return { entry: null, revoked: u.role === 'client' ? shop.reconcileFor(u.id) : [] };
       }
       q.upsertEntry.run(
         u.id, date, merged.weight, merged.steps, merged.sleep, merged.note,
         merged.calories_ok, merged.calories, merged.training
       );
-      return { entry: entryRow(q.entry.get(u.id, date)) };
+      // corrected values can cost medals: take back what was bought with tokens that no longer exist
+      return { entry: entryRow(q.entry.get(u.id, date)), revoked: u.role === 'client' ? shop.reconcileFor(u.id) : [] };
     }],
 
     ['DELETE', /^\/api\/entries\/(\d{4}-\d{2}-\d{2})$/, async (ctx, [, date]) => {
       const u = requireUser(ctx);
       if (u.role !== 'client') throw new HttpError(403, 'Nur Klienten können Einträge löschen');
       q.deleteEntry.run(u.id, date);
-      return { ok: true };
+      return { ok: true, revoked: u.role === 'client' ? shop.reconcileFor(u.id) : [] };
     }],
   ];
 
@@ -1258,7 +1260,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   }
   const achievements = achievementsModule(deps);
   const ai = aiRoutes(deps);
-  routes.push(...achievements.routes, ...shopRoutes({ ...deps, achievements }), ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  shop = shopRoutes({ ...deps, achievements });
+  routes.push(...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();
