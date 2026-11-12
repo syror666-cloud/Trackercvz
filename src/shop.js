@@ -31,6 +31,7 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
     insert: db.prepare('INSERT INTO fridge_items (client_id, flavor, cost) VALUES (?, ?, ?)'),
     newest: db.prepare('SELECT * FROM fridge_items WHERE client_id = ? ORDER BY id DESC LIMIT 1'),
     remove: db.prepare('DELETE FROM fridge_items WHERE id = ?'),
+    clear: db.prepare('DELETE FROM fridge_items WHERE client_id = ?'),
   };
 
   /**
@@ -65,19 +66,47 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
     };
   }
 
+  /**
+   * A coach's own test fridge: everything is free, nothing is ever taken back. Only for the coach's own
+   * account – a coach looking at a client (?userId=) always gets that client's real fridge.
+   */
+  function coachTestState(coachId) {
+    return {
+      revoked: [],
+      free: true,
+      flavors: FLAVORS,
+      rarities: RARITIES,
+      balance: { earned: 0, spent: 0, available: 0 },
+      items: q.items.all(coachId).map((i) => ({ id: i.id, flavor: i.flavor, cost: 0, boughtAt: i.bought_at })),
+    };
+  }
+  const ownCoachFridge = (ctx) => {
+    const u = requireUser(ctx);
+    return u.role === 'coach' && !ctx.url.searchParams.has('userId') ? u : null;
+  };
+
   /** After a client's data changed: take back purchases that are no longer covered. */
   function reconcileFor(clientId) {
     return reconcile(clientId, achievements.evaluate(clientId).summary.tokens);
   }
 
   const routes = [
-    ['GET', /^\/api\/shop$/, async (ctx) => stateOf(targetClient(ctx).id)],
+    ['GET', /^\/api\/shop$/, async (ctx) => {
+      const coach = ownCoachFridge(ctx);
+      return coach ? coachTestState(coach.id) : stateOf(targetClient(ctx).id);
+    }],
     ['POST', /^\/api\/shop\/buy$/, async (ctx) => {
       const u = requireUser(ctx);
-      if (u.role !== 'client') throw new HttpError(403, 'Nur Klienten können im Shop kaufen');
       const { flavor } = await readBody(ctx.req);
       const f = FLAVORS.find((x) => x.key === flavor);
       if (!f) throw new HttpError(400, 'Diese Sorte gibt es nicht');
+      if (u.role === 'coach') {
+        // coach test fridge: free, always into the coach's own fridge (never a client's)
+        q.insert.run(u.id, f.key, 0);
+        ctx.res.statusCode = 201;
+        return coachTestState(u.id);
+      }
+      if (u.role !== 'client') throw new HttpError(403, 'Nur Klienten können im Shop kaufen');
       // check and insert in one transaction so two quick taps cannot overspend
       db.exec('BEGIN IMMEDIATE');
       try {
@@ -91,6 +120,13 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
       }
       ctx.res.statusCode = 201;
       return stateOf(u.id);
+    }],
+    // Coach only: empty the own test fridge to see the empty state (cobwebs, flies) again.
+    ['DELETE', /^\/api\/shop\/items$/, async (ctx) => {
+      const u = requireUser(ctx);
+      if (u.role !== 'coach') throw new HttpError(403, 'Nur für Coaches');
+      q.clear.run(u.id);
+      return coachTestState(u.id);
     }],
   ];
 

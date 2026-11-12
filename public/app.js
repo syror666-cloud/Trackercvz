@@ -194,6 +194,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-coach-fridge', date: 'November 2026',
+      client: [],
+      coach: [
+        ['🧪', 'Dein Test-Kühlschrank', 'Unter Konto → Test-Kühlschrank: Kühlschrank und Shop nur für dich, alles gratis. Probier Seltenheiten und Kaufanimationen aus und leere ihn jederzeit wieder.'],
+      ],
+    },
+    {
       id: '2026-11-buy-fx', date: 'November 2026',
       client: [
         ['🎆', 'Große Kaufanimation', 'Jeder Kauf im Shop wird gefeiert – je seltener das Getränk, desto spektakulärer.'],
@@ -388,8 +395,9 @@
       renderNav();
       if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
       refreshUnread();
-      const fame = me.role === 'client' && location.hash.match(/^#\/account\/fame(?:\/(fridge|shop))?$/);
-      return renderAccount(fame ? fame[1] || 'medals' : null);
+      const fame = location.hash.match(/^#\/account\/fame(?:\/(fridge|shop))?$/);
+      // coaches have no medals: their "Hall of Fame" is just the free test fridge
+      return renderAccount(fame ? fame[1] || (me.role === 'coach' ? 'fridge' : 'medals') : null);
     }
     renderNav();
     if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
@@ -522,16 +530,16 @@
 
   // ---------- account: profile picture, name, username, password ----------
   function renderAccount(fameSub) {
-    const tabs = me.role === 'client'
-      ? `<nav class="tabs" aria-label="Konto">
+    const tabs = `<nav class="tabs" aria-label="Konto">
           <a href="#/account"${fameSub ? '' : ' aria-current="page"'}>Profil</a>
-          <a href="#/account/fame"${fameSub ? ' aria-current="page"' : ''}>Hall of Fame</a>
-        </nav>`
-      : '';
+          ${me.role === 'client'
+            ? `<a href="#/account/fame"${fameSub ? ' aria-current="page"' : ''}>Hall of Fame</a>`
+            : `<a href="#/account/fame/fridge"${fameSub ? ' aria-current="page"' : ''}>Test-Kühlschrank</a>`}
+        </nav>`;
     const head = `<div class="page-head"><div>${eyebrow(me.role === 'coach' ? 'Coach' : 'Dein Profil')}<h1>Konto</h1></div></div>${tabs}`;
     if (fameSub) {
       setView(`${head}<div id="fame">${LOADING}</div>`);
-      mountHallOfFame(document.getElementById('fame'), { base: '#/account/fame', sub: fameSub });
+      mountHallOfFame(document.getElementById('fame'), { base: '#/account/fame', sub: fameSub, coachTest: me.role === 'coach' });
       return;
     }
     setView(`
@@ -4063,6 +4071,7 @@
 
   /** opts: { base (hash), sub: 'medals' | 'fridge' | 'shop', coach, userId, clientName } */
   function mountHallOfFame(root, opts) {
+    if (opts.coachTest) return opts.sub === 'shop' ? mountShop(root, opts) : mountFridge(root, opts);
     if (opts.sub === 'fridge') return mountFridge(root, opts);
     if (opts.sub === 'shop' && !opts.coach) return mountShop(root, opts);
     return mountMedals(root, opts);
@@ -4129,6 +4138,13 @@
   // ---------- Hall of Fame: sub menu, fridge (3D glide into a pixel-art fridge) and medal shop ----------
   function hofHeader(opts, sub, text) {
     const link = (key, href, label) => `<a href="${href}"${sub === key ? ' aria-current="page"' : ''}>${label}</a>`;
+    if (opts.coachTest) {
+      return `<div class="hof-head">
+        <div>${eyebrow('Nur für dich als Coach')}<h2 class="page-title-sm">Test-Kühlschrank</h2>
+          <p class="muted">Alles gratis – zum Ausprobieren von Kühlschrank, Seltenheiten und Kaufanimationen. Deine Klienten sehen davon nichts.</p></div>
+        <nav class="hof-nav" aria-label="Test-Kühlschrank">${link('fridge', `${opts.base}/fridge`, 'Kühlschrank')}${link('shop', `${opts.base}/shop`, 'Shop')}</nav>
+      </div>`;
+    }
     return `<div class="hof-head">
         <div>${eyebrow(opts.coach ? 'Erfolge' : 'Deine Erfolge')}<h2 class="page-title-sm">Hall of Fame</h2>
           <p class="muted">${text}</p></div>
@@ -4333,9 +4349,22 @@
         </section>
       </div>
       <div class="fridge-meta">
-        <span class="muted">${cans.length} ${cans.length === 1 ? 'Dose' : 'Dosen'} · ${shop.balance.available} Token übrig</span>
-        ${reduce ? '' : '<button type="button" class="btn-ghost btn-sm" data-replay>↻ Nochmal reingleiten</button>'}
+        <span class="muted">${shop.free ? `${cans.length} ${cans.length === 1 ? 'Getränk' : 'Getränke'} · Testmodus: alles gratis` : `${cans.length} ${cans.length === 1 ? 'Dose' : 'Dosen'} · ${shop.balance.available} Token übrig`}</span>
+        <span class="row" style="gap:6px">
+          ${shop.free && cans.length ? '<button type="button" class="btn-ghost btn-sm" data-empty-fridge>Kühlschrank leeren</button>' : ''}
+          ${reduce ? '' : '<button type="button" class="btn-ghost btn-sm" data-replay>↻ Nochmal reingleiten</button>'}
+        </span>
       </div>`;
+    const emptyBtn = root.querySelector('[data-empty-fridge]');
+    if (emptyBtn) emptyBtn.addEventListener('click', async () => {
+      if (!confirm('Test-Kühlschrank leeren?')) return;
+      try {
+        await api('DELETE', '/api/shop/items');
+        mountFridge(root, opts);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
     const replay = root.querySelector('[data-replay]');
     if (replay) replay.addEventListener('click', () => {
       const stage = root.querySelector('[data-stage]');
@@ -4445,6 +4474,7 @@
     }
     function draw() {
       const b = shop.balance;
+      if (shop.free) return drawFree();
       root.innerHTML = `${hofHeader(opts, 'shop', 'Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen etwas für deinen Kühlschrank.')}
         <section class="card shop-balance">
           <div><span class="fame-big">${b.available}</span> <span class="muted">Token verfügbar</span></div>
@@ -4473,6 +4503,46 @@
           btn.disabled = false;
         }
       }));
+    }
+    function drawFree() {
+      root.innerHTML = `${hofHeader(opts, 'shop', '')}
+        <section class="card shop-balance">
+          <div><span class="fame-big">∞</span> <span class="muted">Testmodus – alles gratis</span></div>
+          <p class="muted small">${shop.items.length} ${shop.items.length === 1 ? 'Getränk' : 'Getränke'} im Test-Kühlschrank</p>
+          <span class="row" style="gap:6px">
+            ${shop.items.length ? '<button type="button" class="btn-ghost btn-sm" data-empty-fridge>Kühlschrank leeren</button>' : ''}
+            <a class="btn btn-secondary btn-sm" href="${opts.base}/fridge">Zum Kühlschrank →</a>
+          </span>
+        </section>
+        <div class="shop-grid">${shop.flavors.map((f) => `<section class="card shop-item" style="--can:${f.colors[0]}">
+            <div class="shop-can">${coldCan(f, 'data-wobble')}</div>
+            <h3>${esc(f.name)}</h3>
+            <span class="rarity-tag r-${f.rarity}">${esc(RARITY[f.rarity].name)}</span>
+            <p class="shop-price"><span class="muted">Gratis</span> <s class="muted small">${f.price} Token</s></p>
+            <button type="button" class="btn-primary btn-sm btn-block" data-buy="${f.key}">Gratis holen</button>
+          </section>`).join('')}</div>`;
+      root.querySelectorAll('[data-buy]').forEach((btn) => btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const f = shop.flavors.find((x) => x.key === btn.dataset.buy);
+        try {
+          shop = await api('POST', '/api/shop/buy', { flavor: f.key });
+          drawFree();
+          playPurchaseFx(f);
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      }));
+      const emptyBtn = root.querySelector('[data-empty-fridge]');
+      if (emptyBtn) emptyBtn.addEventListener('click', async () => {
+        if (!confirm('Test-Kühlschrank leeren?')) return;
+        try {
+          shop = await api('DELETE', '/api/shop/items');
+          drawFree();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
     }
     draw();
   }

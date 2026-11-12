@@ -80,7 +80,9 @@ test('shop: medals are worth tokens (bronze 1, silver 2, gold 3), cans go into t
   assert.equal((await max('GET', '/api/shop')).data.balance.earned, 5);
   // the coach sees the fridge but cannot shop
   assert.equal((await coach('GET', `/api/shop?userId=${id}`)).data.items.length, 1);
-  assert.equal((await coach('POST', '/api/shop/buy', { flavor: 'white' })).status, 403);
+  // the coach's purchase goes into the coach's own test fridge, never into the client's
+  assert.equal((await coach('POST', '/api/shop/buy', { flavor: 'white' })).status, 201);
+  assert.equal((await coach('GET', `/api/shop?userId=${id}`)).data.items.length, 1);
 });
 
 test('prefs: language, theme and Liquid Glass are saved per person', async (t) => {
@@ -130,4 +132,26 @@ test('security: only as much is taken back as needed, newest purchases first', a
   const shop = (await max('GET', '/api/shop')).data;
   assert.deepEqual(shop.items.map((i) => i.flavor), ['white']);
   assert.deepEqual(shop.balance, { earned: 1, spent: 1, available: 0 });
+});
+
+test('coach test fridge: free, only for the coach, can be emptied', async (t) => {
+  const { server, max, coach, id } = await withClient();
+  t.after(() => server.close());
+  let own = (await coach('GET', '/api/shop')).data;
+  assert.equal(own.free, true);
+  assert.equal(own.items.length, 0);
+  // everything is free, even the mythic vial, as often as wanted
+  for (const flavor of ['testo_vial', 'mcd_cup', 'testo_vial']) assert.equal((await coach('POST', '/api/shop/buy', { flavor })).status, 201);
+  own = (await coach('GET', '/api/shop')).data;
+  assert.deepEqual(own.items.map((i) => [i.flavor, i.cost]), [['testo_vial', 0], ['mcd_cup', 0], ['testo_vial', 0]]);
+  // clients get nothing for free and do not see the coach's items
+  const client = (await max('GET', '/api/shop')).data;
+  assert.equal(client.free, undefined);
+  assert.equal(client.items.length, 0);
+  assert.equal((await max('POST', '/api/shop/buy', { flavor: 'testo_vial' })).status, 409);
+  assert.equal((await max('DELETE', '/api/shop/items')).status, 403);
+  // the coach's view of a client is still that client's real fridge
+  assert.equal((await coach('GET', `/api/shop?userId=${id}`)).data.free, undefined);
+  // empty again
+  assert.equal((await coach('DELETE', '/api/shop/items')).data.items.length, 0);
 });

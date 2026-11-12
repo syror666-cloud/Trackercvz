@@ -404,6 +404,15 @@ Große Kaufanimation|Big purchase animation|Gran animación de compra|Grande ani
 Jeder Kauf im Shop wird gefeiert – je seltener das Getränk, desto spektakulärer.|Every purchase in the shop is celebrated – the rarer the drink, the more spectacular.|Cada compra en la tienda se celebra – cuanto más raro, más espectacular.|Ogni acquisto nel negozio viene festeggiato – più è raro, più è spettacolare.
 Faire Token|Fair tokens|Tokens justos|Token equi
 Fällt eine Medaille durch eine Korrektur weg, verschwindet auch das, was du mit ihren Token gekauft hast.|If a correction removes a medal, whatever you bought with its tokens goes too.|Si una corrección elimina una medalla, también desaparece lo que compraste con sus tokens.|Se una correzione toglie una medaglia, sparisce anche ciò che hai comprato con i suoi token.
+Test-Kühlschrank|Test fridge|Nevera de prueba|Frigo di prova
+Nur für dich als Coach|Only for you as a coach|Solo para ti como coach|Solo per te come coach
+Alles gratis – zum Ausprobieren von Kühlschrank, Seltenheiten und Kaufanimationen. Deine Klienten sehen davon nichts.|Everything free – to try out the fridge, rarities and purchase animations. Your clients see none of this.|Todo gratis – para probar la nevera, las rarezas y las animaciones de compra. Tus clientes no ven nada de esto.|Tutto gratis – per provare frigo, rarità e animazioni d'acquisto. I tuoi clienti non vedono nulla.
+Testmodus – alles gratis|Test mode – everything free|Modo de prueba – todo gratis|Modalità prova – tutto gratis
+Kühlschrank leeren|Empty fridge|Vaciar nevera|Svuota frigo
+Gratis holen|Get for free|Coger gratis|Prendi gratis
+Gratis|Free|Gratis|Gratis
+Dein Test-Kühlschrank|Your test fridge|Tu nevera de prueba|Il tuo frigo di prova
+Unter Konto → Test-Kühlschrank: Kühlschrank und Shop nur für dich, alles gratis. Probier Seltenheiten und Kaufanimationen aus und leere ihn jederzeit wieder.|Under Account → Test fridge: fridge and shop just for you, everything free. Try rarities and purchase animations and empty it any time.|En Cuenta → Nevera de prueba: nevera y tienda solo para ti, todo gratis. Prueba rarezas y animaciones y vacíala cuando quieras.|In Account → Frigo di prova: frigo e negozio solo per te, tutto gratis. Prova rarità e animazioni e svuotalo quando vuoi.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -458,6 +467,8 @@ noch nie|never|nunca|mai
     [/^Gerade (\d+) Tage? in Folge$/, W(0, (m) => `${m[1]} in a row right now`, (m) => `${m[1]} seguidos ahora mismo`, (m) => `${m[1]} di fila ora`)],
     [/^([\d.,]+(?: t)?) (Tage in Folge|Schritte|Tage|Nächte|Trainings|kg bewegt|Bestleistungen|Check-ins)( \(Rekord\))?$/, W(0, (m, l) => `${m[1]} ${word(l, m[2])}${m[3] ? ({ en: ' (record)', es: ' (récord)', it: ' (record)' })[l] : ''}`, (m, l) => `${m[1]} ${word(l, m[2])}${m[3] ? ' (récord)' : ''}`, (m, l) => `${m[1]} ${word(l, m[2])}${m[3] ? ' (record)' : ''}`)],
     [/^Aus deinem Kühlschrank genommen: (.+) – die Medaille dafür ist durch die Korrektur weggefallen\.$/, W(0, (m) => `Taken out of your fridge: ${m[1]} – the medal for it was lost through the correction.`, (m) => `Retirado de tu nevera: ${m[1]} – la medalla se perdió con la corrección.`, (m) => `Tolto dal tuo frigo: ${m[1]} – la medaglia è venuta meno con la correzione.`)],
+    [/^(\d+) Getränke? · Testmodus: alles gratis$/, W(0, (m) => `${m[1]} drink${m[1] === '1' ? '' : 's'} · test mode: everything free`, (m) => `${m[1]} bebida${m[1] === '1' ? '' : 's'} · modo de prueba: todo gratis`, (m) => `${m[1]} bevand${m[1] === '1' ? 'a' : 'e'} · modalità prova: tutto gratis`)],
+    [/^(\d+) Getränke? im Test-Kühlschrank$/, W(0, (m) => `${m[1]} drink${m[1] === '1' ? '' : 's'} in the test fridge`, (m) => `${m[1]} bebida${m[1] === '1' ? '' : 's'} en la nevera de prueba`, (m) => `${m[1]} bevand${m[1] === '1' ? 'a' : 'e'} nel frigo di prova`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],
