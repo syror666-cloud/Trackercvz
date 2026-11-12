@@ -11,6 +11,7 @@ const { weekComparison, weekHighlights } = require('./weekstats');
 const { nutritionRoutes } = require('./nutrition');
 const { trainingRoutes } = require('./training');
 const { achievementsModule } = require('./achievements');
+const { shopRoutes } = require('./shop');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -230,7 +231,18 @@ function describeProposal(previous, proposal) {
 }
 
 const avatarUrl = (u) => (u.avatar ? `/api/avatar/${u.id}?v=${encodeURIComponent(u.avatar_updated || '1')}` : null);
-const publicUser = (u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, avatar: avatarUrl(u) });
+const PREF_DEFAULTS = { lang: 'de', theme: 'system', glass: false };
+const LANGS = ['de', 'en', 'es', 'it'];
+function prefsOf(u) {
+  let p = {};
+  try { p = JSON.parse(u.prefs || '{}') || {}; } catch { p = {}; }
+  return {
+    lang: LANGS.includes(p.lang) ? p.lang : PREF_DEFAULTS.lang,
+    theme: ['system', 'light', 'dark'].includes(p.theme) ? p.theme : PREF_DEFAULTS.theme,
+    glass: typeof p.glass === 'boolean' ? p.glass : PREF_DEFAULTS.glass,
+  };
+}
+const publicUser = (u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, avatar: avatarUrl(u), prefs: prefsOf(u) });
 
 /** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
 function parseAvatar(dataUrl) {
@@ -259,11 +271,13 @@ function parseSteps(value) {
 
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders }) {
+// Apple Health import (Shortcuts) is switched off for now; `health: true` turns the routes back on.
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
   const q = {
+    setPrefs: db.prepare('UPDATE users SET prefs = ? WHERE id = ?'),
     setSeenRelease: db.prepare('UPDATE users SET seen_release = ? WHERE id = ?'),
     sessionUser: db.prepare(
       `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
@@ -580,6 +594,27 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     ['GET', /^\/api\/me$/, async (ctx) => {
       const u = requireUser(ctx);
       return { user: { ...publicUser(u), seenRelease: u.seen_release || null } };
+    }],
+
+    // Language, appearance and Liquid Glass – stored per person so they follow to every device
+    ['PATCH', /^\/api\/me\/prefs$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const body = await readBody(ctx.req);
+      const next = { ...prefsOf(u) };
+      if (body.lang !== undefined) {
+        if (!LANGS.includes(body.lang)) throw new HttpError(400, 'Unbekannte Sprache');
+        next.lang = body.lang;
+      }
+      if (body.theme !== undefined) {
+        if (!['system', 'light', 'dark'].includes(body.theme)) throw new HttpError(400, 'Unbekanntes Erscheinungsbild');
+        next.theme = body.theme;
+      }
+      if (body.glass !== undefined) {
+        if (typeof body.glass !== 'boolean') throw new HttpError(400, 'Liquid Glass: ja oder nein');
+        next.glass = body.glass;
+      }
+      q.setPrefs.run(JSON.stringify(next), u.id);
+      return { prefs: next };
     }],
 
     // "What's new" was dismissed – it does not come back on any device
@@ -917,7 +952,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const push =
         u.role === 'coach'
           ? // No message text in the notification – it may show on a locked screen.
-            notifier.sendToUsers([c.id], { title: 'Thabstracker', body: 'Du hast eine neue Nachricht von deinem Coach', url: '/#/chat' })
+            notifier.sendToUsers([c.id], { title: 'StayOnTrack', body: 'Du hast eine neue Nachricht von deinem Coach', url: '/#/chat' })
           : notifier.sendToUsers(notifier.coachIds(), {
               title: `Nachricht von ${c.display_name}`, body: preview, url: `/#/messages/${c.id}`,
             });
@@ -971,7 +1006,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     ['POST', /^\/api\/push\/test$/, async (ctx) => {
       const u = requireUser(ctx);
       const r = await notifier.sendToUsers([u.id], {
-        title: 'Thabstracker', body: 'Benachrichtigungen sind aktiv 💪', url: '/',
+        title: 'StayOnTrack', body: 'Benachrichtigungen sind aktiv 💪', url: '/',
       });
       return r;
     }],
@@ -1183,7 +1218,11 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     isValidDate, maxAllowedDate, localDate,
   };
   metrics = metricsModule(deps);
-  routes.push(...achievementsModule(deps).routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  if (!health) {
+    for (let i = routes.length - 1; i >= 0; i--) if (String(routes[i][1]).includes('health')) routes.splice(i, 1);
+  }
+  const achievements = achievementsModule(deps);
+  routes.push(...achievements.routes, ...shopRoutes({ ...deps, achievements }), ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

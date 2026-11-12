@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Thabstracker – design system
+   StayOnTrack – design system
    Editorial and calm: Midnight Navy type on white and Soft Blue surfaces,
    one Coral accent used like a highlighter, a muted blue as quiet second accent.
    Three radii create rhythm: sharp buttons · asymmetric cards · round pills/data cards.
@@ -58,8 +58,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  /* Dark: Midnight Navy with Coral and Soft Blue */
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #001a2b;
     --surface: #002941;
     --surface-2: #08344f;
@@ -86,6 +85,32 @@
     color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+    --bg: #001a2b;
+    --surface: #002941;
+    --surface-2: #08344f;
+    --ivory: #0d3f5e;
+    --text: #eaf5fa;
+    --steel: #c4dbe6;
+    --muted: #8fb0c2;
+    --border: #0f3c58;
+    --line: #1e4f6c;
+    --field: #5f8ba3;
+    --accent: #fd6e6e;
+    --accent-soft: #4a2333;
+    --accent-text: #002941;
+    --accent-display: #fd6e6e;
+    --brass: #b6dfed;
+    --btn-bg: #fd6e6e;
+    --btn-text: #002941;
+    --weight: #fd6e6e;
+    --steps: #b6dfed;
+    --sleep: #7cc3dc;
+    --good: #7fd1a0;
+    --warn: #f2c46d;
+    --bad: #ff8f8f;
+    color-scheme: dark;
+  }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -672,13 +697,19 @@ html { overflow-x: hidden; overscroll-behavior-x: none; }
   --cat-maintenance: #2f7d5b;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --cat-diet: #ff8f8f;
     --cat-reverse: #f2c46d;
     --cat-build: #8cc8ea;
     --cat-maintenance: #7fd1a0;
   }
 }
+:root[data-theme="dark"] {
+    --cat-diet: #ff8f8f;
+    --cat-reverse: #f2c46d;
+    --cat-build: #8cc8ea;
+    --cat-maintenance: #7fd1a0;
+  }
 .cat-diet { --cat: var(--cat-diet); }
 .cat-reverse { --cat: var(--cat-reverse); }
 .cat-build { --cat: var(--cat-build); }
@@ -1226,7 +1257,6 @@ button.back { background: none; border: 0; padding: 0; min-height: 32px; }
   .tp-ex .icon-btn { width: 28px; }
   .tp-view-list li { grid-template-columns: minmax(0, 1fr) auto; }
   .tp-view-last { grid-column: 1 / -1; text-align: left; font-size: 0.86rem; color: var(--muted); margin-top: -4px; }
-  .tp-view-last:not(:has(.muted))::before { content: 'Zuletzt '; }
   .tp-view-last:has(.muted) { display: none; }
 }
 .page-title-sm { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.1; letter-spacing: -0.02em; }
@@ -1331,8 +1361,9 @@ button.back { background: none; border: 0; padding: 0; min-height: 32px; }
   .medal-shine, .medal .medal-icon *, .medal.new .medal-svg, .fame-new-banner { animation: none !important; }
 }
 @media (prefers-color-scheme: dark) {
-  .medal.earned .medal-svg { filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5)); }
+  :root:not([data-theme="light"]) .medal.earned .medal-svg { filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5)); }
 }
+:root[data-theme="dark"] .medal.earned .medal-svg { filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5)); }
 .medal.earned .medal-face { stroke: none; }
 .medal.earned.tier-bronze .medal-face { fill: url(#hof-bronze); }
 .medal.earned.tier-silver .medal-face { fill: url(#hof-silver); }
@@ -1359,3 +1390,234 @@ dialog.whats-new[open] { animation: fame-pop 0.4s cubic-bezier(0.2, 1.2, 0.4, 1)
   .wn-icon { width: 34px; height: 34px; font-size: 1.05rem; }
   .wn-list p { font-size: 0.88rem; }
 }
+
+/* ==========================================================================
+   Logo: track ring with a coral dot. Tile and ring shift slightly in dark mode.
+   ========================================================================== */
+:root { --lm-tile: #002941; --lm-ring: #b6dfed; --lm-dot: #fd6e6e; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --lm-tile: #0d3f5e; --lm-ring: #cfeaf4; --lm-dot: #ff7b7b; }
+}
+:root[data-theme="dark"] { --lm-tile: #0d3f5e; --lm-ring: #cfeaf4; --lm-dot: #ff7b7b; }
+.logo-mark { display: block; flex-shrink: 0; }
+.lm-tile { fill: var(--lm-tile); }
+.lm-ring { stroke: var(--lm-ring); }
+.lm-dot { fill: var(--lm-dot); }
+.brand .logo-mark { width: 38px; height: 38px; }
+.brand span { font-weight: 500; letter-spacing: -0.02em; }
+.splash-logo {
+  width: 120px; height: 120px; border-radius: 34px;
+  box-shadow: 0 18px 50px rgba(0, 41, 65, 0.22);
+  animation: splash-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, splash-breathe 2.4s ease-in-out 0.6s infinite;
+}
+.splash-logo .lm-ring { stroke-dashoffset: 86; animation: lm-draw 1s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards; }
+.splash-logo .lm-dot { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: lm-dot 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) 0.95s forwards; }
+@keyframes lm-draw { to { stroke-dashoffset: 0; } }
+@keyframes lm-dot { to { transform: scale(1); } }
+.page-loading .logo-mark { width: 44px; height: 44px; animation: splash-breathe 1.6s ease-in-out infinite; }
+.login-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 26px; border-radius: 0; }
+.login-logo .logo-mark { width: 72px; height: 72px; }
+.login-wordmark { font: 400 2.2rem/1 var(--font-display); letter-spacing: -0.04em; }
+.login-wordmark b { font-weight: 400; color: var(--accent-display); }
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo .lm-ring { animation: none; stroke-dashoffset: 0; }
+  .splash-logo .lm-dot { animation: none; transform: none; }
+}
+
+/* ==========================================================================
+   Settings: language, appearance, Liquid Glass
+   ========================================================================== */
+.pref-row { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-top: 1px solid var(--border); }
+.pref-label { font: 500 0.95rem var(--font-body); }
+.pref-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.pref-choices button {
+  min-height: 40px; padding: 8px 14px; border-radius: var(--r-pill); font-size: 0.92rem;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+}
+.pref-choices button:hover { border-color: var(--field); background: var(--surface-2); color: var(--text); }
+.pref-choices button[aria-checked="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.pref-glass { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.pref-glass p { margin: 2px 0 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ==========================================================================
+   Hall of Fame sub menu
+   ========================================================================== */
+.hof-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.hof-head p { margin: 4px 0 0; }
+.hof-nav { display: inline-flex; background: var(--surface); border-radius: var(--r-pill); padding: 4px; gap: 2px; }
+.hof-nav a {
+  padding: 9px 16px; min-height: 40px; display: inline-flex; align-items: center; border-radius: var(--r-pill);
+  color: var(--steel); text-decoration: none; font: 400 0.95rem var(--font-display);
+}
+.hof-nav a:hover { color: var(--text); background: var(--surface-2); }
+.hof-nav a[aria-current="page"] { background: var(--text); color: var(--surface); }
+@media (max-width: 720px) { .hof-nav { width: 100%; } .hof-nav a { flex: 1; justify-content: center; padding: 9px 6px; } }
+
+/* ==========================================================================
+   Fridge: camera approaches, door swings open, camera glides inside
+   ========================================================================== */
+.pixel { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.fridge-stage {
+  position: relative; height: min(560px, calc(100dvh - 190px)); min-height: 440px; border-radius: var(--r-data); overflow: hidden;
+  perspective: 900px; perspective-origin: 50% 50%;
+  background:
+    linear-gradient(to bottom, transparent 70%, rgba(0, 41, 65, 0.08) 70%),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(0, 41, 65, 0.05) 31px 32px),
+    linear-gradient(#f6fbfd, #e3eff5);
+}
+.fridge-cam {
+  position: absolute; left: 50%; top: 50%; width: 224px; height: 400px; margin: -200px 0 0 -112px;
+  transform-style: preserve-3d; transform: translateZ(-1500px) rotateY(24deg);
+}
+.fridge { position: absolute; inset: 0; transform-style: preserve-3d; }
+.fridge-freezer { position: absolute; left: 0; top: 0; width: 224px; height: 112px; }
+.fridge-inside, .fridge-door { position: absolute; left: 0; top: 112px; width: 224px; height: 288px; }
+.fridge-door { transform-style: preserve-3d; transform-origin: 0 50%; }
+.door-front, .door-back { position: absolute; inset: 0; backface-visibility: hidden; }
+.door-back { transform: rotateY(180deg); }
+.fridge-side {
+  position: absolute; top: 0; left: 224px; width: 64px; height: 400px; transform-origin: 0 50%; transform: rotateY(90deg);
+  background: linear-gradient(90deg, #a8bccb, #8ea4b3); box-shadow: inset 0 0 0 8px #1d3446;
+}
+.fridge-shadow {
+  position: absolute; left: -20px; right: -20px; bottom: -22px; height: 26px; border-radius: 50%;
+  background: radial-gradient(rgba(0, 26, 43, 0.35), transparent 70%); transform: translateZ(-40px);
+}
+.fridge-view {
+  position: absolute; inset: 0; opacity: 0; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: space-evenly; padding: 28px 22px 22px;
+  background: linear-gradient(#fffbe6, #f3fbff 120px, #eaf5fa);
+  box-shadow: inset 0 0 0 12px #cfe2ec, inset 0 0 0 16px #1d3446;
+  image-rendering: pixelated;
+}
+.fridge-light {
+  position: absolute; left: 50%; top: 16px; width: 120px; height: 10px; margin-left: -60px;
+  background: #fff6c9; box-shadow: 0 0 40px 22px rgba(255, 246, 201, 0.75);
+}
+.shelf {
+  position: relative; display: flex; align-items: flex-end; gap: 10px; min-height: 76px; padding: 0 10px;
+  border-bottom: 8px solid #a9c6d4; box-shadow: 0 6px 0 #8fb0c0;
+}
+.shelf-can { width: 40px; height: 72px; display: block; transform-origin: 50% 100%; }
+.fridge-empty {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(320px, 80%);
+  margin: 0; padding: 14px 16px; text-align: center; background: rgba(255, 255, 255, 0.92); color: #002941;
+  border: 4px solid #1d3446; font: 400 0.95rem var(--font-display);
+}
+.fridge-empty a { color: #002941; }
+.fridge-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+
+.fridge-stage.play .fridge-cam { animation: fr-approach 1s cubic-bezier(0.2, 0.7, 0.2, 1) forwards, fr-dive 0.95s cubic-bezier(0.6, 0, 0.8, 0.4) 2s forwards; }
+.fridge-stage.play .fridge-door { animation: fr-door 0.85s cubic-bezier(0.3, 0.1, 0.2, 1) 1.05s forwards; }
+.fridge-stage.play .fridge-view { animation: fr-view 0.5s ease-out 2.65s forwards; }
+.fridge-stage.play .fridge-light { animation: fr-flicker 0.6s steps(2) 2.7s 2; }
+.fridge-stage.play .shelf-can { animation: fr-can 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) calc(2.9s + var(--i) * 0.06s) both; }
+@keyframes fr-approach { from { transform: translateZ(-1500px) rotateY(24deg); } to { transform: translateZ(0) rotateY(-8deg); } }
+@keyframes fr-door { from { transform: rotateY(0); } to { transform: rotateY(-118deg); } }
+@keyframes fr-dive {
+  from { transform: translateZ(0) rotateY(-8deg); opacity: 1; }
+  80% { opacity: 1; }
+  to { transform: translateY(-56px) translateZ(860px) rotateY(0); opacity: 0; }
+}
+@keyframes fr-view { to { opacity: 1; pointer-events: auto; } }
+@keyframes fr-flicker { 50% { opacity: 0.3; } }
+@keyframes fr-can { from { transform: translateY(-14px) scale(0.6); opacity: 0; } }
+.fridge-stage.skip .fridge-cam { display: none; }
+.fridge-stage.skip .fridge-view { opacity: 1; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .fridge-stage .fridge-cam { display: none; }
+  .fridge-stage .fridge-view { opacity: 1; pointer-events: auto; animation: none !important; }
+  .fridge-stage .shelf-can { animation: none !important; }
+}
+
+/* ==========================================================================
+   Shop
+   ========================================================================== */
+.shop-balance { border-radius: var(--r-data); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.shop-balance p { margin: 0; }
+.shop-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+@media (max-width: 720px) { .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.shop-item { border-radius: var(--r-data); display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 18px 14px 14px; }
+.shop-can {
+  width: 100%; height: 120px; display: grid; place-items: center; border-radius: 14px;
+  background: radial-gradient(circle at 50% 70%, color-mix(in srgb, var(--can) 35%, transparent), transparent 70%);
+}
+.shop-can .can { width: 50px; height: 90px; }
+.shop-item:hover .wobble { animation: can-wobble 0.6s ease-in-out; }
+.shop-item h3 { margin: 0; font: 400 1rem var(--font-display); }
+.shop-price { display: flex; align-items: center; gap: 4px; margin: 0; font: 400 0.95rem var(--font-display); }
+.shop-price span { margin-left: 4px; }
+.coin { width: 14px; height: 14px; border-radius: 50%; display: inline-block; background: linear-gradient(135deg, #fff1a8, #b8860b); box-shadow: inset 0 0 0 1.5px rgba(122, 88, 0, 0.5); }
+@keyframes can-wobble { 25% { transform: rotate(-8deg); } 50% { transform: rotate(6deg); } 75% { transform: rotate(-3deg); } }
+@media (prefers-reduced-motion: reduce) { .shop-item:hover .wobble { animation: none; } }
+
+/* ==========================================================================
+   Liquid Glass (optional, Settings): glass only on the floating functional layer –
+   top bar, tab bar, menus, dialogs, sheet, save bar, toasts. Content stays opaque.
+   Brand colour moves into the content layer as a soft ambient background the glass picks up.
+   ========================================================================== */
+:root { --glass-fill: rgba(255, 255, 255, 0.7); --glass-strong: rgba(255, 255, 255, 0.78); --glass-edge: rgba(255, 255, 255, 0.85); --glass-shadow: 0 10px 34px rgba(0, 41, 65, 0.16); --glass-pill: rgba(255, 255, 255, 0.75); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --glass-fill: rgba(10, 52, 79, 0.66); --glass-strong: rgba(8, 44, 68, 0.78); --glass-edge: rgba(255, 255, 255, 0.16); --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.45); --glass-pill: rgba(255, 255, 255, 0.14); }
+}
+:root[data-theme="dark"] { --glass-fill: rgba(10, 52, 79, 0.66); --glass-strong: rgba(8, 44, 68, 0.78); --glass-edge: rgba(255, 255, 255, 0.16); --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.45); --glass-pill: rgba(255, 255, 255, 0.14); }
+html.glass body {
+  background:
+    radial-gradient(60vmax 40vmax at 8% 0%, color-mix(in srgb, var(--ivory) 85%, transparent), transparent 60%),
+    radial-gradient(40vmax 30vmax at 100% 25%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 65%),
+    radial-gradient(60vmax 40vmax at 40% 100%, color-mix(in srgb, var(--ivory) 70%, transparent), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+html.glass .nav, html.glass .user-menu, html.glass dialog, html.glass .save-bar,
+html.glass .toast, html.glass .saved-box, html.glass body.sheet-open .entry-sheet, html.glass .topbar::before {
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+}
+/* top bar: glass with a scroll-edge fade instead of a solid colour. The blur sits on a pseudo layer:
+   a backdrop-filter on the bar itself would make it the containing block of the fixed tab bar inside it. */
+html.glass .topbar { background: transparent; border-bottom-color: transparent; }
+html.glass .topbar::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--glass-fill);
+  box-shadow: inset 0 -1px 0 var(--glass-edge), 0 8px 24px -18px rgba(0, 41, 65, 0.4);
+}
+/* desktop navigation capsule */
+html.glass .nav { background: var(--glass-pill); box-shadow: inset 0 0 0 1px var(--glass-edge); }
+html.glass .nav a[aria-current="page"] { background: var(--glass-strong); box-shadow: 0 2px 10px rgba(0, 41, 65, 0.12), inset 0 0 0 1px var(--glass-edge); }
+/* menus, dialogs, sheet, save bar, toasts */
+html.glass .user-menu, html.glass .save-bar, html.glass .saved-box, html.glass .toast {
+  background: var(--glass-strong); box-shadow: var(--glass-shadow), inset 0 0 0 1px var(--glass-edge);
+}
+html.glass .user-menu { border-radius: 22px; }
+html.glass .save-bar { border-radius: 26px; }
+html.glass dialog { background: var(--glass-strong); border-radius: 28px; box-shadow: var(--glass-shadow), inset 0 0 0 1px var(--glass-edge); }
+html.glass dialog::backdrop { background: rgba(0, 26, 43, 0.3); }
+html.glass body.sheet-open .entry-sheet { background: var(--glass-strong) !important; border-radius: 30px 30px 0 0 !important; box-shadow: 0 -12px 40px rgba(0, 41, 65, 0.2), inset 0 1px 0 var(--glass-edge) !important; }
+html.glass .btn-primary, html.glass .btn-secondary, html.glass .pref-choices button, html.glass .hof-nav a { border-radius: var(--r-pill); }
+@media (max-width: 720px) {
+  /* floating tab bar capsule, inset from the edges like iOS */
+  html.glass .nav {
+    left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom));
+    padding: 6px; border-radius: 32px; border-top: 0;
+    background: var(--glass-fill);
+    box-shadow: var(--glass-shadow), inset 0 0 0 1px var(--glass-edge), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  html.glass .nav a { border-radius: 26px; }
+  html.glass .nav a[aria-current="page"] { background: var(--glass-pill); box-shadow: inset 0 0 0 1px var(--glass-edge); }
+  html.glass .nav a[aria-current="page"] .nav-icon { background: transparent; }
+  html.glass .save-bar { bottom: calc(92px + env(safe-area-inset-bottom)); }
+  html.glass .container { padding-bottom: calc(118px + env(safe-area-inset-bottom)); }
+}
+/* accessibility: opaque fallbacks */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html.glass .topbar::before, html.glass .nav, html.glass .user-menu, html.glass dialog, html.glass .save-bar,
+  html.glass .toast, html.glass .saved-box, html.glass body.sheet-open .entry-sheet {
+    -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface) !important;
+  }
+  html.glass body { background: var(--bg); }
+}
+
+.tp-last-label { display: none; }
+@media (max-width: 720px) { .tp-last-label { display: inline; } }

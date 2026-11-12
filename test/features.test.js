@@ -100,7 +100,7 @@ async function setup() {
     return { status: url.includes('gone') ? 410 : 201 };
   };
   const notifier = createNotifier(db, { subject: 'mailto:test@example.com', fetchImpl });
-  const server = http.createServer(createApp({ db, notifier, publicDir: path.join(__dirname, '..', 'public') }));
+  const server = http.createServer(createApp({ db, notifier, health: true, publicDir: path.join(__dirname, '..', 'public') }));
   await new Promise((r) => server.listen(0, r));
   const base = `http://127.0.0.1:${server.address().port}`;
   function client() {

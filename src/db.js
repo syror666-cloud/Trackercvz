@@ -257,6 +257,16 @@ CREATE TABLE IF NOT EXISTS workout_sets (
   reps           INTEGER
 );
 CREATE INDEX IF NOT EXISTS workout_sets_key ON workout_sets (exercise_key, workout_id);
+
+-- Fridge: energy drinks bought with medals in the Hall of Fame shop.
+CREATE TABLE IF NOT EXISTS fridge_items (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  flavor      TEXT NOT NULL,
+  cost        INTEGER NOT NULL,
+  bought_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS fridge_client ON fridge_items (client_id, id);
 `;
 
 function openDb(file) {
@@ -288,7 +298,7 @@ function migrate(db) {
            WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
 
   addColumns(db, 'checkins', [['highlights', "TEXT NOT NULL DEFAULT '[]'"]]);
-  addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT'], ['seen_release', 'TEXT']]);
+  addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT'], ['seen_release', 'TEXT'], ['prefs', 'TEXT']]);
 
   // Starter extra measurements: belly circumference for diets, gym PRs for building muscle.
   if (!db.prepare("SELECT 1 FROM settings WHERE key = 'metrics_seeded'").get()) {

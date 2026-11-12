@@ -25,7 +25,7 @@
   const num = (v, d = 0) =>
     v === null || v === undefined || Number.isNaN(v)
       ? '–'
-      : Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+      : Number(v).toLocaleString((window.I18N ? I18N.locale : 'de-DE'), { minimumFractionDigits: d, maximumFractionDigits: d });
 
   const signed = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '±') + num(Math.abs(v), d);
 
@@ -36,7 +36,7 @@
   }
 
   function fmtDate(s, opts) {
-    return new Date(`${s}T12:00:00`).toLocaleDateString('de-DE', opts || { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    return new Date(`${s}T12:00:00`).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), opts || { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
   function relDay(s) {
@@ -141,7 +141,7 @@
   }
 
   /** Small brass line above page titles, e.g. "Mittwoch, 11. November". */
-  const todayLong = () => new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const todayLong = () => new Date().toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), { weekday: 'long', day: 'numeric', month: 'long' });
   const eyebrow = (text) => `<p class="eyebrow">${esc(text)}</p>`;
 
   /** Greeting by time of day: morning until 11, midday until 14, afternoon until 18, evening until 23. */
@@ -190,19 +190,20 @@
 
 
   // ---------- "What's new": shown once per person after an update (remembered on the server) ----------
-  const RELEASE = '2026-11-training-hof';
+  const RELEASE = '2026-11-stayontrack';
   const WHATS_NEW = {
     client: [
-      ['🏋️', 'Trainingsplan', 'Neuer Tab „Training“: Split wählen, Übungen anpassen und Gewichte tracken – deine letzten Werte stehen schon drin.'],
-      ['📈', 'Trainingshistorie', 'Für jede Übung ein Graph, wie sich dein Gewicht entwickelt.'],
-      ['🏆', 'Hall of Fame', 'Über dein Profilbild oben rechts: Medaillen für deine Erfolge.'],
-      ['✨', 'Neue Übersicht', 'Die Karte „Heute“ und kompakte Werte mit Mini-Grafiken.'],
+      ['✨', 'Neuer Name: StayOnTrack', 'Mit neuem, schlichtem Logo.'],
+      ['🌍', 'Sprache & Erscheinungsbild', 'In den Einstellungen: Deutsch, Englisch, Spanisch oder Italienisch – und Hell, Dunkel oder wie das System.'],
+      ['🫧', 'Liquid Glass', 'Optional in den Einstellungen: gläserne Leisten und Menüs wie im aktuellen iOS.'],
+      ['🧊', 'Kühlschrank & Shop', 'Hall of Fame jetzt unter Konto. Tausche Medaillen im Shop gegen Dosen für deinen Kühlschrank.'],
     ],
     coach: [
-      ['🏋️', 'Trainingspläne', 'Neuer Tab beim Klienten: Plan ansehen, bearbeiten und Trainingshistorie je Übung.'],
-      ['🏆', 'Hall of Fame', 'Beim Klienten: seine Medaillen und wie nah er an den nächsten ist.'],
-      ['✅', 'Zu erledigen', 'Dashboard zeigt nur offene Aufgaben, Push-Einstellungen sind eingeklappt.'],
-      ['👁️', 'Besser lesbar', 'Mehr Kontrast bei grauen Texten und Eingabefeldern.'],
+      ['✨', 'Neuer Name: StayOnTrack', 'Mit neuem, schlichtem Logo.'],
+      ['🌍', 'Sprache & Erscheinungsbild', 'Unter Konto: Deutsch, Englisch, Spanisch oder Italienisch – und Hell, Dunkel oder wie das System.'],
+      ['🫧', 'Liquid Glass', 'Optional unter Konto: gläserne Leisten und Menüs wie im aktuellen iOS.'],
+      ['🧊', 'Kühlschrank', 'In der Hall of Fame deiner Klienten siehst du, was sie sich mit Medaillen gegönnt haben.'],
+      ['⏸️', 'Apple Health', 'Apple Health ist vorerst deaktiviert.'],
     ],
   };
   let whatsNewChecked = false;
@@ -222,10 +223,10 @@
     dlg.className = 'whats-new';
     dlg.setAttribute('aria-labelledby', 'wn-title');
     dlg.innerHTML = `
-      <div class="wn-head"><span class="wn-badge">Neu</span><h2 id="wn-title">Das ist neu im Thabstracker</h2></div>
+      <div class="wn-head"><span class="wn-badge">Neu</span><h2 id="wn-title">Das ist neu: StayOnTrack</h2></div>
       <ul class="wn-list">${items.map(([icon, title, text]) => `<li><span class="wn-icon" aria-hidden="true">${icon}</span><div><strong>${esc(title)}</strong><p>${esc(text)}</p></div></li>`).join('')}</ul>
       <div class="wn-actions">
-        ${me.role === 'coach' ? '' : '<button type="button" class="btn-secondary" data-wn-go>Zum Trainingsplan</button>'}
+        ${me.role === 'coach' ? '' : '<button type="button" class="btn-secondary" data-wn-go>Zum Shop</button>'}
         <button type="button" class="btn-primary" data-wn-ok>Verstanden</button>
       </div>`;
     document.body.appendChild(dlg);
@@ -237,7 +238,7 @@
       api('POST', '/api/me/release', { release: RELEASE }).catch(() => {});
       dlg.close();
       dlg.remove();
-      if (go) location.hash = '#/training';
+      if (go) location.hash = '#/account/fame/shop';
     };
     dlg.querySelector('[data-wn-ok]').addEventListener('click', () => dismiss(false));
     const go = dlg.querySelector('[data-wn-go]');
@@ -261,6 +262,7 @@
     } catch {
       me = null;
     }
+    if (me) applyPrefs(me.prefs);
     try {
       await route();
     } finally {
@@ -278,7 +280,8 @@
   }
 
   /** Placeholder while a page loads: the small pulsing logo instead of an empty page. */
-  const LOADING = '<div class="page-loading" role="status" aria-label="Lädt"><img src="/icon-192.png" alt=""><span></span></div>';
+  const LOGO = '<svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><rect class="lm-tile" width="64" height="64" rx="18"/><circle cx="32" cy="32" r="17" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="86.04 106.81" transform="rotate(-10 32 32)" class="lm-ring"/><circle cx="44.02" cy="19.98" r="5.2" class="lm-dot"/></svg>';
+  const LOADING = '<div class="page-loading" role="status" aria-label="Lädt">' + LOGO + '<span></span></div>';
 
   function setView(html) {
     cleanups.forEach((fn) => fn());
@@ -296,16 +299,18 @@
     }
     topbar.hidden = false;
     renderUserBadge();
-    if (location.hash === '#/account') {
+    if (location.hash === '#/fame') return location.replace('#/account/fame');
+    if (location.hash.startsWith('#/account')) {
       renderNav();
       if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
       refreshUnread();
-      return renderAccount();
+      const fame = me.role === 'client' && location.hash.match(/^#\/account\/fame(?:\/(fridge|shop))?$/);
+      return renderAccount(fame ? fame[1] || 'medals' : null);
     }
     renderNav();
     if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
     refreshUnread();
-    const m = location.hash.match(/^#\/client\/(\d+)(?:\/(chat|nutrition|fame|training(?:\/history)?))?/);
+    const m = location.hash.match(/^#\/client\/(\d+)(?:\/(chat|nutrition|fame(?:\/fridge)?|training(?:\/history)?))?/);
     if (me.role === 'coach') {
       if (m) return renderCoachClient(Number(m[1]), m[2] || 'overview');
       if (location.hash === '#/admin') return renderAdmin();
@@ -319,7 +324,6 @@
     if (location.hash === '#/chat') return renderClientChat();
     if (location.hash === '#/settings') return renderClientSettings();
     if (location.hash === '#/nutrition') return renderClientNutrition();
-    if (location.hash === '#/fame') return renderHallOfFame();
     if (location.hash === '#/training' || location.hash === '#/training/history') return renderClientTraining(location.hash === '#/training/history');
     return renderClientHome();
   }
@@ -333,7 +337,7 @@
       me.role === 'coach'
         ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash.startsWith('#/messages') ? '#/messages' : location.hash === '#/admin' ? '#/admin' : '#/'
         : location.hash.startsWith('#/training') ? '#/training' : ['#/chat', '#/settings', '#/nutrition'].includes(location.hash) ? location.hash : '#/';
-    if (location.hash === '#/account' || location.hash === '#/fame') current = null; // these live in the profile menu
+    if (location.hash.startsWith('#/account')) current = null; // the account page lives in the profile menu
     nav.innerHTML = links
       .map(
         ([href, label, badge]) =>
@@ -365,7 +369,6 @@
       el.classList.toggle('has-img', Boolean(me.avatar));
     });
     document.getElementById('menu-name').textContent = me.displayName;
-    document.getElementById('menu-fame').hidden = me.role !== 'client';
     document.getElementById('menu-role').textContent = `@${me.username} · ${me.role === 'coach' ? 'Coach' : 'Klient'}`;
   }
 
@@ -404,7 +407,6 @@
     }
   });
   document.getElementById('menu-account').addEventListener('click', () => setMenu(false));
-  document.getElementById('menu-fame').addEventListener('click', () => setMenu(false));
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
     setMenu(false);
@@ -435,9 +437,21 @@
   }
 
   // ---------- account: profile picture, name, username, password ----------
-  function renderAccount() {
+  function renderAccount(fameSub) {
+    const tabs = me.role === 'client'
+      ? `<nav class="tabs" aria-label="Konto">
+          <a href="#/account"${fameSub ? '' : ' aria-current="page"'}>Profil</a>
+          <a href="#/account/fame"${fameSub ? ' aria-current="page"' : ''}>Hall of Fame</a>
+        </nav>`
+      : '';
+    const head = `<div class="page-head"><div>${eyebrow(me.role === 'coach' ? 'Coach' : 'Dein Profil')}<h1>Konto</h1></div></div>${tabs}`;
+    if (fameSub) {
+      setView(`${head}<div id="fame">${LOADING}</div>`);
+      mountHallOfFame(document.getElementById('fame'), { base: '#/account/fame', sub: fameSub });
+      return;
+    }
     setView(`
-      <div class="page-head"><div>${eyebrow(me.role === 'coach' ? 'Coach' : 'Dein Profil')}<h1>Konto</h1></div></div>
+      ${head}
       <div class="account-grid">
         <section class="card account-photo">
           <div class="avatar avatar-xl ${me.avatar ? 'has-img' : ''}" data-avatar-preview>${avatarHtml(me)}</div>
@@ -463,7 +477,9 @@
           <p class="muted small">Ändere dein Passwort regelmäßig und nutze es nirgendwo sonst.</p>
           <button type="button" class="btn-secondary" data-password>Passwort ändern</button>
         </section>
+        ${me.role === 'coach' ? '<section class="card" id="prefs-card"></section>' : ''}
       </div>`);
+    if (me.role === 'coach') mountPrefsCard(document.getElementById('prefs-card'));
 
     const fileInput = app.querySelector('[data-avatar-file]');
     fileInput.addEventListener('change', async () => {
@@ -534,13 +550,13 @@
     setView(`
       <div class="login-wrap">
         <div class="login-intro">
-          ${eyebrow('Thabstracker · Coaching')}
+          ${eyebrow('StayOnTrack · Coaching')}
           <h1>Fortschritt,<br>präzise <em>festgehalten.</em></h1>
           <p>Gewicht, Schritte, Schlaf und Ernährung an einem Ort. Dein Coach sieht mit – du bleibst dran.</p>
           <div class="login-facts"><span>Täglich tracken</span><span>Wöchentlicher Check-in</span><span>Persönlicher Plan</span></div>
         </div>
         <form class="card login-card" id="login-form">
-          <img class="login-logo" src="/logo.jpg" alt="Thabstracker" width="900" height="600">
+          <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
           <div class="field"><label for="u">Benutzername</label>
             <input id="u" name="username" autocomplete="username" autocapitalize="none" required></div>
           <div class="field"><label for="p">Passwort</label>
@@ -558,6 +574,7 @@
       try {
         me = (await api('POST', '/api/login', { username: form.username.value, password: form.password.value })).user;
         whatsNewChecked = false; // another person may log in on this device
+        applyPrefs(me.prefs);
         route();
         setTimeout(maybeShowWhatsNew, 450);
       } catch (err) {
@@ -876,7 +893,7 @@
       root.innerHTML = '';
       return;
     }
-    const date = new Date(ci.createdAt).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+    const date = new Date(ci.createdAt).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), { weekday: 'long', day: '2-digit', month: '2-digit' });
     const hasChanges = ci.changes.length > 0;
     const changesHtml = hasChanges
       ? `<div class="proposal"><div class="small muted" style="margin-bottom:6px">Vorgeschlagene Anpassungen für deinen Plan</div>
@@ -886,7 +903,7 @@
       : '';
     const state =
       ci.status === 'accepted'
-        ? `<p class="good small" style="margin:10px 0 0"><strong>✓ Angenommen</strong> am ${esc(new Date(ci.acceptedAt).toLocaleDateString('de-DE'))} – dein Plan ist aktualisiert.</p>`
+        ? `<p class="good small" style="margin:10px 0 0"><strong>✓ Angenommen</strong> am ${esc(new Date(ci.acceptedAt).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE')))} – dein Plan ist aktualisiert.</p>`
         : '';
     root.innerHTML = `
       <section class="card checkin-card">
@@ -1419,8 +1436,8 @@
   };
 
   const IOS_HINT =
-    'Auf dem iPhone funktionieren Push-Nachrichten nur, wenn Thabstracker auf dem Home-Bildschirm liegt: ' +
-    'In Safari unten auf das Teilen-Symbol tippen → „Zum Home-Bildschirm“ → danach Thabstracker über das neue App-Symbol öffnen und hier aktivieren.';
+    'Auf dem iPhone funktionieren Push-Nachrichten nur, wenn StayOnTrack auf dem Home-Bildschirm liegt: ' +
+    'In Safari unten auf das Teilen-Symbol tippen → „Zum Home-Bildschirm“ → danach StayOnTrack über das neue App-Symbol öffnen und hier aktivieren.';
 
   /** Card with push status + buttons. Used on the client settings page and for the coach. */
   async function mountPushCard(root, { title, intro }) {
@@ -1529,106 +1546,19 @@
     }
   }
 
-  // ---------- client: settings (push + Apple Health) ----------
+  // ---------- client: settings (push + appearance) ----------
   async function renderClientSettings() {
     setView(`
       <div class="page-head"><div>${eyebrow('Konto')}<h1>Einstellungen</h1></div></div>
       <div class="settings-grid">
         <section class="card" id="push-card"><p class="muted">Lade…</p></section>
-        <section class="card" id="health-card"><p class="muted">Lade…</p></section>
+        <section class="card" id="prefs-card"></section>
       </div>`);
     mountPushCard(document.getElementById('push-card'), {
       title: 'Push-Benachrichtigungen',
       intro: 'Erinnerungen deines Coaches und neue Chat-Nachrichten direkt aufs Handy.',
     }).catch((err) => toast(err.message, true));
-    mountHealthCard(document.getElementById('health-card'));
-  }
-
-  async function mountHealthCard(root, freshToken) {
-    const status = await api('GET', '/api/health/token');
-    const importUrl = `${location.origin}/api/health/import`;
-    const fmtTs = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-    let statusHtml = '<span class="badge">Nicht verbunden</span>';
-    if (status.linked) {
-      statusHtml = status.lastUsedAt
-        ? `<span class="badge good">Zuletzt übertragen: ${esc(fmtTs(status.lastUsedAt))}</span>`
-        : '<span class="badge warn">Eingerichtet, noch keine Übertragung</span>';
-    }
-
-    const keyBlock = freshToken
-      ? `<div class="field"><label>Dein persönlicher Schlüssel <span class="muted">(wird nur jetzt angezeigt!)</span></label>
-           <div class="copy-field"><code>${esc(freshToken)}</code><button type="button" class="btn-secondary btn-sm" data-copy="${esc(freshToken)}">Kopieren</button></div></div>`
-      : status.linked
-        ? '<p class="small muted">Dein Schlüssel ist eingerichtet. Hast du ihn verloren oder ein neues Handy? Dann erzeuge einen neuen – der alte wird damit ungültig.</p>'
-        : '';
-
-    root.innerHTML = `
-      <div class="row-between" style="margin-bottom:8px"><h2>Apple Health (iPhone)</h2>${statusHtml}</div>
-      <p class="muted small">Webseiten haben keinen direkten Zugriff auf Apple Health. Über die Apple-App <strong>„Kurzbefehle“</strong>
-        überträgt dein iPhone deine Schritte (und auf Wunsch dein Gewicht) aber automatisch jeden Tag hierher.</p>
-      ${keyBlock}
-      <div class="field"><label>Adresse für den Kurzbefehl</label>
-        <div class="copy-field"><code>${esc(importUrl)}</code><button type="button" class="btn-secondary btn-sm" data-copy="${esc(importUrl)}">Kopieren</button></div></div>
-      <div class="row" style="margin-bottom:12px">
-        <button type="button" class="${status.linked ? 'btn-secondary' : 'btn-primary'}" data-health="new">${status.linked ? 'Neuen Schlüssel erzeugen' : 'Verbindung einrichten'}</button>
-        ${status.linked ? '<button type="button" class="btn-ghost" data-health="off">Verbindung trennen</button>' : ''}
-      </div>
-      <details class="howto"${freshToken ? ' open' : ''}>
-        <summary>Anleitung: Kurzbefehl einrichten (ca. 5 Minuten, einmalig)</summary>
-        <ol>
-          <li>Oben auf <strong>„Verbindung einrichten“</strong> tippen und den Schlüssel kopieren.</li>
-          <li>App <strong>Kurzbefehle</strong> öffnen → unten <strong>„Automation“</strong> → <strong>„+“</strong> → <strong>„Tageszeit“</strong>.
-            Uhrzeit z. B. <strong>21:30</strong>, <strong>Täglich</strong>, und <strong>„Sofort ausführen“</strong> wählen → <strong>Weiter</strong> → <strong>„Neuer leerer Kurzbefehl“</strong>.</li>
-          <li>Aktion <strong>„Health-Stichproben suchen“</strong> <span class="muted">(engl. „Find Health Samples“)</span> hinzufügen:
-            Typ <strong>Schritte</strong>, Filter <strong>„Startdatum ist heute“</strong>, <strong>„Gruppieren nach: Tag“</strong>.</li>
-          <li>Aktion <strong>„Inhalte von URL abrufen“</strong> <span class="muted">(„Get Contents of URL“)</span> hinzufügen und die
-            <strong>Adresse</strong> von oben einfügen. Auf den Pfeil tippen:
-            <ul>
-              <li>Methode: <strong>POST</strong></li>
-              <li>Header hinzufügen: Schlüssel <code>Authorization</code>, Wert <code>Bearer </code> + dein Schlüssel
-                <span class="muted">(Bearer, Leerzeichen, Schlüssel)</span></li>
-              <li>Anforderungstext: <strong>JSON</strong> → Feld hinzufügen → Typ <strong>Zahl</strong>, Schlüssel <code>steps</code>,
-                Wert: Variable <strong>„Health-Stichproben“</strong></li>
-            </ul></li>
-          <li>Fertig. Zum Testen den Kurzbefehl einmal von Hand starten – hier oben erscheint dann „Zuletzt übertragen“.</li>
-        </ol>
-        <p class="small muted"><strong>Gewicht mit übertragen (optional, z. B. von einer smarten Waage):</strong> eine zweite
-          „Health-Stichproben suchen“-Aktion mit Typ <strong>Gewicht</strong>, sortiert nach <strong>Startdatum, Neueste zuerst</strong>,
-          <strong>Limit 1</strong>, und im JSON ein zweites Zahl-Feld <code>weight</code> mit diesem Ergebnis.</p>
-        <p class="small muted">Die Übertragung ergänzt nur Schritte bzw. Gewicht des Tages – deine Notizen und übrigen Werte bleiben erhalten.
-          Läuft die Automation mehrmals am Tag, gilt der letzte Wert.</p>
-        <p class="small muted"><strong>Android:</strong> Eine direkte Anbindung an Google Health Connect ist über eine Webseite ebenfalls nicht möglich.</p>
-      </details>`;
-
-    root.querySelectorAll('[data-copy]').forEach((b) =>
-      b.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(b.dataset.copy);
-          toast('Kopiert');
-        } catch {
-          toast('Kopieren nicht möglich – bitte manuell markieren', true);
-        }
-      })
-    );
-    root.querySelector('[data-health=new]').addEventListener('click', async () => {
-      if (status.linked && !confirm('Neuen Schlüssel erzeugen? Der bisherige Kurzbefehl funktioniert dann erst wieder mit dem neuen Schlüssel.')) return;
-      try {
-        const { token } = await api('POST', '/api/health/token');
-        mountHealthCard(root, token);
-      } catch (err) {
-        toast(err.message, true);
-      }
-    });
-    const off = root.querySelector('[data-health=off]');
-    if (off) {
-      off.addEventListener('click', async () => {
-        if (!confirm('Verbindung trennen? Der Kurzbefehl kann danach keine Daten mehr übertragen.')) return;
-        await api('DELETE', '/api/health/token');
-        toast('Verbindung getrennt');
-        mountHealthCard(root);
-      });
-    }
+    mountPrefsCard(document.getElementById('prefs-card'));
   }
 
   // ---------- chat ----------
@@ -1660,7 +1590,7 @@
     let stopped = false;
     let scrolledOnce = false;
 
-    const timeOf = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const timeOf = (iso) => new Date(iso).toLocaleTimeString((window.I18N ? I18N.locale : 'de-DE'), { hour: '2-digit', minute: '2-digit' });
     const dayOf = (iso) => {
       const d = new Date(iso);
       const local = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -1759,9 +1689,9 @@
       const d = new Date(iso);
       const local = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
       const diff = daysBetween(local, todayStr());
-      if (diff === 0) return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      if (diff === 0) return d.toLocaleTimeString((window.I18N ? I18N.locale : 'de-DE'), { hour: '2-digit', minute: '2-digit' });
       if (diff === 1) return 'gestern';
-      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      return d.toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), { day: '2-digit', month: '2-digit' });
     };
     const initials = (name) => name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
     const avatarOf = (c) =>
@@ -2010,13 +1940,13 @@
 
     const last = rv.checkins[0];
     const lastHtml = last
-      ? `<div class="small muted">Letzter Check-in: ${esc(new Date(last.createdAt).toLocaleDateString('de-DE'))} ·
+      ? `<div class="small muted">Letzter Check-in: ${esc(new Date(last.createdAt).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE')))} ·
           ${last.status === 'accepted' ? '<span class="good">Anpassungen angenommen</span>' : last.changes.length ? '<span class="warn">Anpassungen noch offen</span>' : 'ohne Anpassungen'}
           ${last.seenAt ? ' · gelesen' : ' · noch nicht gelesen'}</div>`
       : '<div class="small muted">Erster Check-in für diesen Klienten.</div>';
     const msgsHtml = rv.clientMessages.length
       ? `<div class="client-msgs"><div class="small muted" style="margin-bottom:6px">Nachrichten von ${esc(rv.client.displayName)} seit dem letzten Check-in</div>
-          ${rv.clientMessages.map((m) => `<div class="msg theirs">${esc(m.body)}<time>${esc(new Date(m.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</time></div>`).join('')}
+          ${rv.clientMessages.map((m) => `<div class="msg theirs">${esc(m.body)}<time>${esc(new Date(m.createdAt).toLocaleString((window.I18N ? I18N.locale : 'de-DE'), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</time></div>`).join('')}
           <a class="small" href="#/client/${selected.id}/chat">Zum Chat →</a></div>`
       : '';
 
@@ -2320,7 +2250,7 @@
       <div class="row-between"><strong>${esc(r.subject.split(' · ')[0])}</strong><span class="badge ${cls}">${label}</span></div>
       <div class="small">→ ${esc(wish)}</div>
       ${r.coachNote ? `<div class="small muted">Coach: ${esc(r.coachNote)}</div>` : ''}
-      <div class="small muted">${esc(new Date(r.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }))}${r.subject.includes(' · ') ? ` · ${esc(r.subject.split(' · ')[1])}` : ''}</div>
+      <div class="small muted">${esc(new Date(r.createdAt).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), { day: '2-digit', month: '2-digit' }))}${r.subject.includes(' · ') ? ` · ${esc(r.subject.split(' · ')[1])}` : ''}</div>
     </div>`;
   }
 
@@ -2734,7 +2664,7 @@
   }
 
   const fmtTs = (iso) =>
-    iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '–';
+    iso ? new Date(iso).toLocaleString((window.I18N ? I18N.locale : 'de-DE'), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '–';
 
   function drawActivity(ov) {
     const root = document.getElementById('activity');
@@ -3008,7 +2938,7 @@
       return;
     }
     const fmt = (iso) =>
-      new Date(iso).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: timezone });
+      new Date(iso).toLocaleString((window.I18N ? I18N.locale : 'de-DE'), { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: timezone });
     root.innerHTML = `${autoHtml}<ul class="notif-list">${notifications
       .map((n) => {
         const state = n.active
@@ -3202,7 +3132,7 @@
   }
 
   function showCredentials(name, username, password, after) {
-    const text = `Dein Zugang zum Thabstracker\nAdresse: ${location.origin}\nBenutzername: ${username}\nPasswort: ${password}`;
+    const text = `Dein Zugang zu StayOnTrack\nAdresse: ${location.origin}\nBenutzername: ${username}\nPasswort: ${password}`;
     dialog.innerHTML = `<form method="dialog">
       <h2>Zugang für ${esc(name)}</h2>
       <p class="muted small">Schick diese Daten an deinen Klienten. Das Passwort wird danach nicht mehr angezeigt.</p>
@@ -3419,7 +3349,7 @@
               const l = data.last[exKey(e.name)];
               const top = l ? l.sets.reduce((b, s) => ((s.weight ?? -1) > (b.weight ?? -1) ? s : b), l.sets[0]) : null;
               return `<li><span class="tp-view-name">${esc(e.name)}</span><span class="tp-view-target">${esc(e.sets)} × ${esc(e.reps || '–')}</span>
-                <span class="tp-view-last">${top ? fmtSet(top) : '<span class="muted">–</span>'}</span></li>`;
+                <span class="tp-view-last">${top ? `<span class="tp-last-label">Zuletzt </span>${fmtSet(top)}` : '<span class="muted">–</span>'}</span></li>`;
             }).join('') || '<li class="muted small">Noch keine Übungen – über „Plan bearbeiten“ hinzufügen.</li>'}</ul>
           </section>`;
         }).join('')}</div>
@@ -3594,7 +3524,7 @@
     </svg>`;
   }
 
-  async function mountHallOfFame(root, opts) {
+  async function mountMedals(root, opts) {
     const query = opts.userId ? `?userId=${opts.userId}` : '';
     let data;
     try {
@@ -3663,9 +3593,7 @@
       return `${(data.achievements.find((a) => a.key === k) || {}).title} ${TIER_NAMES[lvl]}`;
     });
     root.innerHTML = `${FAME_DEFS}
-      ${opts.coach ? '' : '<a class="back" href="#/">← Zurück</a>'}
-      <div class="page-head fame-page-head"><div>${eyebrow(opts.coach ? 'Erfolge' : 'Deine Erfolge')}${opts.coach ? '<h2 class="page-title-sm">Hall of Fame</h2>' : '<h1>Hall of Fame</h1>'}
-        <p class="muted">${opts.coach ? `Was ${esc(opts.clientName || 'dein Klient')} schon geschafft hat – und was als Nächstes kommt.` : 'Jede Medaille steht für etwas, das du durchgezogen hast. Ausgegraute zeigen, was als Nächstes kommt.'}</p></div></div>
+      ${hofHeader(opts, 'medals', opts.coach ? `Was ${esc(opts.clientName || 'dein Klient')} schon geschafft hat – und was als Nächstes kommt.` : 'Jede Medaille steht für etwas, das du durchgezogen hast. Ausgegraute zeigen, was als Nächstes kommt.')}
       ${freshNames.length ? `<div class="fame-new-banner" role="status">🎉 <strong>Neu freigeschaltet:</strong> ${esc(freshNames.slice(0, 3).join(', '))}${freshNames.length > 3 ? ` und ${freshNames.length - 3} weitere` : ''}</div>` : ''}
       <section class="card fame-summary">
         <div class="fame-count"><span class="fame-big">${s.earned}</span><span class="muted">von ${s.total} Medaillen</span></div>
@@ -3690,9 +3618,214 @@
     });
   }
 
-  function renderHallOfFame() {
-    setView(`<div id="fame">${LOADING}</div>`);
-    return mountHallOfFame(document.getElementById('fame'), {});
+  /** opts: { base (hash), sub: 'medals' | 'fridge' | 'shop', coach, userId, clientName } */
+  function mountHallOfFame(root, opts) {
+    if (opts.sub === 'fridge') return mountFridge(root, opts);
+    if (opts.sub === 'shop' && !opts.coach) return mountShop(root, opts);
+    return mountMedals(root, opts);
+  }
+
+  // ---------- appearance & language (per person, cached for the next start) ----------
+  const PREFS_KEY = 'sot-prefs';
+  function applyPrefs(p) {
+    if (!p) return;
+    const root = document.documentElement;
+    if (p.theme === 'light' || p.theme === 'dark') root.dataset.theme = p.theme;
+    else delete root.dataset.theme;
+    root.classList.toggle('glass', Boolean(p.glass));
+    const dark = p.theme === 'dark' || (p.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', dark ? '#002941' : '#ffffff'));
+    if (window.I18N) I18N.setLang(p.lang || 'de');
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* private mode */ }
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => me && applyPrefs(me.prefs));
+
+  const LANG_OPTIONS = [['de', 'Deutsch'], ['en', 'English'], ['es', 'Español'], ['it', 'Italiano']];
+  function mountPrefsCard(root) {
+    const p = me.prefs || { lang: 'de', theme: 'system', glass: false };
+    root.innerHTML = `
+      <h2 style="margin-bottom:6px">Darstellung</h2>
+      <p class="muted small" style="margin-top:0">Gilt für dein Konto auf allen Geräten.</p>
+      <div class="pref-row">
+        <span class="pref-label" id="pref-lang-l">Sprache</span>
+        <div class="pref-choices" role="radiogroup" aria-labelledby="pref-lang-l">
+          ${LANG_OPTIONS.map(([k, l]) => `<button type="button" role="radio" lang="${k}" aria-checked="${p.lang === k}" data-pref="lang" data-val="${k}" data-no-i18n>${l}</button>`).join('')}
+        </div>
+      </div>
+      <div class="pref-row">
+        <span class="pref-label" id="pref-theme-l">Erscheinungsbild</span>
+        <div class="pref-choices" role="radiogroup" aria-labelledby="pref-theme-l">
+          ${[['system', 'System'], ['light', 'Hell'], ['dark', 'Dunkel']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${p.theme === k}" data-pref="theme" data-val="${k}">${l}</button>`).join('')}
+        </div>
+      </div>
+      <div class="pref-row pref-glass">
+        <div><span class="pref-label">Liquid Glass</span>
+          <p class="muted small">Gläserne, durchscheinende Leisten und Menüs – angelehnt an das aktuelle iOS-Design.</p></div>
+        <label class="switch"><input type="checkbox" data-pref="glass" ${p.glass ? 'checked' : ''}><span></span><b>${p.glass ? 'An' : 'Aus'}</b></label>
+      </div>`;
+    async function save(patch) {
+      const prev = me.prefs;
+      me.prefs = { ...prev, ...patch };
+      applyPrefs(me.prefs);
+      if (patch.lang) route(); // dates and numbers follow the language too
+      else mountPrefsCard(root);
+      try {
+        const r = await api('PATCH', '/api/me/prefs', patch);
+        me.prefs = r.prefs;
+      } catch (err) {
+        me.prefs = prev;
+        applyPrefs(prev);
+        mountPrefsCard(root);
+        toast(err.message, true);
+      }
+    }
+    root.querySelectorAll('button[data-pref]').forEach((b) => b.addEventListener('click', () => save({ [b.dataset.pref]: b.dataset.val })));
+    root.querySelector('input[data-pref="glass"]').addEventListener('change', (e) => save({ glass: e.target.checked }));
+  }
+
+  // ---------- Hall of Fame: sub menu, fridge (3D glide into a pixel-art fridge) and medal shop ----------
+  function hofHeader(opts, sub, text) {
+    const link = (key, href, label) => `<a href="${href}"${sub === key ? ' aria-current="page"' : ''}>${label}</a>`;
+    return `<div class="hof-head">
+        <div>${eyebrow(opts.coach ? 'Erfolge' : 'Deine Erfolge')}<h2 class="page-title-sm">Hall of Fame</h2>
+          <p class="muted">${text}</p></div>
+        <nav class="hof-nav" aria-label="Hall of Fame">
+          ${link('medals', opts.base, 'Medaillen')}${link('fridge', `${opts.base}/fridge`, 'Kühlschrank')}${opts.coach ? '' : link('shop', `${opts.base}/shop`, 'Shop')}
+        </nav>
+      </div>`;
+  }
+
+  /** Pixel rectangles → crisp SVG. rects: [x, y, w, h, color] on a w×h grid. */
+  const pixelSvg = (w, h, rects, cls = '') =>
+    `<svg class="pixel ${cls}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" aria-hidden="true">${rects
+      .map(([x, y, rw, rh, c]) => `<rect x="${x}" y="${y}" width="${rw}" height="${rh}" fill="${c}"/>`)
+      .join('')}</svg>`;
+
+  /** A 10×18 pixel can in the flavour's colours (generic design, no brand mark). */
+  function canSvg(f, cls = '') {
+    const [body, shade, band, accent] = f.colors;
+    return pixelSvg(10, 18, [
+      [2, 0, 6, 1, '#7f8f99'], [1, 1, 8, 1, '#c3ced5'], [3, 1, 2, 1, '#eef3f6'],
+      [1, 2, 8, 14, body], [7, 2, 2, 14, shade], [2, 2, 1, 14, 'rgba(255,255,255,0.45)'],
+      [1, 6, 8, 6, band], [7, 6, 2, 6, 'rgba(0,0,0,0.12)'],
+      [3, 6, 1, 2, accent], [4, 8, 1, 2, accent], [5, 6, 1, 2, accent], [6, 8, 1, 2, accent], [4, 10, 3, 1, accent],
+      [1, 16, 8, 1, '#aab7bf'], [2, 17, 6, 1, '#7f8f99'],
+    ], `can ${cls}`);
+  }
+
+  // Fridge artwork on a 28×50 grid (8 px per pixel on screen): freezer rows 0–13, main compartment 14–49.
+  const FR = { line: '#1d3446', body: '#e9f2f6', shade: '#c4d5df', hi: '#ffffff', handle: '#8ea4b3' };
+  const fridgeDoorSvg = () => pixelSvg(28, 36, [
+    [0, 0, 28, 36, FR.line], [1, 1, 26, 34, FR.body], [24, 1, 3, 34, FR.shade], [2, 2, 1, 32, FR.hi],
+    [21, 3, 2, 10, FR.handle], [21, 3, 1, 10, '#b7c8d3'], [1, 34, 26, 1, FR.shade],
+    [6, 8, 3, 3, '#fd6e6e'], [10, 12, 3, 3, '#b6dfed'], [6, 16, 2, 2, '#002941'],
+  ], 'fridge-art');
+  const fridgeDoorBackSvg = () => pixelSvg(28, 36, [
+    [0, 0, 28, 36, FR.line], [1, 1, 26, 34, '#dbe9f0'], [3, 3, 22, 30, '#f2f8fb'],
+    [3, 10, 22, 2, '#a9c6d4'], [3, 20, 22, 2, '#a9c6d4'], [3, 30, 22, 2, '#a9c6d4'],
+    [5, 6, 3, 4, '#fff3b0'], [9, 6, 3, 4, '#ffd1d1'], [5, 16, 2, 4, '#c8f0d5'],
+  ], 'fridge-art');
+  const freezerSvg = () => pixelSvg(28, 14, [
+    [0, 0, 28, 14, FR.line], [1, 1, 26, 12, FR.body], [24, 1, 3, 12, FR.shade], [2, 2, 1, 10, FR.hi],
+    [21, 8, 2, 4, FR.handle], [1, 12, 26, 1, FR.shade],
+  ], 'fridge-art');
+  const fridgeInsideSvg = () => pixelSvg(28, 36, [
+    [0, 0, 28, 36, FR.line], [1, 1, 26, 34, '#cfe2ec'], [3, 2, 22, 32, '#f3fbff'],
+    [8, 2, 12, 2, '#fff6c9'], [6, 4, 16, 3, 'rgba(255,246,201,0.55)'],
+    [3, 13, 22, 2, '#a9c6d4'], [3, 23, 22, 2, '#a9c6d4'], [3, 31, 22, 3, '#d6e7ef'],
+  ], 'fridge-art');
+
+  async function mountFridge(root, opts) {
+    const query = opts.userId ? `?userId=${opts.userId}` : '';
+    let shop;
+    try {
+      shop = await api('GET', `/api/shop${query}`);
+    } catch (err) {
+      root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+      return;
+    }
+    const flavor = (k) => shop.flavors.find((f) => f.key === k);
+    const cans = shop.items.map((i) => flavor(i.flavor)).filter(Boolean);
+    const perShelf = 6;
+    const shelves = Math.max(3, Math.ceil(cans.length / perShelf));
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    root.innerHTML = `${hofHeader(opts, 'fridge', opts.coach ? 'Was sich dein Klient mit seinen Medaillen gegönnt hat.' : 'Dein Kühlschrank – gefüllt mit dem, was du dir mit Medaillen verdient hast.')}
+      <div class="fridge-stage ${reduce ? 'skip' : ''}" data-stage>
+        <div class="fridge-cam" aria-hidden="true">
+          <div class="fridge">
+            <div class="fridge-side"></div>
+            <div class="fridge-freezer">${freezerSvg()}</div>
+            <div class="fridge-inside">${fridgeInsideSvg()}</div>
+            <div class="fridge-door"><div class="door-front">${fridgeDoorSvg()}</div><div class="door-back">${fridgeDoorBackSvg()}</div></div>
+          </div>
+          <div class="fridge-shadow"></div>
+        </div>
+        <section class="fridge-view" aria-label="Inhalt des Kühlschranks">
+          <div class="fridge-light" aria-hidden="true"></div>
+          ${Array.from({ length: shelves }, (_, s) => `<div class="shelf">${cans.slice(s * perShelf, (s + 1) * perShelf)
+            .map((f, i) => `<span class="shelf-can" style="--i:${i}" title="${esc(f.name)}">${canSvg(f)}<span class="sr-only">${esc(f.name)}</span></span>`).join('')}</div>`).join('')}
+          ${cans.length ? '' : `<p class="fridge-empty">${opts.coach ? 'Noch leer – dein Klient hat sich noch nichts gegönnt.' : 'Noch leer. Im <a href="' + opts.base + '/shop">Shop</a> tauschst du Medaillen gegen Dosen.'}</p>`}
+        </section>
+      </div>
+      <div class="fridge-meta">
+        <span class="muted">${cans.length} ${cans.length === 1 ? 'Dose' : 'Dosen'} · ${shop.balance.available} ${shop.balance.available === 1 ? 'Medaille' : 'Medaillen'} übrig</span>
+        ${reduce ? '' : '<button type="button" class="btn-ghost btn-sm" data-replay>↻ Nochmal reingleiten</button>'}
+      </div>`;
+    const replay = root.querySelector('[data-replay]');
+    if (replay) replay.addEventListener('click', () => {
+      const stage = root.querySelector('[data-stage]');
+      stage.classList.remove('play');
+      void stage.offsetWidth; // restart the animation
+      stage.classList.add('play');
+    });
+    // bring the whole fridge into view first, then start gliding in
+    const stage = root.querySelector('[data-stage]');
+    const r = stage.getBoundingClientRect();
+    const hidden = r.top < 70 || r.bottom > innerHeight - (innerWidth <= 720 ? 90 : 10);
+    if (hidden) stage.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+    setTimeout(() => stage.classList.add('play'), hidden && !reduce ? 450 : 0);
+  }
+
+  async function mountShop(root, opts) {
+    let shop;
+    try {
+      shop = await api('GET', '/api/shop');
+    } catch (err) {
+      root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+      return;
+    }
+    function draw() {
+      const b = shop.balance;
+      root.innerHTML = `${hofHeader(opts, 'shop', 'Tausche deine Medaillen gegen eine kalte Dose für deinen Kühlschrank.')}
+        <section class="card shop-balance">
+          <div><span class="fame-big">${b.available}</span> <span class="muted">${b.available === 1 ? 'Medaille' : 'Medaillen'} verfügbar</span></div>
+          <p class="muted small">${b.earned} verdient · ${b.spent} ausgegeben</p>
+          <a class="btn btn-secondary btn-sm" href="${opts.base}/fridge">Zum Kühlschrank →</a>
+        </section>
+        <div class="shop-grid">${shop.flavors.map((f) => {
+          const can = b.available >= f.price;
+          return `<section class="card shop-item" style="--can:${f.colors[0]}">
+            <div class="shop-can">${canSvg(f, 'wobble')}</div>
+            <h3>${esc(f.name)}</h3>
+            <p class="shop-price" aria-label="${f.price} ${f.price === 1 ? 'Medaille' : 'Medaillen'}">${'<i class="coin"></i>'.repeat(f.price)}<span>${f.price}</span></p>
+            <button type="button" class="${can ? 'btn-primary' : 'btn-secondary'} btn-sm btn-block" data-buy="${f.key}" ${can ? '' : 'disabled'}>${can ? 'Kaufen' : `Noch ${f.price - b.available} ${f.price - b.available === 1 ? 'Medaille' : 'Medaillen'}`}</button>
+          </section>`;
+        }).join('')}</div>`;
+      root.querySelectorAll('[data-buy]').forEach((btn) => btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const f = shop.flavors.find((x) => x.key === btn.dataset.buy);
+        try {
+          shop = await api('POST', '/api/shop/buy', { flavor: f.key });
+          draw();
+          savedHud('Ab in den Kühlschrank', f.name);
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      }));
+    }
+    draw();
   }
 
   async function renderCoachClient(id, tab) {
@@ -3711,7 +3844,7 @@
       [{ clients }, { entries }, { goals }] = await Promise.all([
         api('GET', '/api/clients'),
         tab !== 'overview' ? { entries: [] } : api('GET', `/api/entries?userId=${id}`),
-        tab === 'chat' || tab === 'fame' || tab.startsWith('training') ? { goals: {} } : api('GET', `/api/goals?userId=${id}`).then((g) => {
+        tab === 'chat' || tab.startsWith('fame') || tab.startsWith('training') ? { goals: {} } : api('GET', `/api/goals?userId=${id}`).then((g) => {
           goalHistory = g.history;
           return g;
         }),
@@ -3727,8 +3860,7 @@
       <a class="back" href="#/">← Alle Klienten</a>
       <div class="page-head">
         <div>${eyebrow('Klient')}<h1>${esc(client.displayName)} ${catTag(client.category)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p>
-          <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}
-            ${client.healthLinked ? `<span class="badge good">❤️ Apple Health${client.healthLastUsed ? ` · ${esc(relDay(client.healthLastUsed.slice(0, 10)))}` : ' · noch keine Daten'}</span>` : ''}</div></div>
+          <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}</div></div>
         <div class="row">
           <a class="btn btn-secondary" href="/api/entries.csv?userId=${id}">CSV exportieren</a>
         </div>
@@ -3739,7 +3871,7 @@
           client.openSwaps ? ` <span class="count">${client.openSwaps}</span>` : ''
         }</a>
         <a href="#/client/${id}/training"${tab.startsWith('training') ? ' aria-current="page"' : ''}>Trainingsplan</a>
-        <a href="#/client/${id}/fame"${tab === 'fame' ? ' aria-current="page"' : ''}>Hall of Fame</a>
+        <a href="#/client/${id}/fame"${tab.startsWith('fame') ? ' aria-current="page"' : ''}>Hall of Fame</a>
         <a href="#/client/${id}/chat"${tab === 'chat' ? ' aria-current="page"' : ''}>Nachrichten${
           client.unreadMessages && tab !== 'chat' ? ` <span class="count">${client.unreadMessages}</span>` : ''
         }</a>
@@ -3751,9 +3883,9 @@
       return;
     }
 
-    if (tab === 'fame') {
+    if (tab.startsWith('fame')) {
       setView(`${head}<div id="fame">${LOADING}</div>`);
-      mountHallOfFame(document.getElementById('fame'), { userId: id, coach: true, clientName: client.displayName });
+      mountHallOfFame(document.getElementById('fame'), { userId: id, coach: true, clientName: client.displayName, base: `#/client/${id}/fame`, sub: tab === 'fame/fridge' ? 'fridge' : 'medals' });
       return;
     }
 

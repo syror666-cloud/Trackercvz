@@ -1,6 +1,6 @@
 {
-  "name": "Thabstracker",
-  "short_name": "Thabstracker",
+  "name": "StayOnTrack",
+  "short_name": "StayOnTrack",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#edf5f8",

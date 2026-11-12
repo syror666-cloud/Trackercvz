@@ -24,7 +24,7 @@
   }
 
   function fmt(v, decimals) {
-    return v.toLocaleString('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    return v.toLocaleString((window.I18N ? I18N.locale : 'de-DE'), { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   }
 
   function shortDate(n) {
@@ -33,7 +33,7 @@
   }
 
   function longDate(n) {
-    return new Date(n * DAY).toLocaleDateString('de-DE', {
+    return new Date(n * DAY).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), {
       weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
     });
   }

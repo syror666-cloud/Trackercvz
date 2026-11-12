@@ -3,24 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Thabstracker</title>
+  <title>StayOnTrack</title>
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#002941" media="(prefers-color-scheme: dark)">
-  <meta name="apple-mobile-web-app-title" content="Thabstracker">
+  <meta name="apple-mobile-web-app-title" content="StayOnTrack">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <script src="/boot.js"></script>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div id="splash" class="splash" role="status" aria-label="Thabstracker lädt">
-    <img src="/icon-512.png" alt="" width="132" height="132">
+  <div id="splash" class="splash" role="status" aria-label="StayOnTrack lädt">
+    <svg class="logo-mark splash-logo" viewBox="0 0 64 64" aria-hidden="true"><rect class="lm-tile" width="64" height="64" rx="18"/><circle cx="32" cy="32" r="17" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="86.04 106.81" transform="rotate(-10 32 32)" class="lm-ring"/><circle cx="44.02" cy="19.98" r="5.2" class="lm-dot"/></svg>
     <span class="splash-bar"><i></i></span>
   </div>
   <header class="topbar" id="topbar" hidden>
     <a class="brand" href="#/">
-      <img src="/logo.jpg" alt="" width="60" height="40">
-      <span>Thabstracker</span>
+      <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><rect class="lm-tile" width="64" height="64" rx="18"/><circle cx="32" cy="32" r="17" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="86.04 106.81" transform="rotate(-10 32 32)" class="lm-ring"/><circle cx="44.02" cy="19.98" r="5.2" class="lm-dot"/></svg>
+      <span>StayOnTrack</span>
     </a>
     <nav class="nav" id="nav" aria-label="Hauptnavigation"></nav>
     <div class="topbar-user">
@@ -32,7 +34,6 @@
           <span class="avatar avatar-lg" data-avatar></span>
           <div><strong id="menu-name"></strong><span id="menu-role"></span></div>
         </div>
-        <a role="menuitem" href="#/fame" id="menu-fame" hidden><span aria-hidden="true">🏆</span> Hall of Fame</a>
         <a role="menuitem" href="#/account" id="menu-account">Konto</a>
         <button role="menuitem" type="button" id="btn-logout">Abmelden</button>
       </div>
@@ -41,6 +42,7 @@
   <main id="app" class="container"></main>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <dialog id="dialog"></dialog>
+  <script src="/i18n.js"></script>
   <script src="/charts.js"></script>
   <script src="/app.js"></script>
 </body>
