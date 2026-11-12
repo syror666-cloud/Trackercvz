@@ -392,6 +392,9 @@ KI-Vorgaben|AI rules|Reglas de IA|Regole IA
 Im Admin-Tool legst du fest, was die KI in welche Mahlzeit packt – z. B. kein warmes Hauptgericht zum Frühstück. Beim Entwurf kannst du zusätzlich einen einmaligen Hinweis mitgeben.|In the admin tool you decide what the AI puts into which meal – e.g. no hot main course at breakfast. You can also add a one-off note per draft.|En el panel de administración decides qué pone la IA en cada comida – p. ej. nada de plato caliente en el desayuno. También puedes añadir una nota puntual por borrador.|Nello strumento admin decidi cosa mette l'IA in ogni pasto – es. niente piatto caldo a colazione. Puoi anche aggiungere una nota per singola bozza.
 Mehr Sicherheit|More security|Más seguridad|Più sicurezza
 Besserer Schutz gegen Passwort-Raten beim Login. Automatische KI-Entwürfe und Push-Nachrichten bei Plan-Anfragen sind begrenzt, damit niemand dein KI-Guthaben aufbrauchen kann.|Better protection against password guessing at login. Automatic AI drafts and push messages for plan requests are limited so nobody can use up your AI credit.|Mejor protección contra adivinar contraseñas al iniciar sesión. Los borradores automáticos de IA y los avisos por solicitudes de plan están limitados para que nadie agote tu saldo de IA.|Migliore protezione contro i tentativi di indovinare la password. Bozze IA automatiche e notifiche per richieste di piano sono limitate, così nessuno può esaurire il tuo credito IA.
+Dein eigener Kühlschrank|Your own fridge|Tu propia nevera|Il tuo frigo personale
+Auf der Tür deines Kühlschranks steht jetzt dein Name – in Pixel-Schrift.|Your fridge door now shows your name – in pixel letters.|La puerta de tu nevera ahora lleva tu nombre – en letras pixeladas.|Sulla porta del tuo frigo ora c'è il tuo nome – in lettere pixel.
+Kühlschrank mit Namen|Fridge with name|Nevera con nombre|Frigo con nome
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

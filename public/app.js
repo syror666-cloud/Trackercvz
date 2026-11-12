@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-fridge-name', date: 'November 2026',
+      client: [
+        ['🧊', 'Dein eigener Kühlschrank', 'Auf der Tür deines Kühlschranks steht jetzt dein Name – in Pixel-Schrift.'],
+      ],
+      coach: [
+        ['🧊', 'Kühlschrank mit Namen', 'Jeder Kühlschrank trägt jetzt den Namen des Klienten auf der Tür, z. B. „CLAUDE’S FRIDGE“.'],
+      ],
+    },
+    {
       id: '2026-11-sicherheit', date: 'November 2026',
       client: [],
       coach: [
@@ -4160,10 +4169,71 @@
     [3, 10, 22, 2, '#a9c6d4'], [3, 20, 22, 2, '#a9c6d4'], [3, 30, 22, 2, '#a9c6d4'],
     [5, 6, 3, 4, '#fff3b0'], [9, 6, 3, 4, '#ffd1d1'], [5, 16, 2, 4, '#c8f0d5'],
   ], 'fridge-art');
-  const freezerSvg = () => pixelSvg(28, 14, [
-    [0, 0, 28, 14, FR.line], [1, 1, 26, 12, FR.body], [24, 1, 3, 12, FR.shade], [2, 2, 1, 10, FR.hi],
-    [21, 8, 2, 4, FR.handle], [1, 12, 26, 1, FR.shade],
-  ], 'fridge-art');
+  // 3×5 pixel font for the name plate on the fridge door (rows top to bottom, 1 = pixel)
+  const PIXEL_FONT = {
+    A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111',
+    F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010',
+    K: '101101110101101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010',
+    P: '110101110100100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
+    U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010',
+    Z: '111001010100111', 0: '111101101101111', 1: '010110010010111', 2: '110001010100111', 3: '110001010001110',
+    4: '101101111001001', 5: '111100110001110', 6: '011100111101111', 7: '111001010010010', 8: '111101111101111',
+    9: '111101111001110', '-': '000000111000000', '.': '000000000000010',
+  };
+  const UMLAUT = { Ä: 'A', Ö: 'O', Ü: 'U' };
+  /** Glyph runs of a text: [{ bits, width, dots }]; apostrophe and space are narrower. */
+  function glyphsOf(text) {
+    return [...text].map((ch) => {
+      if (ch === "'") return { bits: '11000', width: 1 };
+      if (ch === ' ') return { bits: '', width: 2 };
+      const base = UMLAUT[ch] || ch;
+      return PIXEL_FONT[base] ? { bits: PIXEL_FONT[base], width: 3, dots: Boolean(UMLAUT[ch]) } : null;
+    }).filter(Boolean);
+  }
+  const textUnits = (g) => g.reduce((a, x) => a + x.width + 1, 0) - 1;
+  /** Pixel rects for a line of text, `s` = size of one font pixel in fridge pixels, centred on cx. */
+  function pixelTextRects(glyphs, cx, y, s, color) {
+    const rects = [];
+    let x = cx - (textUnits(glyphs) * s) / 2;
+    for (const g of glyphs) {
+      for (let i = 0; i < g.bits.length; i++) {
+        if (g.bits[i] === '1') rects.push([x + (i % g.width) * s, y + Math.floor(i / g.width) * s, s, s, color]);
+      }
+      if (g.dots) rects.push([x, y - 1.5 * s, s, s, color], [x + 2 * s, y - 1.5 * s, s, s, color]);
+      x += (g.width + 1) * s;
+    }
+    return rects;
+  }
+  /** "Claude" -> CLAUDE'S, "James" -> JAMES' (first name only, letters the font can draw). */
+  function fridgeOwner(displayName) {
+    const first = String(displayName || '').trim().split(/\s+/)[0] || '';
+    let name = first.toUpperCase().replace(/ß/g, 'SS').normalize('NFC')
+      .replace(/[^A-Z0-9ÄÖÜ.-]/g, (c) => c.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, ''));
+    if (name.length > 12 && name.includes('-')) name = name.split('-')[0]; // long double names: first part
+    if (name.length > 12) name = `${name.slice(0, 11)}.`;
+    name = name.replace(/^[.-]+|[-]+$/g, '');
+    if (!name) return '';
+    return /S$/.test(name) ? `${name}'` : `${name}'S`;
+  }
+  /** Freezer door; with an owner its name is embossed on it in pixel letters ("CLAUDE'S" / "FRIDGE"). */
+  const freezerSvg = (owner) => {
+    const rects = [
+      [0, 0, 28, 14, FR.line], [1, 1, 26, 12, FR.body], [24, 1, 3, 12, FR.shade], [2, 2, 1, 10, FR.hi],
+      [21, 8, 2, 4, FR.handle], [1, 12, 26, 1, FR.shade],
+    ];
+    const lines = [owner, 'FRIDGE'].filter(Boolean).map(glyphsOf);
+    // one letter size for both lines: as large as possible within the door (handle and edge shading stay free)
+    const s = Math.min(0.75, ...lines.map((g) => 17 / textUnits(g)));
+    const cx = 12;
+    const lineGap = 2.2 * s;
+    const top = 6.5 - ((lines.length * 5 + (lines.length - 1) * 2.2) * s) / 2 + (owner && /[ÄÖÜ]/.test(owner) ? 0.4 * s : 0);
+    lines.forEach((g, i) => {
+      const y = top + i * (5 * s + lineGap);
+      rects.push(...pixelTextRects(g, cx + s * 0.35, y + s * 0.35, s, 'rgba(255,255,255,0.95)')); // highlight: embossed look
+      rects.push(...pixelTextRects(g, cx, y, s, '#7f97a8'));
+    });
+    return pixelSvg(28, 14, rects, 'fridge-art');
+  };
   const fridgeInsideSvg = () => pixelSvg(28, 36, [
     [0, 0, 28, 36, FR.line], [1, 1, 26, 34, '#cfe2ec'], [3, 2, 22, 32, '#f3fbff'],
     [8, 2, 12, 2, '#fff6c9'], [6, 4, 16, 3, 'rgba(255,246,201,0.55)'],
@@ -4194,7 +4264,7 @@
         <div class="fridge-cam" aria-hidden="true">
           <div class="fridge">
             <div class="fridge-side"></div>
-            <div class="fridge-freezer">${freezerSvg()}</div>
+            <div class="fridge-freezer">${freezerSvg(fridgeOwner(opts.coach ? opts.clientName : me && me.displayName))}</div>
             <div class="fridge-inside">${fridgeInsideSvg()}</div>
             <div class="fridge-door"><div class="door-front">${fridgeDoorSvg()}</div><div class="door-back">${fridgeDoorBackSvg()}</div></div>
           </div>
