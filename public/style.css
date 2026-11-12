@@ -1843,3 +1843,24 @@ dialog:has(.pr-q) { width: min(600px, calc(100vw - 24px)); }
 .ai-hint { margin: 0 0 12px; }
 .ai-hint p { margin: 4px 0 0; }
 #ai-guidelines textarea { font-size: 0.95rem; line-height: 1.5; }
+
+/* Mythic rarity: shifting colours, strongest glow */
+.r-mythic { --rar: #ff3d6e; --rar-dark: #b0124a; }
+.r-mythic .gem { animation: gem-bob 2.2s ease-in-out infinite, gem-glow 1.2s ease-in-out infinite, gem-prism 3s linear infinite; }
+@keyframes gem-prism { to { filter: hue-rotate(360deg) drop-shadow(0 0 4px var(--rar)); } }
+.rarity-tag.r-mythic {
+  color: #fff; background: linear-gradient(90deg, #ff3d6e, #a463e0, #3a8ee8, #ff3d6e); background-size: 300% 100%;
+  animation: mythic-tag 4s linear infinite;
+}
+@keyframes mythic-tag { to { background-position: 300% 0; } }
+.shop-item:has(.r-mythic) { box-shadow: inset 0 0 0 2px color-mix(in srgb, #ff3d6e 55%, transparent); }
+/* vial: a glint sweeps over the glass instead of condensation */
+.glint {
+  position: absolute; top: 30%; left: -60%; width: 40%; height: 60%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  animation: glint 3.2s ease-in-out infinite;
+}
+@keyframes glint { 0%, 55% { left: -60%; } 100% { left: 120%; } }
+@media (prefers-reduced-motion: reduce) {
+  .r-mythic .gem, .rarity-tag.r-mythic, .glint { animation: none !important; }
+}

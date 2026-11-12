@@ -395,6 +395,9 @@ Besserer Schutz gegen Passwort-Raten beim Login. Automatische KI-Entwürfe und P
 Dein eigener Kühlschrank|Your own fridge|Tu propia nevera|Il tuo frigo personale
 Auf der Tür deines Kühlschranks steht jetzt dein Name – in Pixel-Schrift.|Your fridge door now shows your name – in pixel letters.|La puerta de tu nevera ahora lleva tu nombre – en letras pixeladas.|Sulla porta del tuo frigo ora c'è il tuo nome – in lettere pixel.
 Kühlschrank mit Namen|Fridge with name|Nevera con nombre|Frigo con nome
+Mythisch|Mythic|Mítica|Mitica
+Neu im Shop|New in the shop|Nuevo en la tienda|Novità nel negozio
+Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen etwas für deinen Kühlschrank.|Every medal is worth tokens – bronze 1, silver 2, gold 3. Trade them for something for your fridge.|Cada medalla vale tokens – bronce 1, plata 2, oro 3. Cámbialos por algo para tu nevera.|Ogni medaglia vale token – bronzo 1, argento 2, oro 3. Scambiali con qualcosa per il tuo frigo.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

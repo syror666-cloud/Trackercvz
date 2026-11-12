@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-mythic', date: 'November 2026',
+      client: [
+        ['🥤', 'Neu im Shop', "Ein McDonald's Becher (legendär) und als erste mythische Belohnung ein Vial Testosteron-Öl."],
+      ],
+      coach: [
+        ['🥤', 'Neu im Shop', "McDonald's Becher (legendär) und Vial Testosteron-Öl (mythisch, neue höchste Seltenheit)."],
+      ],
+    },
+    {
       id: '2026-11-fridge-name', date: 'November 2026',
       client: [
         ['🧊', 'Dein eigener Kühlschrank', 'Auf der Tür deines Kühlschranks steht jetzt dein Name – in Pixel-Schrift.'],
@@ -4122,6 +4131,36 @@
       .map(([x, y, rw, rh, c]) => `<rect x="${x}" y="${y}" width="${rw}" height="${rh}" fill="${c}"/>`)
       .join('')}</svg>`;
 
+  /** Fast-food cup with lid and straw, 10×18 (generic red/yellow design, no brand logo). */
+  function cupSvg(f, cls = '') {
+    const [red, shade, yellow, white] = f.colors;
+    return pixelSvg(10, 18, [
+      [6, 0, 1, 1, white], [6, 1, 1, 1, red], [6, 2, 1, 1, white], [6, 3, 1, 1, red], // striped straw
+      [1, 3, 8, 1, '#e9edf0'], [0, 4, 10, 1, '#f7f9fa'], [0, 4, 1, 1, '#c9d1d7'], [9, 4, 1, 1, '#c9d1d7'], // lid
+      [0, 5, 10, 3, red], [1, 8, 8, 3, yellow], [1, 11, 8, 3, red], [2, 14, 6, 3, red], [3, 17, 4, 1, shade],
+      [0, 8, 1, 3, red], [9, 8, 1, 3, red], // band sits inside the tapering cup
+      [1, 9, 8, 1, white], // thin white line through the yellow band
+      [8, 5, 2, 3, shade], [8, 11, 1, 3, shade], [7, 14, 1, 3, shade], [1, 5, 1, 3, 'rgba(255,255,255,0.4)'], [2, 11, 1, 6, 'rgba(255,255,255,0.3)'],
+    ], `can cup ${cls}`);
+  }
+
+  /** Small glass vial with crimp cap and amber oil, 10×18. */
+  function vialSvg(f, cls = '') {
+    const [oil, oilDark, label, stripe] = f.colors;
+    return pixelSvg(10, 18, [
+      [3, 0, 4, 3, '#9aa6ae'], [3, 0, 4, 1, '#c8d0d5'], [3, 3, 4, 1, '#6f7b83'], // crimp cap
+      [4, 4, 2, 2, 'rgba(210,232,240,0.85)'], // neck
+      [2, 6, 6, 1, 'rgba(210,232,240,0.85)'], [2, 7, 6, 10, 'rgba(210,232,240,0.6)'], [3, 17, 4, 1, '#8aa1ad'], // glass
+      [1, 7, 1, 10, '#8aa1ad'], [8, 7, 1, 10, '#8aa1ad'], [1, 6, 1, 1, '#8aa1ad'], [8, 6, 1, 1, '#8aa1ad'], [3, 4, 1, 2, '#8aa1ad'], [6, 4, 1, 2, '#8aa1ad'], // outline
+      [2, 9, 6, 8, oil], [6, 9, 2, 8, oilDark], [2, 9, 6, 1, '#f1c867'], // oil with meniscus
+      [2, 11, 6, 3, label], [3, 12, 3, 1, stripe], [6, 11, 2, 3, 'rgba(0,0,0,0.1)'], // label
+      [2, 7, 1, 9, 'rgba(255,255,255,0.75)'], [7, 7, 1, 10, 'rgba(120,150,165,0.45)'],
+    ], `can vial ${cls}`);
+  }
+
+  /** Pixel art of a fridge item: can (default), cup or vial. */
+  const itemSvg = (f, cls = '') => (f.kind === 'cup' ? cupSvg(f, cls) : f.kind === 'vial' ? vialSvg(f, cls) : canSvg(f, cls));
+
   /** A 10×18 pixel can in the flavour's colours (generic design, no brand mark). */
   function canSvg(f, cls = '') {
     const [body, shade, band, accent] = f.colors;
@@ -4140,14 +4179,15 @@
     rare: { name: 'Selten', rank: 1 },
     epic: { name: 'Episch', rank: 2 },
     legendary: { name: 'Legendär', rank: 3 },
+    mythic: { name: 'Mythisch', rank: 4 },
   };
   /** Small faceted gem above a can; colour and animation per rarity (CSS .gem-*). */
   const gemSvg = (r) => `<svg class="gem gem-${r}" viewBox="0 0 16 14" aria-hidden="true">
       <path class="g-body" d="M4 1h8l3 4-7 8-7-8z"/><path class="g-top" d="M4 1h8l3 4H1z"/><path class="g-hi" d="M5.5 2.2h3L7 4.6H3.4z"/></svg>`;
-  /** A can with its rarity gem and cold condensation drops running down. */
-  const coldCan = (f, extra = '') => `<span class="cold-can r-${f.rarity}" ${extra}>
+  /** An item with its rarity gem; cold drinks get condensation drops, the vial a glint instead. */
+  const coldCan = (f, extra = '') => `<span class="cold-can r-${f.rarity} kind-${f.kind || 'can'}" ${extra}>
       <span class="gem-wrap" title="${esc(RARITY[f.rarity].name)}">${gemSvg(f.rarity)}</span>
-      <span class="can-body">${canSvg(f)}<span class="frost"></span><i class="drop d1"></i><i class="drop d2"></i><i class="drop d3"></i></span>
+      <span class="can-body">${itemSvg(f)}${f.kind === 'vial' ? '<span class="glint"></span>' : '<span class="frost"></span><i class="drop d1"></i><i class="drop d2"></i><i class="drop d3"></i>'}</span>
     </span>`;
   const cobweb = (cls) => `<svg class="cobweb ${cls}" viewBox="0 0 100 100" aria-hidden="true">
       <path d="M0 0L100 0M0 0L96 30M0 0L80 62M0 0L54 86M0 0L28 98M0 0L0 100"/>
@@ -4307,7 +4347,7 @@
     }
     function draw() {
       const b = shop.balance;
-      root.innerHTML = `${hofHeader(opts, 'shop', 'Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen eine kalte Dose für deinen Kühlschrank.')}
+      root.innerHTML = `${hofHeader(opts, 'shop', 'Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen etwas für deinen Kühlschrank.')}
         <section class="card shop-balance">
           <div><span class="fame-big">${b.available}</span> <span class="muted">Token verfügbar</span></div>
           <p class="muted small">${b.earned} verdient · ${b.spent} ausgegeben</p>
