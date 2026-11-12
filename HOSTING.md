@@ -103,3 +103,18 @@ Gewicht und Schlaf sind Gesundheitsdaten (Art. 9 DSGVO). Darum:
 - Vom Klienten eine **schriftliche Einwilligung** zur Verarbeitung seiner Gesundheitsdaten einholen.
 - Ist die Seite öffentlich erreichbar und geschäftlich genutzt, brauchst du Impressum und Datenschutzerklärung.
 Das ist keine Rechtsberatung – im Zweifel kurz mit einem Datenschutz-Berater abklären.
+
+## KI-Funktionen einschalten (optional)
+
+1. **API-Schlüssel holen:** Auf <https://console.anthropic.com> anmelden (leitet ggf. auf platform.claude.com weiter) → unter **Billing** Guthaben aufladen (z. B. 5 $) und am besten ein monatliches Limit setzen → unter **API Keys** → **Create Key** einen Schlüssel erstellen (Name z. B. `stayontrack`). Den Schlüssel (beginnt mit `sk-ant-`) sofort kopieren – er wird nur einmal angezeigt.
+2. **In Render eintragen:** Dashboard → deinen Web Service öffnen → links **Environment** → **Add Environment Variable**:
+
+   | Key | Value |
+   |---|---|
+   | `ANTHROPIC_API_KEY` | dein Schlüssel `sk-ant-…` |
+   | `AI_MODEL` | `claude-haiku-5-5` (günstigstes Modell; ohne diese Zeile wird `claude-opus-5-5` genutzt) |
+
+3. **Save Changes** → bei der Frage danach **Save, rebuild, and deploy** wählen. Nach ein bis zwei Minuten ist die KI aktiv.
+4. **Prüfen:** Als Coach einen Check-in öffnen → Karte „KI-Überblick“ → **Zusammenfassung erstellen**.
+
+Den Schlüssel niemals in den Code, in den Chat oder in GitHub schreiben – nur in Render. Wechseln kannst du das Modell jederzeit, indem du `AI_MODEL` änderst (z. B. `claude-opus-5-5` für gründlichere Entwürfe) und neu deployst.
