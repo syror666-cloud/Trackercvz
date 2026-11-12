@@ -16,6 +16,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - Diagramme: Gewichtsverlauf mit 7-Tage-Durchschnitt, Schritte und Schlaf als Balken (Zeiträume 30 T / 90 T / 1 J / Alle)
 - **Nachrichten:** eigener Chat mit dem Coach für Wünsche, Fragen und Vorschläge
 - **Ernährungsplan** vom Coach mit Mengen und Kalorien; einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen (Coach entscheidet)
+- **Trainingsplan** (eigener Tab, auch in der Handy-Leiste): Trainingstage pro Woche wählen, dann einen Standard-Split (Ganzkörper, Upper/Lower, Push/Pull/Legs, Torso/Limbs, Upper/Lower + PPL, Arnold, Bro-Split) oder „Eigener Split“; Übungen per + ergänzen, Plan speichern. Im Training Gewicht und Wiederholungen pro Satz eintragen – beim nächsten Mal stehen die letzten Werte schon drin. „Trainingshistorie“ zeigt pro Übung den Verlauf des schwersten Satzes
 - **Check-in vom Coach** oben in der Übersicht: Feedback lesen, antworten oder vorgeschlagene Plananpassungen mit einem Klick annehmen. Check-in und Annahme laufen im Hintergrund; nur die Antwort des Klienten landet im Chat
 - **Kalorien:** Zielkalorien als Range (z. B. 2.200–2.300 kcal) mit Diagramm: Range als Band, Mittelwert als Linie, pro Tag eingehalten/nicht eingehalten
 - **Push-Benachrichtigungen** (nach Zustimmung; Chat-Nachrichten des Coaches erscheinen nur als „Du hast eine neue Nachricht von deinem Coach“, ohne Inhalt): Erinnerungen des Coaches und neue Chat-Nachrichten. Auf dem iPhone nur, wenn die Seite zum Home-Bildschirm hinzugefügt wurde (ab iOS 16.4)
@@ -31,6 +32,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - CSV-Export (öffnet sich direkt in Excel)
 - **Wöchentlicher Check-in:** alle Klienten in einer Reihe nacheinander abarbeiten; Wochenvergleich (letzte 7 Tage vs. Vorwoche) mit Gewicht, Schritten, Schlaf, Trainingstagen, Einhaltung des Kalorienplans, Tagesdetails und Diagrammen; Nachricht schreiben und Plan anpassen (Zielkalorien als Range, Schritte, Schlaf, Zielgewicht); der Klient nimmt Anpassungen per Klick an, der Plan wird dann automatisch aktualisiert
 - **Plan:** Kalorien pro Tag, Schritte, Schlaf und Zielgewicht; jede Änderung wird im Verlauf gespeichert
+- **Trainingsplan** pro Klient (Tab „Trainingsplan“): denselben Plan wie der Klient sehen, bearbeiten und die Trainingshistorie ansehen; der Klient bekommt einen Push, wenn du den Plan änderst
 - **Ernährungsplan** pro Klient: Mahlzeiten aus der Lebensmittel-Datenbank zusammenstellen, Tauschwünsche per Klick kcal-gleich übernehmen, selbst anpassen oder ablehnen (Push bei neuen Wünschen)
 - **Kategorien** (nur für den Coach sichtbar): Diät, Reverse Diät, Aufbau, Maintenance – als farbige Markierung in Übersicht, Check-in und Admin-Tool
 - **Zusatzmaße je Kategorie**, im Admin-Tool zuordenbar: Zahlenwerte wie Bauchumfang (Feld im Tageseintrag + Verlaufsdiagramm) und Kraft-PRs (Übung, Gewicht, Wiederholungen; Rekorde werden erkannt, Push an den Coach); beides auch im Check-in-Wochenvergleich

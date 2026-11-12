@@ -228,6 +228,35 @@ CREATE TABLE IF NOT EXISTS checkins (
   accepted_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS checkins_client ON checkins (client_id, id);
+
+-- Training plan (one per client, edited by client and coach) and logged workouts.
+CREATE TABLE IF NOT EXISTS training_plans (
+  client_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  split          TEXT NOT NULL,
+  days_per_week  INTEGER NOT NULL,
+  data           TEXT NOT NULL,
+  updated_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE TABLE IF NOT EXISTS workouts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date        TEXT NOT NULL,
+  day_id      TEXT NOT NULL,
+  day_name    TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  UNIQUE (client_id, date, day_id)
+);
+CREATE TABLE IF NOT EXISTS workout_sets (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  workout_id     INTEGER NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+  exercise_key   TEXT NOT NULL,
+  exercise_name  TEXT NOT NULL,
+  set_no         INTEGER NOT NULL,
+  weight         REAL,
+  reps           INTEGER
+);
+CREATE INDEX IF NOT EXISTS workout_sets_key ON workout_sets (exercise_key, workout_id);
 `;
 
 function openDb(file) {

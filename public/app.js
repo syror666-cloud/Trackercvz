@@ -238,7 +238,7 @@
     renderNav();
     if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
     refreshUnread();
-    const m = location.hash.match(/^#\/client\/(\d+)(?:\/(chat|nutrition))?/);
+    const m = location.hash.match(/^#\/client\/(\d+)(?:\/(chat|nutrition|training(?:\/history)?))?/);
     if (me.role === 'coach') {
       if (m) return renderCoachClient(Number(m[1]), m[2] || 'overview');
       if (location.hash === '#/admin') return renderAdmin();
@@ -252,6 +252,7 @@
     if (location.hash === '#/chat') return renderClientChat();
     if (location.hash === '#/settings') return renderClientSettings();
     if (location.hash === '#/nutrition') return renderClientNutrition();
+    if (location.hash === '#/training' || location.hash === '#/training/history') return renderClientTraining(location.hash === '#/training/history');
     return renderClientHome();
   }
 
@@ -259,11 +260,11 @@
     const links =
       me.role === 'coach'
         ? [['#/', 'Klienten', false], ['#/messages', 'Nachrichten', true], ['#/checkin', 'Check-in', false], ['#/admin', 'Admin', false]]
-        : [['#/', 'Tracker', false], ['#/nutrition', 'Ernährung', false], ['#/chat', 'Nachrichten', true], ['#/settings', 'Einstellungen', false]];
+        : [['#/', 'Tracker', false], ['#/training', 'Training', false], ['#/nutrition', 'Ernährung', false], ['#/chat', 'Nachrichten', true], ['#/settings', 'Einstellungen', false]];
     let current =
       me.role === 'coach'
         ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash.startsWith('#/messages') ? '#/messages' : location.hash === '#/admin' ? '#/admin' : '#/'
-        : ['#/chat', '#/settings', '#/nutrition'].includes(location.hash) ? location.hash : '#/';
+        : location.hash.startsWith('#/training') ? '#/training' : ['#/chat', '#/settings', '#/nutrition'].includes(location.hash) ? location.hash : '#/';
     if (location.hash === '#/account') current = null; // the account page lives in the profile menu
     nav.innerHTML = links
       .map(
@@ -276,6 +277,7 @@
   const svgIcon = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const NAV_ICONS = {
     Tracker: svgIcon('<path d="M3 12h4l3-7 4 14 3-7h4"/>'),
+    Training: svgIcon('<path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/>'),
     Ernährung: svgIcon('<path d="M7 3v7a2 2 0 0 0 4 0V3M9 10v11M17 3c-1.7 1.3-2.5 3.6-2.5 6.5 0 2 .8 3 2.5 3.5V21"/>'),
     Nachrichten: svgIcon('<path d="M4 5h16v11H9l-5 4z"/>'),
     Einstellungen: svgIcon('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'),
@@ -3151,6 +3153,343 @@
 
   // ---------- coach: client detail ----------
   let goalsPanelOpenFor = null; // keeps the goals panel open while editing (e.g. after changing the category)
+  // ---------- training plan (client and coach) ----------
+  const fmtKg = (w) => (w === null || w === undefined ? '–' : `${num(w, w % 1 ? 1 : 0)} kg`);
+  const fmtSet = (s) => `${s.weight !== null && s.weight !== undefined ? `${num(s.weight, s.weight % 1 ? 1 : 0)} kg` : '–'} × ${s.reps ?? '–'}`;
+  const exKey = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  let tmpSeq = 0;
+  const tmpId = (p) => `${p}${Date.now().toString(36)}${(tmpSeq++).toString(36)}`;
+
+  /**
+   * Training plan page. opts: { userId (coach only), base: hash of the page, coach: bool, clientName }.
+   * Modes: setup (no plan yet) → edit → overview → workout; the history has its own hash (base + '/history').
+   */
+  async function mountTraining(root, opts) {
+    const query = opts.userId ? `?userId=${opts.userId}` : '';
+    let data;
+    try {
+      data = await api('GET', `/api/training${query}`);
+    } catch (err) {
+      root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+      return;
+    }
+    let mode = data.plan ? 'overview' : 'setup';
+    let draft = null; // { split, days } while editing
+    let setupDays = data.plan ? data.plan.daysPerWeek : 3;
+    let workoutDay = null;
+    const you = opts.coach ? esc(opts.clientName || 'dein Klient') : 'du';
+    const H = opts.coach ? 'h2 class="page-title-sm"' : 'h1';
+    const HC = opts.coach ? 'h2' : 'h1';
+
+    const datalist = `<datalist id="exercise-list">${data.exercises.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>`;
+    const setUnsaved = (on) => root.toggleAttribute('data-unsaved', on);
+
+    function draw() {
+      setUnsaved(mode === 'edit' || mode === 'workout');
+      if (mode === 'setup') return drawSetup();
+      if (mode === 'edit') return drawEdit();
+      if (mode === 'workout') return drawWorkout();
+      return drawOverview();
+    }
+
+    // ---- 1. no plan yet: days per week + split ----
+    function drawSetup() {
+      const splitCard = (s) => {
+        const fits = s.days.includes(setupDays);
+        const hint = s.key === 'custom' ? 'Frei' : fits ? 'Passt' : `Ideal: ${s.days.join(' oder ')} Tage`;
+        return `<button type="button" class="split-card ${fits ? 'fits' : ''} ${s.key === 'custom' ? 'custom' : ''}" data-split="${s.key}">
+          <span class="split-top"><span class="split-name">${esc(s.name)}</span><span class="split-fit">${esc(hint)}</span></span>
+          <span class="split-desc">${esc(s.desc)}</span></button>`;
+      };
+      const sorted = [...data.splits.filter((s) => s.key !== 'custom')].sort((a, b) => Number(b.days.includes(setupDays)) - Number(a.days.includes(setupDays)));
+      root.innerHTML = `
+        <div class="page-head"><div>${eyebrow(opts.coach ? 'Trainingsplan' : 'Neu')}<${H}>${opts.coach ? `Trainingsplan für ${you}` : 'Dein Trainingsplan'}</${HC}>
+          <p class="muted">${data.plan ? 'Wähle einen neuen Split – dein bisheriger Plan bleibt, bis du speicherst.' : 'Noch kein Plan. In zwei Schritten zu deinem Standardplan – danach kannst du alles anpassen.'}</p></div>
+          ${data.plan ? '<button type="button" class="btn-secondary" data-cancel>Abbrechen</button>' : ''}</div>
+        <section class="card setup-step">
+          <h2><span class="step-num">1</span> Wie oft pro Woche trainieren?</h2>
+          <div class="days-picker" role="radiogroup" aria-label="Trainingstage pro Woche">
+            ${[2, 3, 4, 5, 6].map((n) => `<button type="button" role="radio" aria-checked="${n === setupDays}" data-days="${n}"><b>${n}</b><span>Tage</span></button>`).join('')}
+          </div>
+        </section>
+        <section class="setup-step">
+          <h2><span class="step-num">2</span> Welcher Split?</h2>
+          <p class="muted small">Ein Split mit „Passt“ ist für ${setupDays} Trainingstage gedacht. Du bekommst einen Standardplan mit Übungen, Sätzen und Wiederholungen.</p>
+          <div class="split-grid">${sorted.map(splitCard).join('')}${splitCard(data.splits.find((s) => s.key === 'custom'))}</div>
+        </section>`;
+      root.querySelectorAll('[data-days]').forEach((b) => b.addEventListener('click', () => {
+        setupDays = Number(b.dataset.days);
+        drawSetup();
+      }));
+      root.querySelectorAll('[data-split]').forEach((b) => b.addEventListener('click', async () => {
+        b.disabled = true;
+        try {
+          const t = await api('GET', `/api/training/template?split=${b.dataset.split}&days=${setupDays}`);
+          draft = { split: b.dataset.split, days: t.days };
+          mode = 'edit';
+          draw();
+          window.scrollTo(0, 0);
+        } catch (err) {
+          toast(err.message, true);
+          b.disabled = false;
+        }
+      }));
+      const cancel = root.querySelector('[data-cancel]');
+      if (cancel) cancel.addEventListener('click', () => { mode = 'overview'; draw(); });
+    }
+
+    // ---- 2. edit: day names, exercises (+), sets × reps, save at the bottom ----
+    function drawEdit() {
+      const splitName = (data.splits.find((s) => s.key === draft.split) || {}).name || '';
+      root.innerHTML = `
+        <div class="page-head"><div>${eyebrow(splitName)}<${H}>Plan bearbeiten</${HC}>
+          <p class="muted">Benenne die Tage, passe Übungen an und füge mit + neue hinzu. Gespeichert wird unten.</p></div>
+          <button type="button" class="btn-secondary" data-resplit>Split wechseln</button></div>
+        ${datalist}
+        <div class="tp-days">${draft.days.map((d, i) => `
+          <section class="card tp-day" data-day="${i}">
+            <div class="tp-day-head">
+              <span class="tp-day-num">Tag ${i + 1}</span>
+              <input class="tp-day-name" value="${esc(d.name)}" maxlength="40" aria-label="Name von Tag ${i + 1}" data-day-name>
+              ${draft.days.length > 1 ? `<button type="button" class="icon-btn" data-remove-day aria-label="Tag ${i + 1} entfernen">✕</button>` : ''}
+            </div>
+            <div class="tp-ex-head" aria-hidden="true"><span>Übung</span><span>Sätze</span><span>Wdh.</span><span></span></div>
+            <ul class="tp-ex-list">${d.exercises.map((e, j) => `
+              <li class="tp-ex" data-ex="${j}">
+                <input value="${esc(e.name)}" list="exercise-list" maxlength="60" placeholder="Übung" aria-label="Übung" data-f="name">
+                <input value="${esc(e.sets)}" inputmode="numeric" maxlength="2" aria-label="Sätze" data-f="sets">
+                <input value="${esc(e.reps)}" maxlength="12" placeholder="8–12" aria-label="Wiederholungen" data-f="reps">
+                <button type="button" class="icon-btn" data-remove-ex aria-label="${esc(e.name || 'Übung')} entfernen">✕</button>
+              </li>`).join('') || '<li class="muted small tp-empty">Noch keine Übungen.</li>'}</ul>
+            <button type="button" class="btn-add" data-add-ex><span aria-hidden="true">+</span> Übung hinzufügen</button>
+          </section>`).join('')}
+        </div>
+        ${draft.days.length < 7 ? '<button type="button" class="btn-secondary btn-block tp-add-day" data-add-day>+ Trainingstag hinzufügen</button>' : ''}
+        <div class="save-bar">
+          ${data.plan ? '<button type="button" class="btn-secondary" data-cancel>Abbrechen</button>' : ''}
+          <button type="button" class="btn-primary" data-save>Plan speichern</button>
+        </div>`;
+
+      // keep the draft in sync with the inputs (no redraw while typing)
+      root.querySelectorAll('[data-day]').forEach((dayEl) => {
+        const d = draft.days[Number(dayEl.dataset.day)];
+        dayEl.querySelector('[data-day-name]').addEventListener('input', (e) => { d.name = e.target.value; });
+        dayEl.querySelectorAll('[data-ex]').forEach((exEl) => {
+          const ex = d.exercises[Number(exEl.dataset.ex)];
+          exEl.querySelectorAll('[data-f]').forEach((inp) => inp.addEventListener('input', () => { ex[inp.dataset.f] = inp.value; }));
+          exEl.querySelector('[data-remove-ex]').addEventListener('click', () => {
+            d.exercises.splice(Number(exEl.dataset.ex), 1);
+            drawEdit();
+          });
+        });
+        dayEl.querySelector('[data-add-ex]').addEventListener('click', () => {
+          d.exercises.push({ id: tmpId('e'), name: '', sets: 3, reps: '8–12', note: '' });
+          drawEdit();
+          const rows = root.querySelectorAll(`[data-day="${dayEl.dataset.day}"] [data-ex]`);
+          rows[rows.length - 1].querySelector('input').focus();
+        });
+        const rm = dayEl.querySelector('[data-remove-day]');
+        if (rm) rm.addEventListener('click', () => {
+          if (d.exercises.length && !confirm(`„${d.name}“ mit ${d.exercises.length} Übungen entfernen?`)) return;
+          draft.days.splice(Number(dayEl.dataset.day), 1);
+          drawEdit();
+        });
+      });
+      const addDay = root.querySelector('[data-add-day]');
+      if (addDay) addDay.addEventListener('click', () => {
+        draft.days.push({ id: tmpId('d'), name: `Tag ${draft.days.length + 1}`, exercises: [] });
+        drawEdit();
+      });
+      root.querySelector('[data-resplit]').addEventListener('click', () => {
+        if (!confirm('Split wechseln? Deine Änderungen hier gehen verloren.')) return;
+        mode = 'setup';
+        setupDays = draft.days.length;
+        draw();
+      });
+      const cancel = root.querySelector('[data-cancel]');
+      if (cancel) cancel.addEventListener('click', () => { mode = 'overview'; draw(); });
+      root.querySelector('[data-save]').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        try {
+          const days = draft.days.map((d) => ({ ...d, exercises: d.exercises.filter((x) => x.name.trim()).map((x) => ({ ...x, sets: Number(x.sets) || 3 })) }));
+          data = await api('PUT', `/api/training${query}`, { split: draft.split, days });
+          draft = null;
+          mode = 'overview';
+          draw();
+          window.scrollTo(0, 0);
+          savedHud('Gespeichert', 'Trainingsplan');
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // ---- 3. overview: all days, last values, start a workout, history at the bottom ----
+    function drawOverview() {
+      const p = data.plan;
+      const last = data.recent[0];
+      const editor = p.updatedBy ? (p.updatedBy.role === 'coach' ? (opts.coach ? 'dir' : 'deinem Coach') : opts.coach ? you : 'dir') : '';
+      root.innerHTML = `
+        <div class="page-head"><div>${eyebrow(`${p.splitName} · ${p.days.length} Tage pro Woche`)}<${H}>${opts.coach ? 'Trainingsplan' : 'Dein Trainingsplan'}</${HC}>
+          <p class="muted">${last ? `Letztes Training: <strong>${esc(last.dayName)}</strong> · ${esc(relDay(last.date))}` : 'Noch kein Training gespeichert.'}${editor ? ` · zuletzt geändert von ${editor}` : ''}</p></div>
+          <button type="button" class="btn-secondary" data-edit>Plan bearbeiten</button></div>
+        <div class="tp-overview">${p.days.map((d, i) => {
+          const done = data.recent.find((w) => w.dayId === d.id);
+          return `<section class="card tp-day-view">
+            <div class="row-between tp-day-view-head">
+              <div><span class="tp-day-num">Tag ${i + 1}</span><h2>${esc(d.name)}</h2>
+                <p class="muted small">${d.exercises.length} Übungen${done ? ` · zuletzt ${esc(relDay(done.date))}` : ''}</p></div>
+              ${d.exercises.length ? `<button type="button" class="btn-primary" data-start="${i}">Training starten</button>` : ''}
+            </div>
+            <ul class="tp-view-list">${d.exercises.map((e) => {
+              const l = data.last[exKey(e.name)];
+              const top = l ? l.sets.reduce((b, s) => ((s.weight ?? -1) > (b.weight ?? -1) ? s : b), l.sets[0]) : null;
+              return `<li><span class="tp-view-name">${esc(e.name)}</span><span class="tp-view-target">${esc(e.sets)} × ${esc(e.reps || '–')}</span>
+                <span class="tp-view-last">${top ? fmtSet(top) : '<span class="muted">–</span>'}</span></li>`;
+            }).join('') || '<li class="muted small">Noch keine Übungen – über „Plan bearbeiten“ hinzufügen.</li>'}</ul>
+          </section>`;
+        }).join('')}</div>
+        <a class="btn btn-secondary btn-block history-link" href="${opts.base}/history">
+          <span aria-hidden="true">📈</span> Trainingshistorie</a>`;
+      root.querySelector('[data-edit]').addEventListener('click', () => {
+        draft = { split: p.split, days: JSON.parse(JSON.stringify(p.days)) };
+        mode = 'edit';
+        draw();
+      });
+      root.querySelectorAll('[data-start]').forEach((b) => b.addEventListener('click', () => {
+        workoutDay = p.days[Number(b.dataset.start)];
+        mode = 'workout';
+        draw();
+        window.scrollTo(0, 0);
+      }));
+    }
+
+    // ---- 4. workout: weight + reps per set, prefilled with the last session ----
+    function drawWorkout() {
+      const d = workoutDay;
+      const rows = d.exercises.map((e) => {
+        const l = data.last[exKey(e.name)];
+        const n = Math.max(Number(e.sets) || 1, l ? l.sets.length : 0);
+        return { name: e.name, target: `${e.sets} × ${e.reps || '–'}`, last: l, sets: Array.from({ length: n }, (_, i) => (l && l.sets[i] ? { ...l.sets[i] } : { weight: null, reps: null })) };
+      });
+      const val = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
+      function paint() {
+        root.innerHTML = `
+          <button type="button" class="back" data-back>← Trainingsplan</button>
+          <div class="page-head"><div>${eyebrow('Training')}<${H}>${esc(d.name)}</${HC}>
+            <p class="muted">${rows.some((r) => r.last) ? 'Die Werte vom letzten Mal sind schon eingetragen – passe an, was du heute geschafft hast.' : 'Trag pro Satz Gewicht und Wiederholungen ein. Beim nächsten Mal stehen diese Werte schon hier.'}</p></div>
+            <div class="field wo-date"><label for="wo-date">Datum</label><input type="date" id="wo-date" value="${todayStr()}" max="${todayStr()}"></div></div>
+          <div class="wo-list">${rows.map((r, i) => `
+            <section class="card wo-ex" data-r="${i}">
+              <div class="row-between wo-head"><h2>${esc(r.name)}</h2><span class="badge">Ziel ${esc(r.target)}</span></div>
+              <p class="small muted wo-last">${r.last ? `Letztes Mal (${esc(fmtDate(r.last.date, { day: 'numeric', month: 'short' }))}): ${r.last.sets.map(fmtSet).join(' · ')}` : 'Erstes Mal – trag dein Startgewicht ein.'}</p>
+              <div class="wo-sets">
+                <div class="wo-set wo-set-head" aria-hidden="true"><span>Satz</span><span>Gewicht</span><span>Wdh.</span></div>
+                ${r.sets.map((s, j) => `<div class="wo-set" data-s="${j}"><span class="wo-num">${j + 1}</span>
+                  <div class="input-unit"><input inputmode="decimal" value="${val(s.weight)}" aria-label="${esc(r.name)} Satz ${j + 1} Gewicht" data-f="weight"><span>kg</span></div>
+                  <div class="input-unit"><input inputmode="numeric" value="${val(s.reps)}" aria-label="${esc(r.name)} Satz ${j + 1} Wiederholungen" data-f="reps"><span>Wdh.</span></div></div>`).join('')}
+              </div>
+              <button type="button" class="btn-add" data-add-set><span aria-hidden="true">+</span> Satz</button>
+            </section>`).join('')}</div>
+          <div class="save-bar">
+            <button type="button" class="btn-secondary" data-back>Abbrechen</button>
+            <button type="button" class="btn-primary" data-save>Training speichern</button>
+          </div>`;
+        root.querySelectorAll('[data-r]').forEach((el) => {
+          const r = rows[Number(el.dataset.r)];
+          el.querySelectorAll('[data-s]').forEach((sEl) => sEl.querySelectorAll('[data-f]').forEach((inp) => inp.addEventListener('input', () => {
+            r.sets[Number(sEl.dataset.s)][inp.dataset.f] = inp.value;
+          })));
+          el.querySelector('[data-add-set]').addEventListener('click', () => {
+            const prev = r.sets[r.sets.length - 1] || { weight: null, reps: null };
+            r.sets.push({ ...prev });
+            paint();
+          });
+        });
+        root.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => { mode = 'overview'; draw(); }));
+        root.querySelector('[data-save]').addEventListener('click', async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try {
+            const clean = (v) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim().replace(',', '.'));
+            data = await api('POST', `/api/training/workouts${query}`, {
+              date: document.getElementById('wo-date').value,
+              dayId: d.id,
+              dayName: d.name,
+              exercises: rows.map((r) => ({ name: r.name, sets: r.sets.map((s) => ({ weight: clean(s.weight), reps: clean(s.reps) })) })),
+            });
+            mode = 'overview';
+            draw();
+            window.scrollTo(0, 0);
+            savedHud('Training gespeichert', d.name);
+          } catch (err) {
+            toast(err.message, true);
+            btn.disabled = false;
+          }
+        });
+      }
+      paint();
+    }
+
+    draw();
+  }
+
+  /** Per exercise: development of the heaviest set per session. */
+  async function mountTrainingHistory(root, opts) {
+    const query = opts.userId ? `?userId=${opts.userId}` : '';
+    let exercises;
+    try {
+      ({ exercises } = await api('GET', `/api/training/history${query}`));
+    } catch (err) {
+      root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+      return;
+    }
+    root.innerHTML = `
+      <a class="back" href="${opts.base}">← Trainingsplan</a>
+      <div class="page-head"><div>${eyebrow('Training')}${opts.coach ? '<h2 class="page-title-sm">Trainingshistorie</h2>' : '<h1>Trainingshistorie</h1>'}
+        <p class="muted">Schwerster Satz pro Training – so siehst du, wie sich deine Gewichte entwickeln.</p></div></div>
+      ${exercises.length ? `<div class="hist-grid">${exercises.map((e, i) => {
+        const first = e.sessions[0];
+        const lastS = e.sessions[e.sessions.length - 1];
+        const diff = first.topWeight !== null && lastS.topWeight !== null && e.sessions.length > 1 ? lastS.topWeight - first.topWeight : null;
+        return `<section class="card hist-card">
+          <div class="row-between hist-head"><h2>${esc(e.name)}</h2>
+            ${diff !== null ? `<span class="badge ${diff > 0 ? 'good' : ''}">${diff > 0 ? '+' : ''}${num(diff, diff % 1 ? 1 : 0)} kg</span>` : ''}</div>
+          <div class="hist-stats">
+            <div><span class="metric-value">${esc(fmtKg(lastS.topWeight))}</span><span class="muted small">zuletzt · ${esc(fmtDate(lastS.date, { day: 'numeric', month: 'short' }))}</span></div>
+            <div><span class="metric-value">${esc(fmtKg(e.best))}</span><span class="muted small">Bestwert</span></div>
+            <div><span class="metric-value">${e.sessions.length}</span><span class="muted small">${e.sessions.length === 1 ? 'Training' : 'Trainings'}</span></div>
+          </div>
+          <div class="chart-hist" data-hist="${i}"></div>
+        </section>`;
+      }).join('')}</div>` : `<div class="card empty-state">Noch keine Trainings gespeichert. Starte im Trainingsplan ein Training – danach siehst du hier für jede Übung deinen Verlauf.</div>`}`;
+    const renderCharts = () => root.querySelectorAll('[data-hist]').forEach((el) => {
+      const e = exercises[Number(el.dataset.hist)];
+      const from = e.sessions[0].date;
+      const to = e.sessions[e.sessions.length - 1].date;
+      Charts.render(el, {
+        data: e.sessions.map((s) => ({ date: s.date, value: s.topWeight })),
+        from: from === to ? addDays(from, -3) : from,
+        to: from === to ? addDays(to, 3) : to,
+        type: 'line', unit: 'kg', decimals: 1, height: 170, label: `${e.name}: Gewichtsverlauf`,
+      });
+    });
+    renderCharts();
+    let t;
+    const onResize = () => { clearTimeout(t); t = setTimeout(renderCharts, 150); };
+    window.addEventListener('resize', onResize);
+    onCleanup(() => window.removeEventListener('resize', onResize));
+  }
+
+  async function renderClientTraining(history) {
+    setView(`<div id="training">${LOADING}</div>`);
+    const root = document.getElementById('training');
+    if (history) return mountTrainingHistory(root, { base: '#/training' });
+    return mountTraining(root, { base: '#/training' });
+  }
+
   async function renderCoachClient(id, tab) {
     setView(LOADING);
     let clients, entries, goals;
@@ -3167,7 +3506,7 @@
       [{ clients }, { entries }, { goals }] = await Promise.all([
         api('GET', '/api/clients'),
         tab !== 'overview' ? { entries: [] } : api('GET', `/api/entries?userId=${id}`),
-        tab === 'chat' ? { goals: {} } : api('GET', `/api/goals?userId=${id}`).then((g) => {
+        tab === 'chat' || tab.startsWith('training') ? { goals: {} } : api('GET', `/api/goals?userId=${id}`).then((g) => {
           goalHistory = g.history;
           return g;
         }),
@@ -3194,6 +3533,7 @@
         <a href="#/client/${id}/nutrition"${tab === 'nutrition' ? ' aria-current="page"' : ''}>Ernährungsplan${
           client.openSwaps ? ` <span class="count">${client.openSwaps}</span>` : ''
         }</a>
+        <a href="#/client/${id}/training"${tab.startsWith('training') ? ' aria-current="page"' : ''}>Trainingsplan</a>
         <a href="#/client/${id}/chat"${tab === 'chat' ? ' aria-current="page"' : ''}>Nachrichten${
           client.unreadMessages && tab !== 'chat' ? ` <span class="count">${client.unreadMessages}</span>` : ''
         }</a>
@@ -3202,6 +3542,15 @@
     if (tab === 'nutrition') {
       setView(`${head}<div id="nutrition">${LOADING}</div>`);
       mountCoachNutrition(document.getElementById('nutrition'), client, goals);
+      return;
+    }
+
+    if (tab.startsWith('training')) {
+      setView(`${head}<div id="training">${LOADING}</div>`);
+      const root = document.getElementById('training');
+      const opts = { userId: id, coach: true, clientName: client.displayName, base: `#/client/${id}/training` };
+      if (tab === 'training/history') mountTrainingHistory(root, opts);
+      else mountTraining(root, opts);
       return;
     }
 
@@ -3387,7 +3736,7 @@
     let armed = false;
     let busy = false;
 
-    const enabled = () => me && innerWidth <= 720 && !dialog.open && !document.querySelector('.sub-dialog[open]') && !document.body.classList.contains('sheet-open');
+    const enabled = () => me && innerWidth <= 720 && !dialog.open && !document.querySelector('.sub-dialog[open]') && !document.body.classList.contains('sheet-open') && !document.querySelector('[data-unsaved]');
     const blockedBy = (target) => {
       const scroller = target.closest('.chat-log, .food-results, .user-menu, .food-table-wrap');
       return scroller && scroller.scrollTop > 0;
