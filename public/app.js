@@ -238,7 +238,7 @@
     renderNav();
     if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
     refreshUnread();
-    const m = location.hash.match(/^#\/client\/(\d+)(?:\/(chat|nutrition|training(?:\/history)?))?/);
+    const m = location.hash.match(/^#\/client\/(\d+)(?:\/(chat|nutrition|fame|training(?:\/history)?))?/);
     if (me.role === 'coach') {
       if (m) return renderCoachClient(Number(m[1]), m[2] || 'overview');
       if (location.hash === '#/admin') return renderAdmin();
@@ -252,6 +252,7 @@
     if (location.hash === '#/chat') return renderClientChat();
     if (location.hash === '#/settings') return renderClientSettings();
     if (location.hash === '#/nutrition') return renderClientNutrition();
+    if (location.hash === '#/fame') return renderHallOfFame();
     if (location.hash === '#/training' || location.hash === '#/training/history') return renderClientTraining(location.hash === '#/training/history');
     return renderClientHome();
   }
@@ -265,7 +266,7 @@
       me.role === 'coach'
         ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash.startsWith('#/messages') ? '#/messages' : location.hash === '#/admin' ? '#/admin' : '#/'
         : location.hash.startsWith('#/training') ? '#/training' : ['#/chat', '#/settings', '#/nutrition'].includes(location.hash) ? location.hash : '#/';
-    if (location.hash === '#/account') current = null; // the account page lives in the profile menu
+    if (location.hash === '#/account' || location.hash === '#/fame') current = null; // these live in the profile menu
     nav.innerHTML = links
       .map(
         ([href, label, badge]) =>
@@ -297,6 +298,7 @@
       el.classList.toggle('has-img', Boolean(me.avatar));
     });
     document.getElementById('menu-name').textContent = me.displayName;
+    document.getElementById('menu-fame').hidden = me.role !== 'client';
     document.getElementById('menu-role').textContent = `@${me.username} · ${me.role === 'coach' ? 'Coach' : 'Klient'}`;
   }
 
@@ -335,6 +337,7 @@
     }
   });
   document.getElementById('menu-account').addEventListener('click', () => setMenu(false));
+  document.getElementById('menu-fame').addEventListener('click', () => setMenu(false));
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
     setMenu(false);
@@ -3490,6 +3493,139 @@
     return mountTraining(root, { base: '#/training' });
   }
 
+  // ---------- Hall of Fame (client; coach sees it per client) ----------
+  const TIER_NAMES = { bronze: 'Bronze', silver: 'Silber', gold: 'Gold' };
+  /** Icon artwork on a 24×24 grid; parts with class "a" carry the icon's own animation. */
+  const FAME_ICONS = {
+    flame: '<g class="a"><path d="M12 3c.6 3-1.7 4.6-3 6.6-1.4 2-1.6 4.6-.2 6.6A5 5 0 0 0 17 14c.2-2-.6-3.6-1.6-4.8.1 1.5-.5 2.7-1.6 3.2.6-3.5-.4-7-1.8-9.4z"/></g>',
+    steps: '<g class="a a1"><ellipse cx="8.5" cy="9" rx="2.3" ry="3.6"/><circle cx="8.3" cy="14.3" r="1.5"/></g><g class="a a2"><ellipse cx="15.5" cy="12" rx="2.3" ry="3.6"/><circle cx="15.7" cy="17.3" r="1.5"/></g>',
+    target: '<circle cx="12" cy="12" r="7.5" fill="none" stroke-width="1.8"/><circle class="a" cx="12" cy="12" r="4" fill="none" stroke-width="1.8"/><circle cx="12" cy="12" r="1.6"/>',
+    moon: '<g class="a"><path d="M15.5 4.5A7.5 7.5 0 1 0 19.5 16 6 6 0 0 1 15.5 4.5z"/></g><path class="a2" d="M18 5.5l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5z"/>',
+    scale: '<rect x="4.5" y="5" width="15" height="14" rx="3" fill="none" stroke-width="1.8"/><path d="M8 10a4 4 0 0 1 8 0z" fill="none" stroke-width="1.6"/><path class="a" d="M12 10l1.6-2.6" fill="none" stroke-width="1.6" stroke-linecap="round"/>',
+    apple: '<g class="a"><path d="M12 8c-1.6-1.2-5-1.2-6 1.8-1 3 .6 7 2.6 8.6 1.2 1 2.2.6 3.4.1 1.2.5 2.2.9 3.4-.1 2-1.6 3.6-5.6 2.6-8.6-1-3-4.4-3-6-1.8z"/><path d="M12 8c0-2 1-3.4 2.6-4" fill="none" stroke-width="1.5" stroke-linecap="round"/></g>',
+    dumbbell: '<g class="a"><rect x="3" y="9" width="3" height="6" rx="1"/><rect x="6" y="7.5" width="2.6" height="9" rx="1"/><rect x="18" y="9" width="3" height="6" rx="1"/><rect x="15.4" y="7.5" width="2.6" height="9" rx="1"/><rect x="8.6" y="11" width="6.8" height="2"/></g>',
+    plate: '<g class="a"><circle cx="12" cy="12" r="8" fill="none" stroke-width="2.4"/><circle cx="12" cy="12" r="4.4" fill="none" stroke-width="1.2" stroke-dasharray="2 1.6"/><circle cx="12" cy="12" r="1.6"/></g>',
+    trophy: '<g class="a"><path d="M8 4.5h8v4a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3M16 6h2.5a2.5 2.5 0 0 1-2.6 3" fill="none" stroke-width="1.5"/><path d="M11 12.5h2v3h-2zM8.5 16h7v2.5h-7z"/></g>',
+    check: '<rect x="5.5" y="4.5" width="13" height="16" rx="2" fill="none" stroke-width="1.7"/><path d="M9.5 3.5h5v2.5h-5z"/><path class="a" d="M8.8 13l2.3 2.3 4.4-4.6" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  };
+  const FAME_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <linearGradient id="hof-bronze" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0b27a"/><stop offset=".5" stop-color="#c47a3a"/><stop offset="1" stop-color="#8a4f1f"/></linearGradient>
+    <linearGradient id="hof-silver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#c3ccd3"/><stop offset="1" stop-color="#8794a0"/></linearGradient>
+    <linearGradient id="hof-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset=".45" stop-color="#f2c230"/><stop offset="1" stop-color="#b8860b"/></linearGradient>
+    <clipPath id="hof-clip"><circle cx="32" cy="32" r="27"/></clipPath></defs></svg>`;
+
+  function medalSvg(icon, tier, earned, progress) {
+    const C = 2 * Math.PI * 30;
+    return `<svg class="medal-svg" viewBox="0 0 64 64" aria-hidden="true">
+      ${earned ? '' : `<circle class="medal-track" cx="32" cy="32" r="30"/><circle class="medal-prog" cx="32" cy="32" r="30" stroke-dasharray="${((C * progress) / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 32 32)"/>`}
+      <circle class="medal-face" cx="32" cy="32" r="27" ${earned ? `fill="url(#hof-${tier})"` : ''}/>
+      <circle class="medal-rim" cx="32" cy="32" r="22.5"/>
+      ${earned ? '<g clip-path="url(#hof-clip)"><rect class="medal-shine" x="-30" y="-10" width="14" height="90" transform="rotate(25 32 32)"/></g>' : ''}
+      <g class="medal-icon ic-${icon}" transform="translate(18 18) scale(1.1667)">${FAME_ICONS[icon] || ''}</g>
+    </svg>`;
+  }
+
+  async function mountHallOfFame(root, opts) {
+    const query = opts.userId ? `?userId=${opts.userId}` : '';
+    let data;
+    try {
+      data = await api('GET', `/api/achievements${query}`);
+    } catch (err) {
+      root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+      return;
+    }
+    const fmtVal = (a, v) => (a.key === 'volume' ? `${num(v / 1000, v >= 10000 ? 0 : 1)} t` : num(v));
+    const fmtGoal = (a, g) => (a.key === 'volume' ? `${num(g / 1000)} t` : num(g));
+
+    // newly earned since this person last looked (only the client's own view celebrates)
+    const seenKey = `hof-seen-${me.id}`;
+    let seen = null;
+    if (!opts.coach) {
+      try { seen = JSON.parse(localStorage.getItem(seenKey) || 'null'); } catch { seen = null; }
+    }
+    const earnedIds = data.achievements.flatMap((a) => a.tiers.filter((t) => t.achievedAt).map((t) => `${a.key}:${t.level}`));
+    const fresh = seen ? earnedIds.filter((x) => !seen.includes(x)) : [];
+    if (!opts.coach) {
+      try { localStorage.setItem(seenKey, JSON.stringify(earnedIds)); } catch { /* private mode */ }
+    }
+
+    const selected = {};
+    const nextTier = (a) => a.tiers.find((t) => !t.achievedAt);
+    const s = data.summary;
+    const upcoming = data.achievements
+      .map((a) => ({ a, t: nextTier(a) }))
+      .filter((x) => x.t && x.t.progress > 0)
+      .sort((x, y) => y.t.progress - x.t.progress)
+      .slice(0, 3);
+
+    function detail(a) {
+      const t = a.tiers.find((x) => x.level === selected[a.key]) || nextTier(a) || a.tiers[2];
+      selected[a.key] = t.level;
+      const status = t.achievedAt
+        ? `<span class="fame-done">✓ Erreicht am ${esc(fmtDate(t.achievedAt, { day: 'numeric', month: 'long', year: 'numeric' }))}</span>`
+        : `<span>${esc(fmtVal(a, Math.min(a.current, t.goal)))} von ${esc(fmtGoal(a, t.goal))} ${esc(a.unit)}</span><span class="fame-pct">${t.progress} %</span>`;
+      return `<p class="fame-goal"><span class="fame-tier-name tier-${t.level}">${TIER_NAMES[t.level]}</span> ${esc(t.text)}</p>
+        <div class="fame-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${t.achievedAt ? 100 : t.progress}" aria-label="${esc(a.title)} ${TIER_NAMES[t.level]}"><span style="width:${t.achievedAt ? 100 : t.progress}%" class="tier-${t.level}"></span></div>
+        <p class="fame-status small">${status}</p>`;
+    }
+
+    function card(a) {
+      const all = a.tiers.every((t) => t.achievedAt);
+      const extra = a.key === 'streak' && a.running ? `<span class="muted small">Gerade ${a.running} ${a.running === 1 ? 'Tag' : 'Tage'} in Folge</span>`
+        : `<span class="muted small">${esc(fmtVal(a, a.current))} ${esc(a.unit)}${a.key === 'streak' ? ' (Rekord)' : ''}</span>`;
+      return `<section class="card fame-card ${all ? 'complete' : ''}" data-fame="${a.key}">
+        <div class="fame-head"><div><h2>${esc(a.title)}</h2>${extra}</div>${all ? '<span class="badge good">Alle Stufen 🎉</span>' : ''}</div>
+        <div class="fame-medals" role="group" aria-label="${esc(a.title)}: Stufen">
+          ${a.tiers.map((t) => {
+            const isNew = fresh.includes(`${a.key}:${t.level}`);
+            const label = `${TIER_NAMES[t.level]}: ${t.text} – ${t.achievedAt ? 'erreicht' : `${t.progress} % geschafft`}`;
+            return `<button type="button" class="medal ${t.achievedAt ? 'earned' : 'locked'} ${isNew ? 'new' : ''} tier-${t.level}" data-tier="${t.level}" aria-pressed="false" aria-label="${esc(label)}">
+              ${medalSvg(a.icon, t.level, Boolean(t.achievedAt), t.progress)}
+              <span class="medal-cap"><b>${TIER_NAMES[t.level]}</b><span>${t.achievedAt ? '✓' : `${t.progress} %`}</span></span>
+            </button>`;
+          }).join('')}
+        </div>
+        <div class="fame-detail" aria-live="polite">${detail(a)}</div>
+      </section>`;
+    }
+
+    const freshNames = fresh.map((id) => {
+      const [k, lvl] = id.split(':');
+      return `${(data.achievements.find((a) => a.key === k) || {}).title} ${TIER_NAMES[lvl]}`;
+    });
+    root.innerHTML = `${FAME_DEFS}
+      ${opts.coach ? '' : '<a class="back" href="#/">← Zurück</a>'}
+      <div class="page-head fame-page-head"><div>${eyebrow(opts.coach ? 'Erfolge' : 'Deine Erfolge')}${opts.coach ? '<h2 class="page-title-sm">Hall of Fame</h2>' : '<h1>Hall of Fame</h1>'}
+        <p class="muted">${opts.coach ? `Was ${esc(opts.clientName || 'dein Klient')} schon geschafft hat – und was als Nächstes kommt.` : 'Jede Medaille steht für etwas, das du durchgezogen hast. Ausgegraute zeigen, was als Nächstes kommt.'}</p></div></div>
+      ${freshNames.length ? `<div class="fame-new-banner" role="status">🎉 <strong>Neu freigeschaltet:</strong> ${esc(freshNames.slice(0, 3).join(', '))}${freshNames.length > 3 ? ` und ${freshNames.length - 3} weitere` : ''}</div>` : ''}
+      <section class="card fame-summary">
+        <div class="fame-count"><span class="fame-big">${s.earned}</span><span class="muted">von ${s.total} Medaillen</span></div>
+        <div class="fame-bar fame-bar-total" aria-hidden="true"><span style="width:${Math.round((s.earned / s.total) * 100)}%"></span></div>
+        <ul class="fame-tally">
+          ${['gold', 'silver', 'bronze'].map((l) => `<li><span class="tally-dot tier-${l}"></span>${s[l]} ${TIER_NAMES[l]}</li>`).join('')}
+        </ul>
+        ${upcoming.length ? `<div class="fame-next"><h3>Fast geschafft</h3><ul>${upcoming.map(({ a, t }) => `
+          <li><span class="tally-dot tier-${t.level}"></span><span class="fn-text"><b>${esc(a.title)} ${TIER_NAMES[t.level]}</b> · noch ${esc(fmtGoal(a, t.goal - a.current))} ${esc(a.unit)}</span><span class="fame-pct">${t.progress} %</span></li>`).join('')}</ul></div>` : ''}
+      </section>
+      <div class="fame-grid">${data.achievements.map(card).join('')}</div>`;
+
+    root.querySelectorAll('[data-fame]').forEach((el) => {
+      const a = data.achievements.find((x) => x.key === el.dataset.fame);
+      const sync = () => el.querySelectorAll('.medal').forEach((m) => m.setAttribute('aria-pressed', String(m.dataset.tier === selected[a.key])));
+      sync();
+      el.querySelectorAll('.medal').forEach((m) => m.addEventListener('click', () => {
+        selected[a.key] = m.dataset.tier;
+        el.querySelector('.fame-detail').innerHTML = detail(a);
+        sync();
+      }));
+    });
+  }
+
+  function renderHallOfFame() {
+    setView(`<div id="fame">${LOADING}</div>`);
+    return mountHallOfFame(document.getElementById('fame'), {});
+  }
+
   async function renderCoachClient(id, tab) {
     setView(LOADING);
     let clients, entries, goals;
@@ -3506,7 +3642,7 @@
       [{ clients }, { entries }, { goals }] = await Promise.all([
         api('GET', '/api/clients'),
         tab !== 'overview' ? { entries: [] } : api('GET', `/api/entries?userId=${id}`),
-        tab === 'chat' || tab.startsWith('training') ? { goals: {} } : api('GET', `/api/goals?userId=${id}`).then((g) => {
+        tab === 'chat' || tab === 'fame' || tab.startsWith('training') ? { goals: {} } : api('GET', `/api/goals?userId=${id}`).then((g) => {
           goalHistory = g.history;
           return g;
         }),
@@ -3534,6 +3670,7 @@
           client.openSwaps ? ` <span class="count">${client.openSwaps}</span>` : ''
         }</a>
         <a href="#/client/${id}/training"${tab.startsWith('training') ? ' aria-current="page"' : ''}>Trainingsplan</a>
+        <a href="#/client/${id}/fame"${tab === 'fame' ? ' aria-current="page"' : ''}>Hall of Fame</a>
         <a href="#/client/${id}/chat"${tab === 'chat' ? ' aria-current="page"' : ''}>Nachrichten${
           client.unreadMessages && tab !== 'chat' ? ` <span class="count">${client.unreadMessages}</span>` : ''
         }</a>
@@ -3542,6 +3679,12 @@
     if (tab === 'nutrition') {
       setView(`${head}<div id="nutrition">${LOADING}</div>`);
       mountCoachNutrition(document.getElementById('nutrition'), client, goals);
+      return;
+    }
+
+    if (tab === 'fame') {
+      setView(`${head}<div id="fame">${LOADING}</div>`);
+      mountHallOfFame(document.getElementById('fame'), { userId: id, coach: true, clientName: client.displayName });
       return;
     }
 

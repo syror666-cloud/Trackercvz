@@ -1231,3 +1231,109 @@ button.back { background: none; border: 0; padding: 0; min-height: 32px; }
 }
 .page-title-sm { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.1; letter-spacing: -0.02em; }
 @media (max-width: 360px) { .nav a { font-size: 0.62rem; padding: 4px 0; } .nav-icon { width: 44px; } }
+
+/* ==========================================================================
+   Hall of Fame: medals (bronze / silver / gold), progress, animated icons
+   ========================================================================== */
+.user-menu #menu-fame { gap: 8px; }
+.fame-new-banner {
+  background: var(--ivory); color: var(--text); padding: 14px 18px; border-radius: var(--r-data); margin-bottom: 16px;
+  --muted: var(--steel); animation: fame-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.fame-summary { border-radius: var(--r-data); margin-bottom: 18px; display: grid; gap: 12px; }
+.fame-count { display: flex; align-items: baseline; gap: 10px; }
+.fame-big { font: 400 2.8rem/1 var(--font-display); letter-spacing: -0.04em; }
+.fame-tally { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.92rem; }
+.fame-tally li { display: flex; align-items: center; gap: 7px; }
+.tally-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.tally-dot.tier-bronze, .fame-bar span.tier-bronze { background: linear-gradient(135deg, #f0b27a, #8a4f1f); }
+.tally-dot.tier-silver, .fame-bar span.tier-silver { background: linear-gradient(135deg, #ffffff, #8794a0); box-shadow: inset 0 0 0 1px #8794a0; }
+.tally-dot.tier-gold, .fame-bar span.tier-gold { background: linear-gradient(135deg, #fff1a8, #b8860b); }
+.fame-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.fame-bar span { display: block; height: 100%; border-radius: 4px; background: var(--text); transition: width 0.6s ease; }
+.fame-next { border-top: 1px solid var(--border); padding-top: 12px; }
+.fame-next h3 { font: 500 0.86rem var(--font-body); color: var(--muted); margin: 0 0 6px; }
+.fame-next ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fame-next li { display: flex; align-items: center; gap: 9px; font-size: 0.92rem; }
+.fn-text { flex: 1; min-width: 0; }
+.fame-pct { font: 400 0.95rem var(--font-display); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+.fame-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+@media (max-width: 720px) { .fame-grid { grid-template-columns: minmax(0, 1fr); } }
+.fame-card { border-radius: var(--r-data); display: flex; flex-direction: column; gap: 12px; }
+.fame-card.complete { box-shadow: inset 0 0 0 2px #e8b923; }
+.fame-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.fame-head h2 { margin: 0 0 2px; }
+.fame-medals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.medal {
+  flex-direction: column; gap: 6px; padding: 8px 2px 6px; min-height: 0; height: auto;
+  background: transparent; border: 0; border-radius: 14px; color: var(--text); letter-spacing: normal;
+}
+.medal:hover { background: var(--surface-2); color: var(--text); }
+.medal[aria-pressed="true"] { background: var(--surface-2); box-shadow: inset 0 0 0 1.5px var(--field); }
+.medal-svg { width: 68px; height: 68px; overflow: visible; }
+.medal-cap { display: flex; flex-direction: column; align-items: center; gap: 1px; font: 400 0.8rem var(--font-body); }
+.medal-cap b { font: 500 0.82rem var(--font-body); }
+.medal-cap span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.medal.earned .medal-cap span { color: var(--good); font-weight: 700; }
+.medal-track { fill: none; stroke: var(--border); stroke-width: 3; }
+.medal-prog { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.medal-face { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
+.medal-rim { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.2; }
+.medal.locked .medal-rim { stroke: var(--line); stroke-dasharray: 2 3; }
+.medal-icon { fill: currentColor; stroke: currentColor; stroke-width: 0; }
+.medal.locked .medal-icon { color: var(--muted); opacity: 0.55; }
+.medal.earned .medal-icon { color: #fff; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3)); }
+.medal.earned.tier-silver .medal-icon { color: #3e4b56; filter: none; }
+.medal.earned.tier-gold .medal-icon { color: #6b4a00; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.5)); }
+.medal.earned .medal-svg { filter: drop-shadow(0 3px 6px rgba(0, 41, 65, 0.22)); }
+.medal-shine { fill: rgba(255, 255, 255, 0.55); animation: medal-shine 4.5s ease-in-out infinite; }
+.tier-silver .medal-shine { animation-delay: 0.5s; }
+.tier-gold .medal-shine { animation-delay: 1s; }
+.fame-detail { border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 7px; }
+.fame-goal { margin: 0; font-size: 0.95rem; }
+.fame-tier-name { font-weight: 600; margin-right: 4px; }
+.fame-status { margin: 0; display: flex; justify-content: space-between; color: var(--muted); }
+.fame-done { color: var(--good); font-weight: 600; }
+
+/* icon animations – only on earned medals */
+.medal.earned .medal-icon .a, .medal.earned .medal-icon .a1, .medal.earned .medal-icon .a2 { transform-box: fill-box; transform-origin: center; }
+.medal.earned .ic-flame .a { transform-origin: 50% 100%; animation: fame-flicker 1.6s ease-in-out infinite; }
+.medal.earned .ic-steps .a1 { animation: fame-step 1.6s ease-in-out infinite; }
+.medal.earned .ic-steps .a2 { animation: fame-step 1.6s ease-in-out 0.8s infinite; }
+.medal.earned .ic-target .a { animation: fame-pulse 2s ease-in-out infinite; }
+.medal.earned .ic-moon .a { animation: fame-sway 4s ease-in-out infinite; }
+.medal.earned .ic-moon .a2 { animation: fame-twinkle 2s ease-in-out infinite; }
+.medal.earned .ic-scale .a { transform-box: view-box; transform-origin: 12px 10px; animation: fame-needle 2.4s ease-in-out infinite; }
+.medal.earned .ic-apple .a { transform-origin: 50% 100%; animation: fame-bounce 2.2s ease-in-out infinite; }
+.medal.earned .ic-dumbbell .a { animation: fame-lift 1.8s ease-in-out infinite; }
+.medal.earned .ic-plate .a { animation: fame-spin 6s linear infinite; }
+.medal.earned .ic-trophy .a { transform-origin: 50% 100%; animation: fame-sway 2.6s ease-in-out infinite; }
+.medal.earned .ic-check .a { stroke-dasharray: 12; animation: fame-draw 2.8s ease-in-out infinite; }
+.medal.new .medal-svg { animation: fame-pop 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) both, fame-glow 1.8s ease-in-out 0.7s 3; }
+.medal.new:nth-child(2) .medal-svg { animation-delay: 0.15s, 0.85s; }
+.medal.new:nth-child(3) .medal-svg { animation-delay: 0.3s, 1s; }
+
+@keyframes medal-shine { 0%, 62% { transform: rotate(25deg) translateX(0); } 100% { transform: rotate(25deg) translateX(110px); } }
+@keyframes fame-flicker { 0%, 100% { transform: scale(1, 1); } 30% { transform: scale(0.94, 1.08); } 60% { transform: scale(1.05, 0.95) skewX(-3deg); } }
+@keyframes fame-step { 0%, 100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(-2px); opacity: 0.55; } }
+@keyframes fame-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.4; } }
+@keyframes fame-sway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+@keyframes fame-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+@keyframes fame-needle { 0%, 100% { transform: rotate(-35deg); } 50% { transform: rotate(45deg); } }
+@keyframes fame-bounce { 0%, 100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-2.5px) scale(1.03, 0.97); } 55% { transform: translateY(0) scale(1.05, 0.95); } }
+@keyframes fame-lift { 0%, 100% { transform: translateY(1.5px); } 45%, 60% { transform: translateY(-2.5px); } }
+@keyframes fame-spin { to { transform: rotate(360deg); } }
+@keyframes fame-draw { 0% { stroke-dashoffset: 12; } 40%, 80% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -12; } }
+@keyframes fame-pop { 0% { transform: scale(0.3) rotate(-25deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes fame-glow { 50% { filter: drop-shadow(0 0 10px rgba(253, 110, 110, 0.75)); } }
+@media (prefers-reduced-motion: reduce) {
+  .medal-shine, .medal .medal-icon *, .medal.new .medal-svg, .fame-new-banner { animation: none !important; }
+}
+@media (prefers-color-scheme: dark) {
+  .medal.earned .medal-svg { filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5)); }
+}
+.medal.earned .medal-face { stroke: none; }
+.medal.earned.tier-bronze .medal-face { fill: url(#hof-bronze); }
+.medal.earned.tier-silver .medal-face { fill: url(#hof-silver); }
+.medal.earned.tier-gold .medal-face { fill: url(#hof-gold); }

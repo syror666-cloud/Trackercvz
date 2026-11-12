@@ -10,6 +10,7 @@ const { nextRecurringRun, localDate, zonedToUtc } = require('./schedule');
 const { weekComparison, weekHighlights } = require('./weekstats');
 const { nutritionRoutes } = require('./nutrition');
 const { trainingRoutes } = require('./training');
+const { achievementsModule } = require('./achievements');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -1169,7 +1170,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     isValidDate, maxAllowedDate, localDate,
   };
   metrics = metricsModule(deps);
-  routes.push(...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...achievementsModule(deps).routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();
