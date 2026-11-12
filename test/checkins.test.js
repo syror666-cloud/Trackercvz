@@ -8,6 +8,7 @@ const { openDb, createUser } = require('../src/db');
 const { createApp } = require('../src/app');
 const { createNotifier } = require('../src/notify');
 const { weekComparison } = require('../src/weekstats');
+const { localDate } = require('../src/schedule');
 
 test('week comparison: last 7 days vs. the 7 before', () => {
   const entries = [
@@ -63,7 +64,8 @@ test('check-in: coach proposes, client replies and accepts, plan updates', async
 
   const max = client();
   await max('POST', '/api/login', { username: 'max', password: 'maxpass123' });
-  await max('PUT', `/api/entries/${new Date().toISOString().slice(0, 10)}`, { weight: 84, steps: 9000, training: true, caloriesOk: false, calories: 2900 });
+  // "today" in the app's time zone (the UTC date is a day behind late in the evening)
+  await max('PUT', `/api/entries/${localDate(Date.now(), 'Europe/Berlin')}`, { weight: 84, steps: 9000, training: true, caloriesOk: false, calories: 2900 });
 
   // Queue
   let queue = (await coach('GET', '/api/checkins/queue')).data.clients;

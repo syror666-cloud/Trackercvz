@@ -381,6 +381,15 @@ Kaufen|Buy|Comprar|Compra
 Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen eine kalte Dose für deinen Kühlschrank.|Every medal is worth tokens – bronze 1, silver 2, gold 3. Trade them for a cold can for your fridge.|Cada medalla vale tokens – bronce 1, plata 2, oro 3. Cámbialos por una lata fría.|Ogni medaglia vale token – bronzo 1, argento 2, oro 3. Scambiali con una lattina fresca.
 Dein Kühlschrank – gefüllt mit dem, was du dir mit deinen Token gegönnt hast.|Your fridge – filled with what you treated yourself to with your tokens.|Tu nevera – llena de lo que te has dado con tus tokens.|Il tuo frigo – pieno di ciò che ti sei concesso con i token.
 tauschst du Token gegen Dosen.|you trade tokens for cans.|cambias tokens por latas.|scambi token con lattine.
+KI-Vorgaben für Ernährungspläne|AI rules for nutrition plans|Reglas de IA para planes de nutrición|Regole IA per i piani alimentari
+Daran hält sich die KI bei jedem Entwurf – z. B. was zum Frühstück passt und was nicht. Eine Regel pro Zeile, in deinen eigenen Worten.|The AI follows these for every draft – e.g. what fits breakfast and what doesn't. One rule per line, in your own words.|La IA las sigue en cada borrador – p. ej. qué encaja en el desayuno. Una regla por línea.|L'IA le segue in ogni bozza – es. cosa va bene a colazione. Una regola per riga.
+Vorgaben speichern|Save rules|Guardar reglas|Salva regole
+Standard wiederherstellen|Restore default|Restaurar estándar|Ripristina predefinito
+angepasst|customised|personalizado|personalizzato
+Standard|Default|Estándar|Predefinito
+Gilt nur für den nächsten Entwurf. Dauerhafte Regeln stellst du im|Applies to the next draft only. Set permanent rules in the|Solo para el próximo borrador. Las reglas fijas se configuran en|Vale solo per la prossima bozza. Le regole fisse si impostano in
+KI-Vorgaben|AI rules|Reglas de IA|Regole IA
+Im Admin-Tool legst du fest, was die KI in welche Mahlzeit packt – z. B. kein warmes Hauptgericht zum Frühstück. Beim Entwurf kannst du zusätzlich einen einmaligen Hinweis mitgeben.|In the admin tool you decide what the AI puts into which meal – e.g. no hot main course at breakfast. You can also add a one-off note per draft.|En el panel de administración decides qué pone la IA en cada comida – p. ej. nada de plato caliente en el desayuno. También puedes añadir una nota puntual por borrador.|Nello strumento admin decidi cosa mette l'IA in ogni pasto – es. niente piatto caldo a colazione. Puoi anche aggiungere una nota per singola bozza.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

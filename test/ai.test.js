@@ -115,3 +115,34 @@ test('nutrition draft: made on request, unknown foods dropped, coach approves an
   assert.equal(d, null);
   assert.equal((await coach('POST', `/api/ai/nutrition-draft/apply?userId=${id}`, { meals: edited })).status, 409);
 });
+
+test('nutrition draft follows meal rules: coach guidelines, one-off hint, meals in daily order', async (t) => {
+  const ai = fakeClient();
+  const { server, coach, id } = await setup(ai);
+  t.after(() => server.close());
+  const g = (await coach('GET', '/api/ai/guidelines')).data;
+  assert.equal(g.custom, false);
+  assert.match(g.guidelines, /Frühstück: .*Kein warmes Hauptgericht/);
+  const mine = `${g.defaults}\nFrühstück immer mit Haferflocken.`;
+  assert.equal((await coach('PUT', '/api/ai/guidelines', { guidelines: mine })).data.custom, true);
+  const foods = (await coach('GET', '/api/foods')).data.foods;
+  const f = (n) => foods.find((x) => x.name.startsWith(n)).id;
+  // the model returns the meals out of order – the plan comes back in the order of the day
+  ai.replies.push({ notes: '', meals: [
+    { type: 'abendessen', name: 'Abendessen', items: [{ foodId: f('Vollkornbrot'), amount: 100 }] },
+    { type: 'fruehstueck', name: 'Frühstück', items: [{ foodId: f('Haferflocken'), amount: 70 }] },
+    { type: 'snack_nachmittag', name: 'Snack', items: [{ foodId: f('Apfel'), amount: 150 }] },
+    { type: 'mittagessen', name: 'Mittagessen', items: [{ foodId: f('Hähnchenbrust'), amount: 180 }] },
+  ] });
+  const r = await coach('POST', `/api/ai/nutrition-draft?userId=${id}`, { hint: 'Frühstück lieber süß' });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.data.draft.meals.map((m) => m.name), ['Frühstück', 'Mittagessen', 'Snack', 'Abendessen']);
+  const p = ai.calls.at(-1);
+  assert.match(p.system, /Vorgaben des Coaches/);
+  assert.match(p.system, /Frühstück immer mit Haferflocken/);
+  assert.match(p.messages[0].content, /Frühstück lieber süß/);
+  assert.ok(p.output_config.format.schema.properties.meals.items.required.includes('type'));
+  // empty text resets to the defaults
+  assert.equal((await coach('PUT', '/api/ai/guidelines', { guidelines: '' })).data.custom, false);
+  assert.equal((await coach('PUT', '/api/ai/guidelines', { guidelines: 'x'.repeat(5000) })).status, 400);
+});

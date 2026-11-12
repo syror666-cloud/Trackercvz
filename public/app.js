@@ -194,6 +194,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-ki-vorgaben', date: 'November 2026',
+      client: [],
+      coach: [
+        ['✦', 'KI-Vorgaben', 'Im Admin-Tool legst du fest, was die KI in welche Mahlzeit packt – z. B. kein warmes Hauptgericht zum Frühstück. Beim Entwurf kannst du zusätzlich einen einmaligen Hinweis mitgeben.'],
+      ],
+    },
+    {
       id: '2026-11-ki-token', date: 'November 2026',
       client: [
         ['🪙', 'Medaillen sind jetzt Token wert', 'Bronze 1, Silber 2, Gold 3 Token – im Shop tauschst du sie gegen Dosen.'],
@@ -253,6 +260,12 @@
     const missed = CHANGELOG.slice(0, seenAt === -1 ? 3 : seenAt);
     const role = me.role === 'coach' ? 'coach' : 'client';
     const items = missed.flatMap((r) => r[role]).slice(0, 10);
+    if (!items.length) {
+      // nothing new for this role: just remember the update silently
+      me.seenRelease = RELEASE;
+      api('POST', '/api/me/release', { release: RELEASE }).catch(() => {});
+      return;
+    }
     const dlg = document.createElement('dialog');
     dlg.className = 'whats-new';
     dlg.setAttribute('aria-labelledby', 'wn-title');
@@ -2196,6 +2209,7 @@
       return;
     }
     let busy = false;
+    let hint = '';
     const kcalOf = (i) => Math.round((i.amount * i.kcal) / 100);
     const draw = () => {
       const d = state.draft;
@@ -2221,14 +2235,18 @@
       root.innerHTML = `
         <div class="row-between ai-head"><h2><span class="ai-spark" aria-hidden="true">✦</span> KI-Entwurf</h2>
           ${state.enabled && !busy ? `<button type="button" class="${d ? 'btn-ghost' : 'btn-primary'} btn-sm" data-ai-run>${d ? 'Neu erstellen' : 'Entwurf erstellen'}</button>` : ''}</div>
+        ${state.enabled && !busy ? `<div class="ai-hint"><input data-ai-hint maxlength="300" value="${esc(hint)}" placeholder="Hinweis für diesen Entwurf (optional), z. B. Frühstück lieber süß" aria-label="Hinweis für diesen Entwurf">
+          <p class="muted small">Gilt nur für den nächsten Entwurf. Dauerhafte Regeln stellst du im <a href="#/admin">Admin-Tool</a> unter „KI-Vorgaben“ ein.</p></div>` : ''}
         ${body}`;
+      const hintEl = root.querySelector('[data-ai-hint]');
+      if (hintEl) hintEl.addEventListener('input', () => { hint = hintEl.value; });
       const run = root.querySelector('[data-ai-run]');
       if (run) run.addEventListener('click', async () => {
         if (d && !confirm('Neuen Entwurf erstellen? Deine Änderungen am aktuellen Entwurf gehen verloren.')) return;
         busy = true;
         draw();
         try {
-          state = await api('POST', `/api/ai/nutrition-draft?userId=${client.id}`);
+          state = await api('POST', `/api/ai/nutrition-draft?userId=${client.id}`, { hint });
         } catch (err) {
           toast(err.message, true);
         }
@@ -2281,7 +2299,7 @@
         btn.disabled = true;
         try {
           await api('POST', `/api/ai/nutrition-draft/apply?userId=${client.id}`, {
-            meals: d.meals.map((m) => ({ name: m.name, items: m.items.filter((i) => i.amount > 0).map((i) => ({ foodId: i.foodId, amount: i.amount })) })),
+            meals: d.meals.map((m) => ({ type: m.type, name: m.name, items: m.items.filter((i) => i.amount > 0).map((i) => ({ foodId: i.foodId, amount: i.amount })) })),
           });
           savedHud('Plan gesendet', client.displayName);
           onApplied();
@@ -2896,12 +2914,55 @@
         <section class="card" id="reminder"></section>
         <section class="card" id="metrics"></section>
         <section class="card" id="foods"></section>
+        <section class="card ai-card" id="ai-guidelines"></section>
       </div>`);
+    drawAiGuidelines();
     drawActivity(ov);
     drawReminder(ov);
     drawWeightReminder(ov);
     drawFoods();
     drawMetricsAdmin();
+  }
+
+  /** Rules the AI follows for nutrition drafts (e.g. what belongs into breakfast). */
+  async function drawAiGuidelines() {
+    const root = document.getElementById('ai-guidelines');
+    let g;
+    try {
+      g = await api('GET', '/api/ai/guidelines');
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    root.innerHTML = `
+      <div class="row-between" style="margin-bottom:6px"><h2><span class="ai-spark" aria-hidden="true">✦</span> KI-Vorgaben für Ernährungspläne</h2>
+        <span class="badge ${g.custom ? 'good' : ''}">${g.custom ? 'angepasst' : 'Standard'}</span></div>
+      <p class="small muted" style="margin:0 0 10px">Daran hält sich die KI bei jedem Entwurf – z. B. was zum Frühstück passt und was nicht. Eine Regel pro Zeile, in deinen eigenen Worten.</p>
+      <form id="ai-guidelines-form" novalidate>
+        <textarea name="guidelines" rows="9" maxlength="4000" aria-label="KI-Vorgaben">${esc(g.guidelines)}</textarea>
+        <div class="row" style="gap:8px;margin-top:10px">
+          <button type="submit" class="btn-primary">Vorgaben speichern</button>
+          ${g.custom ? '<button type="button" class="btn-ghost" data-reset>Standard wiederherstellen</button>' : ''}
+        </div>
+      </form>`;
+    const form = root.querySelector('form');
+    const save = async (text) => {
+      try {
+        await api('PUT', '/api/ai/guidelines', { guidelines: text });
+        savedHud('Gespeichert', 'KI-Vorgaben');
+        drawAiGuidelines();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      save(form.guidelines.value);
+    });
+    const reset = root.querySelector('[data-reset]');
+    if (reset) reset.addEventListener('click', () => {
+      if (confirm('Deine Vorgaben durch den Standard ersetzen?')) save('');
+    });
   }
 
   async function drawMetricsAdmin() {

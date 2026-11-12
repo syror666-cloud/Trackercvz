@@ -28,6 +28,20 @@ const SUMMARY_SCHEMA = {
   },
 };
 
+// Meal types in the order of the day. The model has to say which type each meal is, which keeps
+// e.g. a warm main course out of breakfast; the plan is sorted by this order.
+const MEAL_TYPES = ['fruehstueck', 'snack_vormittag', 'mittagessen', 'snack_nachmittag', 'pre_workout', 'post_workout', 'abendessen', 'spaetmahlzeit'];
+
+// Rules for the nutrition draft. The coach can change them in the admin tool (stored in settings).
+const DEFAULT_GUIDELINES = [
+  'Frühstück: typische Frühstückszutaten – z. B. Haferflocken oder Müsli, Brot oder Brötchen, Eier, Skyr, Quark oder Joghurt, Obst, etwas Aufstrich. Kein warmes Hauptgericht: kein Reis, keine Kartoffeln oder Nudeln, kein Fleisch oder Fisch mit Gemüsebeilage.',
+  'Mittagessen: vollwertige Hauptmahlzeit aus einer Proteinquelle (Fleisch, Fisch, Eier, Tofu, Hülsenfrüchte), einer Beilage (Reis, Kartoffeln, Nudeln oder Brot) und Gemüse.',
+  'Abendessen: Hauptmahlzeit wie mittags oder eine kalte Variante (z. B. Brot mit Belag, Salat mit Eiern oder Hähnchen).',
+  'Snacks: klein und unkompliziert – z. B. Obst, Skyr, Quark oder Joghurt, eine Handvoll Nüsse, Proteinshake, Reiswaffeln. Keine kompletten Mahlzeiten.',
+  'Vor dem Training leicht verdaulich (Kohlenhydrate, wenig Fett), danach Protein plus Kohlenhydrate.',
+  'Pro Mahlzeit 2–5 Lebensmittel in alltagstauglichen Portionen; Mahlzeiten in der Reihenfolge des Tages und mit passenden Namen.',
+].join('\n');
+
 const DRAFT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -38,9 +52,10 @@ const DRAFT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'items'],
+        required: ['type', 'name', 'items'],
         properties: {
-          name: { type: 'string' },
+          type: { type: 'string', enum: MEAL_TYPES, description: 'Art der Mahlzeit – bestimmt, welche Lebensmittel passen' },
+          name: { type: 'string', description: 'Deutscher Name, z. B. Frühstück, Mittagessen, Snack' },
           items: {
             type: 'array',
             items: {
@@ -78,6 +93,9 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
     foods: db.prepare('SELECT id, name, kcal, unit, category FROM foods ORDER BY category, name'),
     food: db.prepare('SELECT * FROM foods WHERE id = ?'),
     hasPlan: db.prepare('SELECT 1 FROM meals WHERE client_id = ? LIMIT 1'),
+    getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
+    setSetting: db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
+    delSetting: db.prepare('DELETE FROM settings WHERE key = ?'),
     getSummary: db.prepare("SELECT * FROM ai_results WHERE client_id = ? AND kind = 'checkin'"),
     getDraft: db.prepare("SELECT * FROM ai_results WHERE client_id = ? AND kind = 'nutrition'"),
     save: db.prepare(
@@ -153,9 +171,13 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
   const summaryView = (row) => (row ? { ...JSON.parse(row.content), createdAt: row.created_at, model: row.model } : null);
 
   // ---------- nutrition draft ----------
+  const guidelines = () => (q.getSetting.get('ai_guidelines') || {}).value || DEFAULT_GUIDELINES;
+
   function resolveDraft(draft) {
     const meals = [];
-    for (const m of (draft.meals || []).slice(0, 8)) {
+    const order = (m) => (MEAL_TYPES.includes(m.type) ? MEAL_TYPES.indexOf(m.type) : MEAL_TYPES.length);
+    const sorted = (draft.meals || []).slice(0, 8).map((m, i) => ({ m, i })).sort((a, b) => order(a.m) - order(b.m) || a.i - b.i).map((x) => x.m);
+    for (const m of sorted) {
       const items = [];
       for (const it of (m.items || []).slice(0, 12)) {
         const f = q.food.get(Number(it.foodId));
@@ -164,12 +186,12 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
         items.push({ foodId: f.id, name: f.name, unit: f.unit, kcal: f.kcal, amount, kcalTotal: Math.round((amount * f.kcal) / 100) });
       }
       const name = String(m.name || '').trim().slice(0, 60) || `Mahlzeit ${meals.length + 1}`;
-      if (items.length) meals.push({ name, items, kcalTotal: items.reduce((a, i) => a + i.kcalTotal, 0) });
+      if (items.length) meals.push({ type: MEAL_TYPES.includes(m.type) ? m.type : null, name, items, kcalTotal: items.reduce((a, i) => a + i.kcalTotal, 0) });
     }
     return { meals, notes: String(draft.notes || '').slice(0, 800), kcalTotal: meals.reduce((a, m) => a + m.kcalTotal, 0) };
   }
 
-  async function makeDraft(clientId) {
+  async function makeDraft(clientId, hint = '') {
     const g = q.goals.get(clientId) || {};
     const r = q.request.get(clientId);
     const answers = r ? JSON.parse(r.answers) : null;
@@ -189,8 +211,12 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
       'Der Coach prüft und ändert den Entwurf, bevor der Klient ihn sieht. Verwende ausschließlich Lebensmittel aus der ' +
       'Datenbank (foodId = erste Spalte); Mengen in Gramm bzw. ml. Halte dich strikt an das Kalorienziel (±5 %) ' +
       'und an alles, was der Klient nicht essen kann oder will. Achte auf ausreichend Protein (ca. 1,8–2 g pro kg ' +
-      'Körpergewicht, falls bekannt), alltagstaugliche Mahlzeiten mit deutschen Namen und die gewünschte Mahlzeitenzahl.';
-    const user = `Kalorienziel: ${target}\nKategorie: ${(q.user.get(clientId) || {}).category || 'keine'}\n\nVorlieben des Klienten:\n${prefs}\n\nLebensmittel-Datenbank (id|Name|kcal|Kategorie):\n${foods}`;
+      'Körpergewicht, falls bekannt), alltagstaugliche Mahlzeiten mit deutschen Namen und die gewünschte Mahlzeitenzahl. ' +
+      'Jede Mahlzeit muss zu ihrer Tageszeit passen: Wähle für jede Mahlzeit zuerst den Typ und dann nur Lebensmittel, ' +
+      'die man zu dieser Mahlzeit typischerweise isst.\n\nVorgaben des Coaches (unbedingt einhalten, sie haben Vorrang):\n' + guidelines();
+    const user = `Kalorienziel: ${target}\nKategorie: ${(q.user.get(clientId) || {}).category || 'keine'}\n\nVorlieben des Klienten:\n${prefs}` +
+      (hint ? `\n\nZusätzlicher Hinweis des Coaches für diesen Entwurf: ${hint}` : '') +
+      `\n\nLebensmittel-Datenbank (id|Name|kcal|Kategorie):\n${foods}`;
     const { data, model: used } = await ask(system, user, DRAFT_SCHEMA, 8000);
     const draft = resolveDraft(data);
     if (!draft.meals.length) throw new HttpError(502, 'Die KI hat keinen brauchbaren Entwurf geliefert – bitte nochmal versuchen');
@@ -214,6 +240,20 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
     ['GET', /^\/api\/ai\/status$/, async (ctx) => {
       requireCoach(ctx);
       return { enabled: enabled(), model: model() };
+    }],
+
+    // The coach's rules for nutrition drafts (admin tool). Empty text = back to the defaults.
+    ['GET', /^\/api\/ai\/guidelines$/, async (ctx) => {
+      requireCoach(ctx);
+      return { guidelines: guidelines(), defaults: DEFAULT_GUIDELINES, custom: Boolean(q.getSetting.get('ai_guidelines')) };
+    }],
+    ['PUT', /^\/api\/ai\/guidelines$/, async (ctx) => {
+      requireCoach(ctx);
+      const { guidelines: text } = await readBody(ctx.req);
+      if (typeof text !== 'string' || text.length > 4000) throw new HttpError(400, 'Vorgaben: maximal 4000 Zeichen');
+      if (!text.trim() || text.trim() === DEFAULT_GUIDELINES) q.delSetting.run('ai_guidelines');
+      else q.setSetting.run('ai_guidelines', text.trim());
+      return { guidelines: guidelines(), defaults: DEFAULT_GUIDELINES, custom: Boolean(q.getSetting.get('ai_guidelines')) };
     }],
 
     ['GET', /^\/api\/ai\/checkin-summary$/, async (ctx) => {
@@ -240,7 +280,9 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
     ['POST', /^\/api\/ai\/nutrition-draft$/, async (ctx) => {
       requireCoach(ctx);
       const c = targetClient(ctx);
-      await makeDraft(c.id);
+      const body = await readBody(ctx.req).catch(() => ({}));
+      const hint = typeof body.hint === 'string' ? body.hint.trim().slice(0, 300) : '';
+      await makeDraft(c.id, hint);
       return { enabled: true, draft: draftView(q.getDraft.get(c.id)) };
     }],
     ['DELETE', /^\/api\/ai\/nutrition-draft$/, async (ctx) => {
@@ -277,4 +319,4 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
   return { routes, autoDraft };
 }
 
-module.exports = { aiRoutes, SUMMARY_SCHEMA, DRAFT_SCHEMA };
+module.exports = { aiRoutes, SUMMARY_SCHEMA, DRAFT_SCHEMA, DEFAULT_GUIDELINES, MEAL_TYPES };

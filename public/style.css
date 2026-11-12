@@ -1840,3 +1840,6 @@ dialog:has(.pr-q) { width: min(600px, calc(100vw - 24px)); }
   .ai-meal li .ai-kcal { display: none; }
 }
 .fame-tokens { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font: 500 0.95rem var(--font-body); }
+.ai-hint { margin: 0 0 12px; }
+.ai-hint p { margin: 4px 0 0; }
+#ai-guidelines textarea { font-size: 0.95rem; line-height: 1.5; }
