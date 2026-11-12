@@ -2255,6 +2255,90 @@
   }
 
   // ---------- client: nutrition plan ----------
+
+  // ---------- nutrition plan request (client without a plan → coach) ----------
+  /** Answers as "question: chosen options" rows. */
+  function planRequestSummary(questions, a) {
+    const label = (q, v) => (q.options.find(([k]) => k === v) || [v, v])[1];
+    const rows = questions
+      .map((q) => {
+        let val = q.type === 'single' ? (a[q.key] ? label(q, a[q.key]) : '') : (a[q.key] || []).map((v) => label(q, v)).join(', ');
+        if (q.key === 'avoid' && a.avoidOther) val = [val, a.avoidOther].filter(Boolean).join(', ');
+        return val ? `<div class="pr-row"><dt>${esc(q.label)}</dt><dd>${esc(val)}</dd></div>` : '';
+      })
+      .join('');
+    return `<dl class="pr-summary">${rows}${a.note ? `<div class="pr-row"><dt>Anmerkung</dt><dd>${esc(a.note)}</dd></div>` : ''}</dl>`;
+  }
+
+  function openPlanRequestForm(questions, current, onSaved) {
+    const a = current || {};
+    const choice = (q, [k, l]) => {
+      const checked = q.type === 'single' ? a[q.key] === k : (a[q.key] || []).includes(k);
+      return `<label class="pr-choice"><input type="${q.type === 'single' ? 'radio' : 'checkbox'}" name="${q.key}" value="${esc(k)}" ${checked ? 'checked' : ''}><span>${esc(l)}</span></label>`;
+    };
+    openDialog(`
+      <h2>Ernährungsplan anfragen</h2>
+      <p class="muted small" style="margin-top:-8px">Ein paar Fragen, damit dein Coach den Plan auf dich zuschneiden kann. Dauert etwa eine Minute.</p>
+      ${questions.map((q) => `<fieldset class="pr-q">
+          <legend>${esc(q.label)}${q.required ? '' : ' <span class="muted small">(optional)</span>'}</legend>
+          ${q.hint ? `<p class="hint">${esc(q.hint)}</p>` : ''}
+          <div class="pr-choices">${q.options.map((o) => choice(q, o)).join('')}</div>
+          ${q.other ? `<input name="avoidOther" maxlength="120" placeholder="Sonstiges, z. B. Pilze" value="${esc(a.avoidOther || '')}" aria-label="Sonstiges, was nicht geht">` : ''}
+        </fieldset>`).join('')}
+      <div class="field"><label for="pr-note">Noch etwas? <span class="muted small">(optional)</span></label>
+        <textarea id="pr-note" name="note" rows="3" maxlength="500" placeholder="z. B. Mittags esse ich in der Kantine">${esc(a.note || '')}</textarea></div>
+      <div class="row" style="justify-content:flex-end;gap:8px">
+        <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+        <button type="submit" class="btn-primary">${current ? 'Antworten speichern' : 'Anfrage senden'}</button>
+      </div>`, async (form) => {
+      const answers = {};
+      for (const q of questions) {
+        if (q.type === 'single') {
+          const sel = form.querySelector(`input[name="${q.key}"]:checked`);
+          if (!sel && q.required) throw new Error(`Bitte beantworten: ${q.label}`);
+          if (sel) answers[q.key] = sel.value;
+        } else {
+          answers[q.key] = [...form.querySelectorAll(`input[name="${q.key}"]:checked`)].map((i) => i.value);
+        }
+      }
+      const r = await api('PUT', '/api/nutrition/request', { answers, avoidOther: form.avoidOther ? form.avoidOther.value : '', note: form.note.value });
+      savedHud(current ? 'Gespeichert' : 'Anfrage gesendet', 'Dein Coach meldet sich');
+      onSaved(r);
+    });
+  }
+
+  async function mountPlanRequest(root) {
+    let data;
+    try {
+      data = await api('GET', '/api/nutrition/request');
+    } catch (err) {
+      root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+      return;
+    }
+    const draw = () => {
+      const r = data.request;
+      root.innerHTML = r
+        ? `<section class="card plan-request sent">
+            <div class="row-between"><h2>Anfrage gesendet ✓</h2><span class="badge">${esc(fmtDate(r.updatedAt.slice(0, 10), { day: 'numeric', month: 'long' }))}</span></div>
+            <p class="muted">${r.status === 'open' ? 'Dein Coach stellt dir anhand deiner Antworten einen Plan zusammen. Du bekommst Bescheid, sobald er da ist.' : 'Dein Coach arbeitet an deinem Plan.'}</p>
+            ${planRequestSummary(data.questions, r.answers)}
+            <button type="button" class="btn-secondary" data-pr-edit>Antworten ändern</button>
+          </section>`
+        : `<section class="card plan-request">
+            <p class="pr-icon" aria-hidden="true">🍽</p>
+            <h2>Noch kein Ernährungsplan</h2>
+            <p class="muted">Erzähl deinem Coach kurz, was du magst und was nicht – daraus stellt er dir deinen Plan zusammen.</p>
+            <button type="button" class="btn-primary" data-pr-edit>Plan beim Coach anfragen</button>
+          </section>`;
+      root.querySelector('[data-pr-edit]').addEventListener('click', () =>
+        openPlanRequestForm(data.questions, r && r.answers, (next) => {
+          data = next;
+          draw();
+        }));
+    };
+    draw();
+  }
+
   async function renderClientNutrition() {
     setView(LOADING);
     const [plan, { goals }] = await Promise.all([api('GET', '/api/nutrition'), api('GET', '/api/goals')]);
@@ -2289,7 +2373,7 @@
 
     setView(`
       <div class="page-head"><div>${eyebrow('Von deinem Coach')}<h1>Ernährungsplan</h1>
-        <p class="muted">Du kannst einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – dein Coach entscheidet.</p></div></div>
+        <p class="muted">${plan.meals.length ? 'Du kannst einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – dein Coach entscheidet.' : 'Dein Coach stellt dir einen Plan zusammen, der zu dir passt.'}</p></div></div>
       ${plan.meals.length ? `
       <div class="nutrition-grid">
         <div class="stack">${planSummary(plan, goals)}${meals}</div>
@@ -2300,7 +2384,8 @@
             ${doneReqs.map(requestLine).join('')}
           </section>
         </aside>
-      </div>` : '<div class="card empty-state"><p style="font-size:2rem;margin:0">🍽</p><p>Dein Coach erstellt gerade deinen Ernährungsplan.</p></div>'}`);
+      </div>` : '<div id="plan-request"></div>'}`);
+    if (!plan.meals.length) mountPlanRequest(document.getElementById('plan-request'));
 
     const refresh = (p) => drawClientNutrition(p, goals);
     app.querySelectorAll('[data-swap-item]').forEach((b) =>
@@ -2372,12 +2457,16 @@
 
   // ---------- coach: nutrition plan editor ----------
   async function mountCoachNutrition(root, client, goals) {
-    const [plan] = await Promise.all([api('GET', `/api/nutrition?userId=${client.id}`), loadFoods()]);
+    const [plan, , pr] = await Promise.all([api('GET', `/api/nutrition?userId=${client.id}`), loadFoods(), api('GET', `/api/nutrition/request?userId=${client.id}`)]);
+    planRequest = pr;
     drawCoachNutrition(root, client, goals, plan);
   }
 
+  let planRequest = null; // the client's preferences for a new plan (coach view)
   function drawCoachNutrition(root, client, goals, plan) {
     const redraw = (p) => drawCoachNutrition(root, client, goals, p);
+    // the first meal answers the request (the server marks it done as well)
+    if (plan.meals.length && planRequest && planRequest.request) planRequest.request.status = 'done';
     const call = async (method, url, body, msg) => {
       try {
         const p = await api(method, url, body);
@@ -2450,6 +2539,14 @@
       <div class="nutrition-grid">
         <div class="stack">
           ${requestsHtml}
+          ${planRequest && planRequest.request && (planRequest.request.status === 'open' || !plan.meals.length) ? `
+          <section class="card requests-card plan-request-coach">
+            <div class="row-between"><h2>🍽 Wünsche für den Ernährungsplan</h2>
+              <span class="badge ${planRequest.request.status === 'open' ? 'warn' : 'good'}">${planRequest.request.status === 'open' ? 'offen' : 'erledigt'}</span></div>
+            <p class="muted small">Angefragt am ${esc(fmtDate(planRequest.request.updatedAt.slice(0, 10), { day: 'numeric', month: 'long' }))}. Mit der ersten Mahlzeit gilt die Anfrage als erledigt.</p>
+            ${planRequestSummary(planRequest.questions, planRequest.request.answers)}
+            ${planRequest.request.status === 'open' ? '<button type="button" class="btn-secondary btn-sm" data-pr-done>Als erledigt markieren</button>' : ''}
+          </section>` : ''}
           ${planSummary(plan, goals)}
           ${mealsHtml || '<div class="card empty-state">Noch kein Ernährungsplan. Leg unten die erste Mahlzeit an.</div>'}
           <form class="card add-meal" id="add-meal">
@@ -2549,6 +2646,15 @@
         );
       })
     );
+    const prDone = root.querySelector('[data-pr-done]');
+    if (prDone) prDone.addEventListener('click', async () => {
+      try {
+        planRequest = await api('POST', `/api/nutrition/request/done?userId=${client.id}`);
+        redraw(plan);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
     const addMeal = root.querySelector('#add-meal');
     const createMeal = (name) => call('POST', `/api/nutrition/meals?userId=${client.id}`, { name }, `„${name}“ angelegt`);
     addMeal.querySelectorAll('[data-quick]').forEach((b) => b.addEventListener('click', () => createMeal(b.dataset.quick)));
@@ -3113,6 +3219,7 @@
       ...(queue.isWeekend
         ? [{ key: 'checkins', title: 'Offene Check-ins', short: 'Check-ins', items: openCheckins, note: `${clients.length - openCheckins.length} von ${clients.length} erledigt` }]
         : []),
+      { key: 'planRequests', title: 'Ernährungsplan angefragt', short: 'Plan-Anfragen', items: clients.filter((c) => c.planRequest).map((c) => ({ href: `#/client/${c.id}/nutrition`, label: who(c), meta: 'wartet auf Plan' })) },
       { key: 'swaps', title: 'Tauschwünsche', short: 'Tauschwünsche', items: swaps, total: clients.reduce((a, c) => a + (c.openSwaps || 0), 0) },
       { key: 'plans', title: 'Plananpassungen offen', short: 'Plananpassungen', items: pendingPlans },
       { key: 'inactive', title: 'Ohne Eintrag seit 2+ Tagen', short: 'Alle tracken', items: inactive },

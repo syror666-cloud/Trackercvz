@@ -12,6 +12,7 @@ const { nutritionRoutes } = require('./nutrition');
 const { trainingRoutes } = require('./training');
 const { achievementsModule } = require('./achievements');
 const { shopRoutes } = require('./shop');
+const { nutritionRequestRoutes } = require('./nutrition-request');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -309,6 +310,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
          (SELECT last_used_at FROM health_tokens ht WHERE ht.user_id = u.id) AS health_last_used,
          (SELECT COUNT(*) FROM health_tokens ht WHERE ht.user_id = u.id) AS health_linked,
+         (SELECT COUNT(*) FROM nutrition_requests nr WHERE nr.client_id = u.id AND nr.status = 'open') AS plan_request,
          (SELECT COUNT(*) FROM swap_requests sr WHERE sr.client_id = u.id AND sr.status = 'open') AS open_swaps,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND e.date = :today) AS weight_today
        FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
@@ -702,6 +704,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           healthLinked: Boolean(r.health_linked),
           healthLastUsed: r.health_last_used,
           openSwaps: r.open_swaps,
+          planRequest: Boolean(r.plan_request),
           weightToday: r.weight_today,
         })),
       };
@@ -1222,7 +1225,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     for (let i = routes.length - 1; i >= 0; i--) if (String(routes[i][1]).includes('health')) routes.splice(i, 1);
   }
   const achievements = achievementsModule(deps);
-  routes.push(...achievements.routes, ...shopRoutes({ ...deps, achievements }), ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...achievements.routes, ...shopRoutes({ ...deps, achievements }), ...nutritionRequestRoutes(deps), ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

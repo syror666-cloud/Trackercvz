@@ -303,6 +303,67 @@ Tipp:|Tip:|Consejo:|Consiglio:
 Start|Start|Inicio|Inizio
 Ende|End|Final|Fine
 Anleitung|How to|Cómo se hace|Come si fa
+Ernährungsplan anfragen|Request a nutrition plan|Pedir un plan de nutrición|Richiedi un piano alimentare
+Plan beim Coach anfragen|Ask your coach for a plan|Pedir el plan a tu coach|Chiedi il piano al tuo coach
+Noch kein Ernährungsplan|No nutrition plan yet|Aún no hay plan de nutrición|Ancora nessun piano alimentare
+Erzähl deinem Coach kurz, was du magst und was nicht – daraus stellt er dir deinen Plan zusammen.|Tell your coach briefly what you like and what you don't – they'll build your plan from it.|Cuéntale a tu coach qué te gusta y qué no – con eso preparará tu plan.|Racconta al tuo coach cosa ti piace e cosa no – così preparerà il tuo piano.
+Ein paar Fragen, damit dein Coach den Plan auf dich zuschneiden kann. Dauert etwa eine Minute.|A few questions so your coach can tailor the plan to you. Takes about a minute.|Unas preguntas para que tu coach adapte el plan a ti. Lleva un minuto.|Qualche domanda per adattare il piano a te. Ci vuole un minuto.
+Anfrage gesendet ✓|Request sent ✓|Solicitud enviada ✓|Richiesta inviata ✓
+Anfrage gesendet|Request sent|Solicitud enviada|Richiesta inviata
+Dein Coach meldet sich|Your coach will get back to you|Tu coach te responderá|Il tuo coach ti risponderà
+Dein Coach stellt dir anhand deiner Antworten einen Plan zusammen. Du bekommst Bescheid, sobald er da ist.|Your coach is building a plan from your answers. You'll be notified when it's ready.|Tu coach prepara un plan con tus respuestas. Te avisaremos cuando esté listo.|Il tuo coach prepara un piano dalle tue risposte. Ti avviseremo quando è pronto.
+Dein Coach arbeitet an deinem Plan.|Your coach is working on your plan.|Tu coach está trabajando en tu plan.|Il tuo coach sta lavorando al tuo piano.
+Antworten ändern|Change answers|Cambiar respuestas|Modifica risposte
+Antworten speichern|Save answers|Guardar respuestas|Salva risposte
+Noch etwas?|Anything else?|¿Algo más?|Altro?
+Anmerkung|Note|Nota|Nota
+Wie ernährst du dich?|How do you eat?|¿Cómo te alimentas?|Come ti alimenti?
+Ich esse alles|I eat everything|Como de todo|Mangio di tutto
+Pescetarisch|Pescatarian|Pescetariano|Pescetariano
+Vegetarisch|Vegetarian|Vegetariano|Vegetariano
+Vegan|Vegan|Vegano|Vegano
+Was geht nicht?|What's a no-go?|¿Qué no puede ser?|Cosa non va?
+Allergien, Unverträglichkeiten oder einfach „mag ich nicht“|Allergies, intolerances or simply “don't like it”|Alergias, intolerancias o simplemente “no me gusta”|Allergie, intolleranze o semplicemente “non mi piace”
+Laktose|Lactose|Lactosa|Lattosio
+Gluten|Gluten|Gluten|Glutine
+Nüsse|Nuts|Frutos secos|Frutta secca
+Eier|Eggs|Huevos|Uova
+Fisch & Meeresfrüchte|Fish & seafood|Pescado y marisco|Pesce e frutti di mare
+Schweinefleisch|Pork|Cerdo|Maiale
+Soja|Soy|Soja|Soia
+Scharfes|Spicy food|Picante|Piccante
+Welche Proteinquellen magst du am liebsten?|Which protein sources do you like best?|¿Qué fuentes de proteína prefieres?|Quali fonti proteiche preferisci?
+Mehrere möglich|Pick several|Puedes elegir varias|Più risposte possibili
+Rind|Beef|Ternera|Manzo
+Hähnchen|Chicken|Pollo|Pollo
+Pute|Turkey|Pavo|Tacchino
+Schwein|Pork|Cerdo|Maiale
+Fisch|Fish|Pescado|Pesce
+Skyr, Quark & Co.|Skyr, quark & co.|Skyr, queso fresco y similares|Skyr, quark e simili
+Hülsenfrüchte|Legumes|Legumbres|Legumi
+Tofu & Tempeh|Tofu & tempeh|Tofu y tempeh|Tofu e tempeh
+Proteinshake|Protein shake|Batido de proteína|Frullato proteico
+Wie viele Mahlzeiten am Tag passen in deinen Alltag?|How many meals a day fit your routine?|¿Cuántas comidas al día encajan en tu rutina?|Quanti pasti al giorno si adattano alla tua routine?
+5 oder mehr|5 or more|5 o más|5 o più
+Soll auf das Budget geachtet werden?|Should we watch the budget?|¿Hay que cuidar el presupuesto?|Bisogna badare al budget?
+Ja, möglichst günstig|Yes, as cheap as possible|Sí, lo más barato posible|Sì, il più economico possibile
+Normal|Normal|Normal|Normale
+Egal – Qualität zählt|Doesn't matter – quality counts|Da igual – cuenta la calidad|Non importa – conta la qualità
+Wie viel Zeit hast du zum Kochen?|How much time do you have to cook?|¿Cuánto tiempo tienes para cocinar?|Quanto tempo hai per cucinare?
+Schnell & einfach (max. 15 Min.)|Quick & easy (max. 15 min)|Rápido y fácil (máx. 15 min)|Veloce e semplice (max 15 min)
+Normal (ca. 30 Min.)|Normal (about 30 min)|Normal (unos 30 min)|Normale (circa 30 min)
+Ich koche gerne|I like cooking|Me gusta cocinar|Mi piace cucinare
+Vorkochen (Meal Prep)?|Cook ahead (meal prep)?|¿Cocinar con antelación (meal prep)?|Cucinare in anticipo (meal prep)?
+Ja, gerne|Yes, happy to|Sí, encantado|Sì, volentieri
+Manchmal|Sometimes|A veces|A volte
+Lieber nicht|Rather not|Mejor no|Meglio di no
+Sonstiges, z. B. Pilze|Other, e.g. mushrooms|Otro, p. ej. setas|Altro, es. funghi
+z. B. Mittags esse ich in der Kantine|e.g. I eat lunch at the canteen|p. ej. Al mediodía como en el comedor|es. A pranzo mangio in mensa
+Dein Coach stellt dir einen Plan zusammen, der zu dir passt.|Your coach puts together a plan that suits you.|Tu coach te prepara un plan a tu medida.|Il tuo coach ti prepara un piano su misura.
+Ernährungsplan angefragt|Nutrition plan requested|Plan de nutrición solicitado|Piano alimentare richiesto
+Plan-Anfragen|Plan requests|Solicitudes de plan|Richieste di piano
+Wünsche für den Ernährungsplan|Wishes for the nutrition plan|Preferencias para el plan|Preferenze per il piano
+Als erledigt markieren|Mark as done|Marcar como hecho|Segna come fatto
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -337,6 +398,7 @@ noch nie|never|nunca|mai
     [/^Tag (\d+)$/, W(0, (m) => `Day ${m[1]}`, (m) => `Día ${m[1]}`, (m) => `Giorno ${m[1]}`)],
     [/^(\d+) Übungen$/, W(0, (m) => `${m[1]} exercises`, (m) => `${m[1]} ejercicios`, (m) => `${m[1]} esercizi`)],
     [/^Anleitung: (.+)$/, W(0, (m) => `How to: ${m[1]}`, (m) => `Cómo se hace: ${m[1]}`, (m) => `Come si fa: ${m[1]}`)],
+    [/^Bitte beantworten: (.+)$/, W(0, (m, l) => `Please answer: ${translate(m[1])}`, (m) => `Responde, por favor: ${translate(m[1])}`, (m) => `Rispondi, per favore: ${translate(m[1])}`)],
     [/^Ziel ([^·]+)$/, W(0, (m) => `Target ${m[1]}`, (m) => `Objetivo ${m[1]}`, (m) => `Obiettivo ${m[1]}`)],
     [/^Ideal: (.+) Tage$/, W(0, (m) => `Ideal: ${m[1].replace('oder', 'or')} days`, (m) => `Ideal: ${m[1].replace('oder', 'o')} días`, (m) => `Ideale: ${m[1].replace('oder', 'o')} giorni`)],
     [/^Ein Split mit „Passt“ ist für (\d+) Trainingstage gedacht\. (.*)$/, W(0, (m) => `A split marked “Fits” is made for ${m[1]} training days. You get a standard plan with exercises, sets and reps.`, (m) => `Un split con “Encaja” está pensado para ${m[1]} días. Recibes un plan estándar con ejercicios, series y repeticiones.`, (m) => `Uno split con “Adatto” è pensato per ${m[1]} giorni. Ricevi un piano standard con esercizi, serie e ripetizioni.`)],

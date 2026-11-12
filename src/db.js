@@ -267,6 +267,15 @@ CREATE TABLE IF NOT EXISTS fridge_items (
   bought_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS fridge_client ON fridge_items (client_id, id);
+
+-- A client without a nutrition plan asks the coach for one, with food preferences.
+CREATE TABLE IF NOT EXISTS nutrition_requests (
+  client_id   INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  answers     TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
 `;
 
 function openDb(file) {

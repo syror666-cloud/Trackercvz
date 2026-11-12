@@ -163,6 +163,8 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
       const name = textField((await readBody(ctx.req)).name, { name: 'Name', max: 60 });
       if (!name) throw new HttpError(400, 'Bitte einen Namen für die Mahlzeit angeben');
       q.insertMeal.run(c.id, name, q.maxMealPos.get(c.id).p + 1);
+      // the first meal answers an open plan request
+      db.prepare("UPDATE nutrition_requests SET status = 'done' WHERE client_id = ? AND status = 'open'").run(c.id);
       ctx.res.statusCode = 201;
       return planOf(c.id);
     }],
