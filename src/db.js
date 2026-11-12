@@ -288,7 +288,7 @@ function migrate(db) {
            WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
 
   addColumns(db, 'checkins', [['highlights', "TEXT NOT NULL DEFAULT '[]'"]]);
-  addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT']]);
+  addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT'], ['seen_release', 'TEXT']]);
 
   // Starter extra measurements: belly circumference for diets, gym PRs for building muscle.
   if (!db.prepare("SELECT 1 FROM settings WHERE key = 'metrics_seeded'").get()) {

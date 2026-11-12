@@ -99,3 +99,5 @@ npm test
 ```
 
 Aufbau: `server.js` startet den Server, `src/app.js` enthält die API und die Auslieferung der Seiten, `src/db.js` das Datenbankschema und das Passwort-Hashing (scrypt), `public/` das Frontend (ohne Build-Schritt).
+
+**„Das ist neu“-Meldung nach einem Update:** In `public/app.js` die Konstante `RELEASE` auf einen neuen Wert setzen und die Punkte in `WHATS_NEW` (getrennt für Klient und Coach) anpassen. Jeder Nutzer sieht die Meldung dann genau einmal – das Wegklicken wird auf dem Server gespeichert und gilt für alle Geräte.

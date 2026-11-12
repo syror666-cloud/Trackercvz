@@ -264,6 +264,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
   const q = {
+    setSeenRelease: db.prepare('UPDATE users SET seen_release = ? WHERE id = ?'),
     sessionUser: db.prepare(
       `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.expires_at > ?`
@@ -576,7 +577,19 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       return { ok: true };
     }],
 
-    ['GET', /^\/api\/me$/, async (ctx) => ({ user: publicUser(requireUser(ctx)) })],
+    ['GET', /^\/api\/me$/, async (ctx) => {
+      const u = requireUser(ctx);
+      return { user: { ...publicUser(u), seenRelease: u.seen_release || null } };
+    }],
+
+    // "What's new" was dismissed – it does not come back on any device
+    ['POST', /^\/api\/me\/release$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const release = textField((await readBody(ctx.req)).release, { name: 'Version', max: 40 });
+      if (!release) throw new HttpError(400, 'Version fehlt');
+      q.setSeenRelease.run(release, u.id);
+      return { seenRelease: release };
+    }],
 
     ['PATCH', /^\/api\/me$/, async (ctx) => {
       const u = requireUser(ctx);

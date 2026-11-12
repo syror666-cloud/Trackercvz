@@ -1337,3 +1337,25 @@ button.back { background: none; border: 0; padding: 0; min-height: 32px; }
 .medal.earned.tier-bronze .medal-face { fill: url(#hof-bronze); }
 .medal.earned.tier-silver .medal-face { fill: url(#hof-silver); }
 .medal.earned.tier-gold .medal-face { fill: url(#hof-gold); }
+
+/* "What's new" after an update */
+dialog.whats-new { width: min(520px, calc(100vw - 32px)); padding: 26px 24px 20px; border-radius: 22px; }
+dialog.whats-new[open] { animation: fame-pop 0.4s cubic-bezier(0.2, 1.2, 0.4, 1); }
+.wn-head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+.wn-head h2 { margin: 0; }
+.wn-badge { background: var(--accent); color: var(--accent-text); font: 600 0.78rem var(--font-body); padding: 4px 11px; border-radius: var(--r-pill); }
+.wn-list { list-style: none; margin: 0 0 18px; padding: 0; }
+.wn-list li { display: flex; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--border); }
+.wn-list li:last-child { border-bottom: 0; }
+.wn-icon { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; background: var(--surface-2); font-size: 1.2rem; }
+.wn-list strong { font: 400 1.05rem var(--font-display); }
+.wn-list p { margin: 3px 0 0; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
+.wn-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.wn-actions button { flex: 1 1 160px; }
+@media (prefers-reduced-motion: reduce) { dialog.whats-new[open] { animation: none; } }
+@media (max-width: 720px) {
+  dialog.whats-new { padding: 22px 18px 16px; }
+  .wn-list li { padding: 10px 0; gap: 12px; }
+  .wn-icon { width: 34px; height: 34px; font-size: 1.05rem; }
+  .wn-list p { font-size: 0.88rem; }
+}

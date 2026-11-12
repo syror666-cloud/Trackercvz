@@ -188,6 +188,72 @@
     hudTimer = setTimeout(() => hud.classList.remove('show'), 1600);
   }
 
+
+  // ---------- "What's new": shown once per person after an update (remembered on the server) ----------
+  const RELEASE = '2026-11-training-hof';
+  const WHATS_NEW = {
+    client: [
+      ['🏋️', 'Trainingsplan', 'Neuer Tab „Training“: Split wählen, Übungen anpassen und Gewichte tracken – deine letzten Werte stehen schon drin.'],
+      ['📈', 'Trainingshistorie', 'Für jede Übung ein Graph, wie sich dein Gewicht entwickelt.'],
+      ['🏆', 'Hall of Fame', 'Über dein Profilbild oben rechts: Medaillen für deine Erfolge.'],
+      ['✨', 'Neue Übersicht', 'Die Karte „Heute“ und kompakte Werte mit Mini-Grafiken.'],
+    ],
+    coach: [
+      ['🏋️', 'Trainingspläne', 'Neuer Tab beim Klienten: Plan ansehen, bearbeiten und Trainingshistorie je Übung.'],
+      ['🏆', 'Hall of Fame', 'Beim Klienten: seine Medaillen und wie nah er an den nächsten ist.'],
+      ['✅', 'Zu erledigen', 'Dashboard zeigt nur offene Aufgaben, Push-Einstellungen sind eingeklappt.'],
+      ['👁️', 'Besser lesbar', 'Mehr Kontrast bei grauen Texten und Eingabefeldern.'],
+    ],
+  };
+  let whatsNewChecked = false;
+  async function maybeShowWhatsNew() {
+    if (whatsNewChecked || !me) return;
+    whatsNewChecked = true;
+    if (me.seenRelease === undefined) {
+      try {
+        me = (await api('GET', '/api/me')).user;
+      } catch {
+        return;
+      }
+    }
+    if (me.seenRelease === RELEASE) return;
+    const items = WHATS_NEW[me.role === 'coach' ? 'coach' : 'client'];
+    const dlg = document.createElement('dialog');
+    dlg.className = 'whats-new';
+    dlg.setAttribute('aria-labelledby', 'wn-title');
+    dlg.innerHTML = `
+      <div class="wn-head"><span class="wn-badge">Neu</span><h2 id="wn-title">Das ist neu im Thabstracker</h2></div>
+      <ul class="wn-list">${items.map(([icon, title, text]) => `<li><span class="wn-icon" aria-hidden="true">${icon}</span><div><strong>${esc(title)}</strong><p>${esc(text)}</p></div></li>`).join('')}</ul>
+      <div class="wn-actions">
+        ${me.role === 'coach' ? '' : '<button type="button" class="btn-secondary" data-wn-go>Zum Trainingsplan</button>'}
+        <button type="button" class="btn-primary" data-wn-ok>Verstanden</button>
+      </div>`;
+    document.body.appendChild(dlg);
+    let done = false;
+    const dismiss = (go) => {
+      if (done) return;
+      done = true;
+      me.seenRelease = RELEASE;
+      api('POST', '/api/me/release', { release: RELEASE }).catch(() => {});
+      dlg.close();
+      dlg.remove();
+      if (go) location.hash = '#/training';
+    };
+    dlg.querySelector('[data-wn-ok]').addEventListener('click', () => dismiss(false));
+    const go = dlg.querySelector('[data-wn-go]');
+    if (go) go.addEventListener('click', () => dismiss(true));
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      dismiss(false);
+    });
+    dlg.addEventListener('click', (e) => {
+      if (e.target === dlg) dismiss(false); // tap on the backdrop
+    });
+    dlg.showModal();
+    dlg.querySelector('[data-wn-ok]').focus({ preventScroll: true });
+    dlg.scrollTop = 0;
+  }
+
   // ---------- routing ----------
   async function boot() {
     try {
@@ -200,6 +266,7 @@
     } finally {
       hideSplash();
     }
+    setTimeout(maybeShowWhatsNew, 450);
   }
 
   /** Start screen with the logo (in index.html) – fades out once the first page is ready. */
@@ -490,7 +557,9 @@
       errEl.hidden = true;
       try {
         me = (await api('POST', '/api/login', { username: form.username.value, password: form.password.value })).user;
+        whatsNewChecked = false; // another person may log in on this device
         route();
+        setTimeout(maybeShowWhatsNew, 450);
       } catch (err) {
         errEl.textContent = err.message;
         errEl.hidden = false;
