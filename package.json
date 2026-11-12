@@ -12,5 +12,8 @@
     "create-coach": "node --no-warnings=ExperimentalWarning scripts/create-coach.js",
     "test": "node --no-warnings=ExperimentalWarning --test \"test/*.test.js\""
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0"
+  }
 }

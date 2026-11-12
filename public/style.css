@@ -1805,3 +1805,38 @@ dialog:has(.pr-q) { width: min(600px, calc(100vw - 24px)); }
 .pr-row dt { font-size: 0.84rem; color: var(--muted); }
 .pr-row dd { margin: 0; font-weight: 500; }
 @media (min-width: 721px) { .pr-row { grid-template-columns: 240px minmax(0, 1fr); gap: 12px; } }
+
+/* ==========================================================================
+   AI cards (coach): check-in summary and nutrition plan draft
+   ========================================================================== */
+.ai-card { border-radius: var(--r-data); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--brass) 45%, transparent); }
+.ai-head { align-items: center; gap: 10px; margin-bottom: 10px; }
+.ai-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; }
+.ai-spark { color: var(--accent); font-size: 1.1em; }
+.ai-overview { margin: 0 0 12px; font-size: 1.02rem; }
+.ai-cols { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.ai-block h4 { margin: 0 0 4px; font: 600 0.82rem var(--font-body); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.ai-block.good h4 { color: var(--good); }
+.ai-block.warn h4 { color: var(--warn); }
+.ai-block ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.ai-meta { margin: 12px 0 0; }
+.ai-loading { display: flex; gap: 6px; padding: 10px 0; }
+.ai-loading span { width: 9px; height: 9px; border-radius: 50%; background: var(--brass); animation: ai-dot 1s ease-in-out infinite; }
+.ai-loading span:nth-child(2) { animation-delay: 0.15s; }
+.ai-loading span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ai-dot { 50% { transform: translateY(-5px); opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .ai-loading span { animation: none; } }
+.ai-meal { border-top: 1px solid var(--border); padding: 10px 0; }
+.ai-meal-head { gap: 10px; }
+.ai-meal-name { font: 500 1rem var(--font-display) !important; border-width: 0 0 1px !important; padding-left: 0 !important; background: transparent !important; min-height: 36px; max-width: 70%; }
+.ai-meal ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.ai-meal li { display: grid; grid-template-columns: minmax(0, 1fr) 120px 76px 32px; gap: 8px; align-items: center; }
+.ai-amount input { min-height: 38px; padding: 6px 44px 6px 10px; }
+.ai-kcal { text-align: right; color: var(--muted); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.ai-total { margin: 10px 0; text-align: right; }
+.ai-actions { gap: 8px; }
+@media (max-width: 720px) {
+  .ai-meal li { grid-template-columns: minmax(0, 1fr) 96px 30px; }
+  .ai-meal li .ai-kcal { display: none; }
+}
+.fame-tokens { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font: 500 0.95rem var(--font-body); }

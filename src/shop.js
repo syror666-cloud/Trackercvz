@@ -1,11 +1,11 @@
 'use strict';
 
-// Hall of Fame shop: earned medals are the currency; bought cans go into the client's fridge.
+// Hall of Fame shop: medals are worth tokens (bronze 1, silver 2, gold 3); bought cans go into the client's fridge.
 
 /** Rarity, rarest last. The fridge sorts cans by rarity, rarest top left. */
 const RARITIES = ['common', 'rare', 'epic', 'legendary'];
 
-/** Can colours: body, darker shade, label band, accent. Prices 1–3 medals. */
+/** Can colours: body, darker shade, label band, accent. Prices 1–3 tokens. */
 const FLAVORS = [
   { key: 'white', name: 'Ultra White', price: 1, rarity: 'common', colors: ['#f4f7f9', '#c9d3da', '#ffffff', '#9fb0bc'] },
   { key: 'rosa', name: 'Ultra Rosá', price: 1, rarity: 'common', colors: ['#f7b6cf', '#d9849f', '#ffe3ee', '#e05589'] },
@@ -29,7 +29,7 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
   };
 
   function stateOf(clientId) {
-    const earned = achievements.evaluate(clientId).summary.earned;
+    const earned = achievements.evaluate(clientId).summary.tokens;
     const spent = q.spent.get(clientId).n;
     return {
       flavors: FLAVORS,
@@ -51,7 +51,7 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
       db.exec('BEGIN IMMEDIATE');
       try {
         const { available } = stateOf(u.id).balance;
-        if (available < f.price) throw new HttpError(409, `Dafür brauchst du ${f.price} Medaille${f.price === 1 ? '' : 'n'} – du hast ${available}.`);
+        if (available < f.price) throw new HttpError(409, `Dafür brauchst du ${f.price} Token – du hast ${available}.`);
         q.insert.run(u.id, f.key, f.price);
         db.exec('COMMIT');
       } catch (err) {

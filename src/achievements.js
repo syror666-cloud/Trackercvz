@@ -8,6 +8,7 @@
 const DAY = 86400000;
 const dayNum = (s) => Math.round(Date.parse(`${s}T00:00:00Z`) / DAY);
 const TIERS = ['bronze', 'silver', 'gold'];
+const TOKENS = [1, 2, 3]; // token value of a bronze, silver and gold medal
 
 /** Running total over the entries for which `fn` returns a number. */
 const cumulative = (rows, fn) => {
@@ -171,6 +172,8 @@ function achievementsModule({ db, targetClient }) {
         bronze: list.filter((a) => a.tiers[0].achievedAt).length,
         silver: list.filter((a) => a.tiers[1].achievedAt).length,
         gold: list.filter((a) => a.tiers[2].achievedAt).length,
+        // shop currency: bronze 1, silver 2, gold 3 tokens
+        tokens: list.reduce((sum, a) => sum + a.tiers.reduce((t, tier, i) => t + (tier.achievedAt ? TOKENS[i] : 0), 0), 0),
       },
     };
   }
@@ -181,4 +184,4 @@ function achievementsModule({ db, targetClient }) {
   };
 }
 
-module.exports = { achievementsModule, ACHIEVEMENTS };
+module.exports = { achievementsModule, ACHIEVEMENTS, TOKENS };

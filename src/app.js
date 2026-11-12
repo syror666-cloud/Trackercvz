@@ -13,6 +13,7 @@ const { trainingRoutes } = require('./training');
 const { achievementsModule } = require('./achievements');
 const { shopRoutes } = require('./shop');
 const { nutritionRequestRoutes } = require('./nutrition-request');
+const { aiRoutes } = require('./ai');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -273,7 +274,7 @@ function parseSteps(value) {
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 // Apple Health import (Shortcuts) is switched off for now; `health: true` turns the routes back on.
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
@@ -1218,14 +1219,15 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
 
   const deps = {
     db, notifier, reminders, HttpError, readBody, textField, numberField, requireUser, requireCoach, targetClient, clientById,
-    isValidDate, maxAllowedDate, localDate,
+    isValidDate, maxAllowedDate, localDate, aiClient,
   };
   metrics = metricsModule(deps);
   if (!health) {
     for (let i = routes.length - 1; i >= 0; i--) if (String(routes[i][1]).includes('health')) routes.splice(i, 1);
   }
   const achievements = achievementsModule(deps);
-  routes.push(...achievements.routes, ...shopRoutes({ ...deps, achievements }), ...nutritionRequestRoutes(deps), ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  const ai = aiRoutes(deps);
+  routes.push(...achievements.routes, ...shopRoutes({ ...deps, achievements }), ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

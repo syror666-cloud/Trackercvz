@@ -268,6 +268,16 @@ CREATE TABLE IF NOT EXISTS fridge_items (
 );
 CREATE INDEX IF NOT EXISTS fridge_client ON fridge_items (client_id, id);
 
+-- AI results for the coach: last check-in summary and the current nutrition plan draft per client.
+CREATE TABLE IF NOT EXISTS ai_results (
+  client_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL CHECK (kind IN ('checkin', 'nutrition')),
+  content     TEXT NOT NULL,
+  model       TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  PRIMARY KEY (client_id, kind)
+);
+
 -- A client without a nutrition plan asks the coach for one, with food preferences.
 CREATE TABLE IF NOT EXISTS nutrition_requests (
   client_id   INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

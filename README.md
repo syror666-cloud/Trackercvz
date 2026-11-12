@@ -17,7 +17,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Nachrichten:** eigener Chat mit dem Coach für Wünsche, Fragen und Vorschläge
 - **Ernährungsplan anfragen:** ohne Plan kann der Klient seinen Coach um einen Plan bitten – mit kurzem Multiple-Choice-Fragebogen (Ernährungsform, was nicht geht, bevorzugte Proteinquellen, Mahlzeiten pro Tag, Budget, Kochzeit, Meal Prep, Anmerkung). Der Coach bekommt eine Push-Nachricht, eine Aufgabe im Dashboard und sieht die Antworten beim Klienten; mit der ersten Mahlzeit ist die Anfrage erledigt
 - **Ernährungsplan** vom Coach mit Mengen und Kalorien; einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen (Coach entscheidet)
-- **Hall of Fame** (Profilbild oben rechts → Konto → Hall of Fame): Medaillen in Bronze, Silber und Gold mit kleinen Animationen – z. B. 7/14/30 Tage in Folge getrackt, 100k/250k/750k Schritte, Schrittziel- und Schlafziel-Tage, Gewicht eingetragen, Kalorien eingehalten, Trainings, bewegte Tonnen, neue Bestleistungen, angenommene Check-ins. Noch nicht erreichte Stufen sind ausgegraut mit Ziel und Fortschritt in %; neu freigeschaltete werden gefeiert. Weitere Erfolge lassen sich in `src/achievements.js` ergänzen
+- **Hall of Fame** (Profilbild oben rechts → Konto → Hall of Fame): Medaillen in Bronze, Silber und Gold (1, 2 bzw. 3 Token wert) mit kleinen Animationen – z. B. 7/14/30 Tage in Folge getrackt, 100k/250k/750k Schritte, Schrittziel- und Schlafziel-Tage, Gewicht eingetragen, Kalorien eingehalten, Trainings, bewegte Tonnen, neue Bestleistungen, angenommene Check-ins. Noch nicht erreichte Stufen sind ausgegraut mit Ziel und Fortschritt in %; neu freigeschaltete werden gefeiert. Weitere Erfolge lassen sich in `src/achievements.js` ergänzen
 - **Kühlschrank & Shop** (Hall of Fame): verdiente Medaillen sind die Währung – im Shop gibt es Monster-Ultra-Dosen in zwölf Sorten für je 1–3 Medaillen. Gekaufte Dosen stehen im Kühlschrank; beim Öffnen gleitet man in einer 3D-Animation in den Pixel-Art-Kühlschrank hinein
 - **Seltenheiten:** Gewöhnlich, Selten, Episch, Legendär – mit animiertem Edelstein über der Dose; im Kühlschrank stehen die seltensten oben links. Gekühlte Dosen mit abperlenden Tropfen; ein leerer Kühlschrank hat Spinnweben und zwei Fliegen
 - **Einstellungen → Darstellung:** Sprache (Deutsch, Englisch, Spanisch, Italienisch), Erscheinungsbild (System, Hell, Dunkel) und **Liquid Glass** (gläserne Leisten und Menüs nach dem aktuellen iOS-Design) – pro Person gespeichert, gilt auf allen Geräten
@@ -41,6 +41,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Hall of Fame** pro Klient (Tab „Hall of Fame“): alle Medaillen und Fortschritte deines Klienten, dazu sein Kühlschrank
 - **Darstellung** unter Konto: Sprache, Hell/Dunkel/System und Liquid Glass
 - **Trainingsplan** pro Klient (Tab „Trainingsplan“): denselben Plan wie der Klient sehen, bearbeiten und die Trainingshistorie ansehen; der Klient bekommt einen Push, wenn du den Plan änderst
+- **KI (optional, mit `ANTHROPIC_API_KEY`):** im Check-in auf Knopfdruck eine Zusammenfassung der Woche (nur auf Anfrage, wird gespeichert und nicht automatisch neu erstellt); bei einer Ernährungsplan-Anfrage ein Planentwurf aus Wünschen, Kalorienziel und Lebensmittel-Datenbank, den du prüfst, änderst und dann abschickst. Namen von Klienten werden nicht an die KI geschickt
 - **Ernährungsplan** pro Klient: Mahlzeiten aus der Lebensmittel-Datenbank zusammenstellen, Tauschwünsche per Klick kcal-gleich übernehmen, selbst anpassen oder ablehnen (Push bei neuen Wünschen)
 - **Kategorien** (nur für den Coach sichtbar): Diät, Reverse Diät, Aufbau, Maintenance – als farbige Markierung in Übersicht, Check-in und Admin-Tool
 - **Zusatzmaße je Kategorie**, im Admin-Tool zuordenbar: Zahlenwerte wie Bauchumfang (Feld im Tageseintrag + Verlaufsdiagramm) und Kraft-PRs (Übung, Gewicht, Wiederholungen; Rekorde werden erkannt, Push an den Coach); beides auch im Check-in-Wochenvergleich
@@ -83,6 +84,10 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `NODE_ENV=production` oder `SECURE_COOKIES=true` | Login-Cookie nur über HTTPS (im Live-Betrieb setzen) |
 | `APP_TIMEZONE` | Zeitzone für geplante Push-Nachrichten und Health-Importe (Standard `Europe/Berlin`) |
 | `VAPID_SUBJECT` | optional: Kontakt für Push-Dienste, z. B. `mailto:du@deine-domain.de` (sonst die Adresse der Seite) |
+| `ANTHROPIC_API_KEY` | optional: schaltet die KI-Funktionen für den Coach ein (Check-in-Zusammenfassung, Ernährungsplan-Entwurf) |
+| `AI_MODEL` | optional: Claude-Modell (Standard `claude-opus-5-5`; am günstigsten `claude-haiku-5-5`) |
+| `AI_EFFORT` | optional: `low`, `medium` (Standard) oder `high` – wie gründlich die KI nachdenkt |
+| `AI_AUTO_DRAFT` | `false` = bei einer Plan-Anfrage nicht automatisch einen KI-Entwurf erstellen |
 
 **Mit Docker** (z. B. auf einem eigenen VPS, Railway, Fly.io oder Render mit Persistent Disk):
 
@@ -105,4 +110,4 @@ npm test
 
 Aufbau: `server.js` startet den Server, `src/app.js` enthält die API und die Auslieferung der Seiten, `src/db.js` das Datenbankschema und das Passwort-Hashing (scrypt), `public/` das Frontend (ohne Build-Schritt).
 
-**„Das ist neu“-Meldung nach einem Update:** In `public/app.js` die Konstante `RELEASE` auf einen neuen Wert setzen und die Punkte in `WHATS_NEW` (getrennt für Klient und Coach) anpassen. Jeder Nutzer sieht die Meldung dann genau einmal – das Wegklicken wird auf dem Server gespeichert und gilt für alle Geräte.
+**Bei jedem Update:** In `public/app.js` oben in `CHANGELOG` einen neuen Eintrag (neue `id`, Punkte für Klient und Coach) ganz nach vorne setzen. Jeder sieht beim nächsten App-Start einmal, was neu ist – wer mehrere Updates verpasst hat, sieht alle (die neuesten zuerst).

@@ -364,6 +364,23 @@ Ernährungsplan angefragt|Nutrition plan requested|Plan de nutrición solicitado
 Plan-Anfragen|Plan requests|Solicitudes de plan|Richieste di piano
 Wünsche für den Ernährungsplan|Wishes for the nutrition plan|Preferencias para el plan|Preferenze per il piano
 Als erledigt markieren|Mark as done|Marcar como hecho|Segna come fatto
+Das ist neu|What's new|Novedades|Novità
+Medaillen sind jetzt Token wert|Medals are now worth tokens|Las medallas ahora valen tokens|Le medaglie ora valgono token
+Bronze 1, Silber 2, Gold 3 Token – im Shop tauschst du sie gegen Dosen.|Bronze 1, silver 2, gold 3 tokens – trade them for cans in the shop.|Bronce 1, plata 2, oro 3 tokens – cámbialos por latas en la tienda.|Bronzo 1, argento 2, oro 3 token – scambiali con lattine nel negozio.
+Noch kein Plan? Unter „Ernährung“ beantwortest du ein paar Fragen und dein Coach erstellt deinen Plan.|No plan yet? Answer a few questions under “Nutrition” and your coach builds your plan.|¿Sin plan? Responde unas preguntas en “Nutrición” y tu coach crea tu plan.|Nessun piano? Rispondi a qualche domanda in “Alimentazione” e il coach crea il tuo piano.
+Übungen erklärt|Exercises explained|Ejercicios explicados|Esercizi spiegati
+Tippe im Trainingsplan auf „i“ neben einer Übung: Fotos, Ausführung und Tipp.|Tap “i” next to an exercise in your plan: photos, how-to and a tip.|Toca la “i” junto a un ejercicio: fotos, ejecución y consejo.|Tocca la “i” accanto a un esercizio: foto, esecuzione e consiglio.
+Seltene Dosen|Rare cans|Latas raras|Lattine rare
+Dosen haben jetzt Seltenheiten – die seltensten stehen im Kühlschrank ganz oben.|Cans now have rarities – the rarest sit at the top of your fridge.|Las latas tienen rareza – las más raras van arriba en la nevera.|Le lattine hanno una rarità – le più rare stanno in cima al frigo.
+Hall of Fame jetzt unter Konto, mit Kühlschrank und Shop.|Hall of Fame now under Account, with fridge and shop.|Salón de la fama ahora en Cuenta, con nevera y tienda.|Hall of Fame ora in Account, con frigo e negozio.
+Trainingsplan|Training plan|Plan de entreno|Piano di allenamento
+Neuer Tab „Training“: Split wählen, Übungen anpassen und Gewichte tracken.|New “Training” tab: pick a split, adjust exercises and track weights.|Nueva pestaña “Entreno”: elige split, ajusta ejercicios y registra pesos.|Nuova scheda “Allenamento”: scegli lo split, modifica esercizi e registra i carichi.
+Medaillen in Bronze, Silber und Gold für deine Erfolge.|Bronze, silver and gold medals for your achievements.|Medallas de bronce, plata y oro por tus logros.|Medaglie di bronzo, argento e oro per i tuoi traguardi.
+Token verfügbar|tokens available|tokens disponibles|token disponibili
+Kaufen|Buy|Comprar|Compra
+Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen eine kalte Dose für deinen Kühlschrank.|Every medal is worth tokens – bronze 1, silver 2, gold 3. Trade them for a cold can for your fridge.|Cada medalla vale tokens – bronce 1, plata 2, oro 3. Cámbialos por una lata fría.|Ogni medaglia vale token – bronzo 1, argento 2, oro 3. Scambiali con una lattina fresca.
+Dein Kühlschrank – gefüllt mit dem, was du dir mit deinen Token gegönnt hast.|Your fridge – filled with what you treated yourself to with your tokens.|Tu nevera – llena de lo que te has dado con tus tokens.|Il tuo frigo – pieno di ciò che ti sei concesso con i token.
+tauschst du Token gegen Dosen.|you trade tokens for cans.|cambias tokens por latas.|scambi token con lattine.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -417,6 +434,11 @@ noch nie|never|nunca|mai
     [/^(\d+) Check-ins deines Coaches annehmen$/, W(0, (m) => `Accept ${m[1]} check-ins from your coach`, (m) => `Acepta ${m[1]} check-ins de tu coach`, (m) => `Accetta ${m[1]} check-in del coach`)],
     [/^Gerade (\d+) Tage? in Folge$/, W(0, (m) => `${m[1]} in a row right now`, (m) => `${m[1]} seguidos ahora mismo`, (m) => `${m[1]} di fila ora`)],
     [/^([\d.,]+(?: t)?) (Tage in Folge|Schritte|Tage|Nächte|Trainings|kg bewegt|Bestleistungen|Check-ins)( \(Rekord\))?$/, W(0, (m, l) => `${m[1]} ${word(l, m[2])}${m[3] ? ({ en: ' (record)', es: ' (récord)', it: ' (record)' })[l] : ''}`, (m, l) => `${m[1]} ${word(l, m[2])}${m[3] ? ' (récord)' : ''}`, (m, l) => `${m[1]} ${word(l, m[2])}${m[3] ? ' (record)' : ''}`)],
+    [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
+    [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
+    [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],
+    [/^(\d+) Updates seit deinem letzten Besuch$/, W(0, (m) => `${m[1]} updates since your last visit`, (m) => `${m[1]} actualizaciones desde tu última visita`, (m) => `${m[1]} aggiornamenti dalla tua ultima visita`)],
+    [/^(\d+) (Dosen?) · (\d+) Token übrig$/, W(0, (m) => `${m[1]} can${m[1] === '1' ? '' : 's'} · ${m[3]} tokens left`, (m) => `${m[1]} lata${m[1] === '1' ? '' : 's'} · quedan ${m[3]} tokens`, (m) => `${m[1]} lattin${m[1] === '1' ? 'a' : 'e'} · ${m[3]} token rimasti`)],
     [/^Noch (\d+) Medaillen?$/, W(0, (m) => `${m[1]} more medal${m[1] === '1' ? '' : 's'}`, (m) => `Faltan ${m[1]} medalla${m[1] === '1' ? '' : 's'}`, (m) => `Ancora ${m[1]} medagli${m[1] === '1' ? 'a' : 'e'}`)],
     [/^(\d+) verdient · (\d+) ausgegeben$/, W(0, (m) => `${m[1]} earned · ${m[2]} spent`, (m) => `${m[1]} ganadas · ${m[2]} gastadas`, (m) => `${m[1]} guadagnate · ${m[2]} spese`)],
     [/^(\d+) (Dosen?) · (\d+) (Medaillen?) übrig$/, W(0, (m) => `${m[1]} can${m[1] === '1' ? '' : 's'} · ${m[3]} medal${m[3] === '1' ? '' : 's'} left`, (m) => `${m[1]} lata${m[1] === '1' ? '' : 's'} · quedan ${m[3]} medalla${m[3] === '1' ? '' : 's'}`, (m) => `${m[1]} lattin${m[1] === '1' ? 'a' : 'e'} · ${m[3]} medagli${m[3] === '1' ? 'a' : 'e'} rimast${m[3] === '1' ? 'a' : 'e'}`)],

@@ -189,23 +189,53 @@
   }
 
 
-  // ---------- "What's new": shown once per person after an update (remembered on the server) ----------
-  const RELEASE = '2026-11-stayontrack';
-  const WHATS_NEW = {
-    client: [
-      ['✨', 'Neuer Name: StayOnTrack', 'Mit neuem, schlichtem Logo.'],
-      ['🌍', 'Sprache & Erscheinungsbild', 'In den Einstellungen: Deutsch, Englisch, Spanisch oder Italienisch – und Hell, Dunkel oder wie das System.'],
-      ['🫧', 'Liquid Glass', 'Optional in den Einstellungen: gläserne Leisten und Menüs wie im aktuellen iOS.'],
-      ['🧊', 'Kühlschrank & Shop', 'Hall of Fame jetzt unter Konto. Tausche Medaillen im Shop gegen Dosen für deinen Kühlschrank.'],
-    ],
-    coach: [
-      ['✨', 'Neuer Name: StayOnTrack', 'Mit neuem, schlichtem Logo.'],
-      ['🌍', 'Sprache & Erscheinungsbild', 'Unter Konto: Deutsch, Englisch, Spanisch oder Italienisch – und Hell, Dunkel oder wie das System.'],
-      ['🫧', 'Liquid Glass', 'Optional unter Konto: gläserne Leisten und Menüs wie im aktuellen iOS.'],
-      ['🧊', 'Kühlschrank', 'In der Hall of Fame deiner Klienten siehst du, was sie sich mit Medaillen gegönnt haben.'],
-      ['⏸️', 'Apple Health', 'Apple Health ist vorerst deaktiviert.'],
-    ],
-  };
+  // ---------- "What's new" on app start after every update (remembered on the server) ----------
+  // EVERY UPDATE: add a new entry at the TOP with a new id. People who missed several updates see all
+  // of them (newest first); once dismissed it does not come back on any device.
+  const CHANGELOG = [
+    {
+      id: '2026-11-ki-token', date: 'November 2026',
+      client: [
+        ['🪙', 'Medaillen sind jetzt Token wert', 'Bronze 1, Silber 2, Gold 3 Token – im Shop tauschst du sie gegen Dosen.'],
+        ['🍽', 'Ernährungsplan anfragen', 'Noch kein Plan? Unter „Ernährung“ beantwortest du ein paar Fragen und dein Coach erstellt deinen Plan.'],
+        ['ℹ️', 'Übungen erklärt', 'Tippe im Trainingsplan auf „i“ neben einer Übung: Fotos, Ausführung und Tipp.'],
+        ['💎', 'Seltene Dosen', 'Dosen haben jetzt Seltenheiten – die seltensten stehen im Kühlschrank ganz oben.'],
+      ],
+      coach: [
+        ['✦', 'KI-Überblick im Check-in', 'Auf Knopfdruck eine kurze Zusammenfassung der Woche – nur wenn du sie anforderst.'],
+        ['🤖', 'KI-Entwurf für Ernährungspläne', 'Fragt ein Klient einen Plan an, liegt ein Entwurf bereit. Du prüfst, änderst und schickst ihn ab.'],
+        ['🍽', 'Plan-Anfragen', 'Klienten ohne Plan schicken dir ihre Vorlieben – mit eigener Aufgabe im Dashboard.'],
+        ['🏋️', 'Trainingsvorlagen', 'Alle Vorlagen mit 2–3 Sätzen und 6–10 Wiederholungen, jede Übung mit Anleitung und Fotos.'],
+      ],
+    },
+    {
+      id: '2026-11-stayontrack', date: 'November 2026',
+      client: [
+        ['✨', 'Neuer Name: StayOnTrack', 'Mit neuem, schlichtem Logo.'],
+        ['🌍', 'Sprache & Erscheinungsbild', 'In den Einstellungen: Deutsch, Englisch, Spanisch oder Italienisch – und Hell, Dunkel oder wie das System.'],
+        ['🫧', 'Liquid Glass', 'Optional in den Einstellungen: gläserne Leisten und Menüs wie im aktuellen iOS.'],
+        ['🧊', 'Kühlschrank & Shop', 'Hall of Fame jetzt unter Konto, mit Kühlschrank und Shop.'],
+      ],
+      coach: [
+        ['✨', 'Neuer Name: StayOnTrack', 'Mit neuem, schlichtem Logo.'],
+        ['🌍', 'Sprache & Erscheinungsbild', 'Unter Konto: Deutsch, Englisch, Spanisch oder Italienisch – und Hell, Dunkel oder wie das System.'],
+        ['🫧', 'Liquid Glass', 'Optional unter Konto: gläserne Leisten und Menüs wie im aktuellen iOS.'],
+        ['⏸️', 'Apple Health', 'Apple Health ist vorerst deaktiviert.'],
+      ],
+    },
+    {
+      id: '2026-11-training-hof', date: 'November 2026',
+      client: [
+        ['🏋️', 'Trainingsplan', 'Neuer Tab „Training“: Split wählen, Übungen anpassen und Gewichte tracken.'],
+        ['🏆', 'Hall of Fame', 'Medaillen in Bronze, Silber und Gold für deine Erfolge.'],
+      ],
+      coach: [
+        ['🏋️', 'Trainingspläne', 'Neuer Tab beim Klienten: Plan ansehen, bearbeiten und Trainingshistorie je Übung.'],
+        ['🏆', 'Hall of Fame', 'Beim Klienten: seine Medaillen und wie nah er an den nächsten ist.'],
+      ],
+    },
+  ];
+  const RELEASE = CHANGELOG[0].id;
   let whatsNewChecked = false;
   async function maybeShowWhatsNew() {
     if (whatsNewChecked || !me) return;
@@ -218,12 +248,17 @@
       }
     }
     if (me.seenRelease === RELEASE) return;
-    const items = WHATS_NEW[me.role === 'coach' ? 'coach' : 'client'];
+    // everything since the last update this person saw (unknown / none: the last three updates)
+    const seenAt = CHANGELOG.findIndex((r) => r.id === me.seenRelease);
+    const missed = CHANGELOG.slice(0, seenAt === -1 ? 3 : seenAt);
+    const role = me.role === 'coach' ? 'coach' : 'client';
+    const items = missed.flatMap((r) => r[role]).slice(0, 10);
     const dlg = document.createElement('dialog');
     dlg.className = 'whats-new';
     dlg.setAttribute('aria-labelledby', 'wn-title');
     dlg.innerHTML = `
-      <div class="wn-head"><span class="wn-badge">Neu</span><h2 id="wn-title">Das ist neu: StayOnTrack</h2></div>
+      <div class="wn-head"><span class="wn-badge">Neu</span><h2 id="wn-title">Das ist neu</h2>
+        ${missed.length > 1 ? `<p class="muted small" style="margin:0">${missed.length} Updates seit deinem letzten Besuch</p>` : ''}</div>
       <ul class="wn-list">${items.map(([icon, title, text]) => `<li><span class="wn-icon" aria-hidden="true">${icon}</span><div><strong>${esc(title)}</strong><p>${esc(text)}</p></div></li>`).join('')}</ul>
       <div class="wn-actions">
         ${me.role === 'coach' ? '' : '<button type="button" class="btn-secondary" data-wn-go>Zum Shop</button>'}
@@ -1966,6 +2001,7 @@
     document.getElementById('checkin-body').innerHTML = `
       <div class="checkin-grid">
         <div class="stack">
+          <section class="card ai-card" id="ai-summary" aria-live="polite"></section>
           <section class="card">
             <div class="row-between" style="margin-bottom:8px">
               <h2>${esc(rv.client.displayName)} – Wochenvergleich ${catTag(rv.client.category)}</h2>
@@ -2025,6 +2061,7 @@
           <p class="hint">Der Check-in erscheint oben in der Übersicht des Klienten (nicht im Chat). Er kann die Anpassungen mit einem Klick annehmen – nur seine Antwort landet im Chat.</p>
         </form>
       </div>`;
+    mountAiSummary(document.getElementById('ai-summary'), selected.id);
 
     const from = cmp.days[0].date;
     const to = cmp.days[13].date;
@@ -2101,6 +2138,160 @@
         btn.disabled = false;
       }
     });
+  }
+
+
+  // ---------- AI (coach): check-in summary on request, nutrition plan draft ----------
+  const aiTime = (iso) => new Date(iso).toLocaleString(window.I18N ? I18N.locale : 'de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const AI_OFF = '<p class="muted small" style="margin:0">KI ist noch nicht eingerichtet. Mit einem API-Schlüssel (Umgebungsvariable <code>ANTHROPIC_API_KEY</code>) bekommst du hier eine Zusammenfassung auf Knopfdruck.</p>';
+  const AI_LOADING = '<div class="ai-loading" role="status" aria-label="KI arbeitet"><span></span><span></span><span></span></div>';
+
+  /** Check-in: the summary is only made when the coach asks; the last one stays until asked again. */
+  async function mountAiSummary(root, clientId) {
+    if (!root) return;
+    let state;
+    try {
+      state = await api('GET', `/api/ai/checkin-summary?userId=${clientId}`);
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    const list = (title, items, cls) => (items && items.length ? `<div class="ai-block ${cls}"><h4>${title}</h4><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '');
+    const draw = (busy) => {
+      const s = state.summary;
+      let body;
+      if (!state.enabled) body = AI_OFF;
+      else if (busy) body = AI_LOADING;
+      else if (s) {
+        body = `<p class="ai-overview">${esc(s.overview)}</p>
+          <div class="ai-cols">${list('Lief gut', s.positives, 'good')}${list('Auffällig', s.concerns, 'warn')}${list('Vorschläge', s.suggestions, '')}${list('Genauer ansehen', s.lookCloser, '')}</div>
+          <p class="muted small ai-meta">Erstellt ${esc(aiTime(s.createdAt))} · nur auf Anfrage, wird nicht automatisch aktualisiert. KI kann sich irren – die Daten unten sind maßgeblich.</p>`;
+      } else body = '<p class="muted small" style="margin:0">Schneller Überblick über die Woche – wird erst erstellt, wenn du darauf tippst.</p>';
+      root.innerHTML = `
+        <div class="row-between ai-head"><h2><span class="ai-spark" aria-hidden="true">✦</span> KI-Überblick</h2>
+          ${state.enabled ? `<button type="button" class="${s ? 'btn-secondary' : 'btn-primary'} btn-sm" data-ai-run ${busy ? 'disabled' : ''}>${busy ? 'Wird erstellt…' : s ? 'Neu erstellen' : 'Zusammenfassung erstellen'}</button>` : ''}</div>
+        ${body}`;
+      const run = root.querySelector('[data-ai-run]');
+      if (run && !busy) run.addEventListener('click', async () => {
+        draw(true);
+        try {
+          state = await api('POST', `/api/ai/checkin-summary?userId=${clientId}`);
+        } catch (err) {
+          toast(err.message, true);
+        }
+        draw(false);
+      });
+    };
+    draw(false);
+  }
+
+  /** Coach nutrition tab: AI draft from the client's wishes – review and edit, then send. */
+  async function mountAiDraft(root, client, onApplied) {
+    if (!root) return;
+    let state;
+    try {
+      state = await api('GET', `/api/ai/nutrition-draft?userId=${client.id}`);
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    let busy = false;
+    const kcalOf = (i) => Math.round((i.amount * i.kcal) / 100);
+    const draw = () => {
+      const d = state.draft;
+      let body;
+      if (!state.enabled) body = '<p class="muted small" style="margin:0">KI ist noch nicht eingerichtet (<code>ANTHROPIC_API_KEY</code>). Dann entsteht hier aus den Wünschen automatisch ein Planentwurf, den du prüfst und abschickst.</p>';
+      else if (busy) body = `${AI_LOADING}<p class="muted small">Die KI stellt aus den Wünschen und eurer Lebensmittel-Datenbank einen Plan zusammen…</p>`;
+      else if (!d) body = '<p class="muted small" style="margin:0">Aus den Wünschen und dem Kalorienziel einen Plan vorschlagen lassen. Du prüfst und änderst ihn, bevor der Klient etwas sieht.</p>';
+      else {
+        body = `${d.notes ? `<p class="ai-overview">${esc(d.notes)}</p>` : ''}
+          ${d.meals.map((m, mi) => `<div class="ai-meal" data-meal="${mi}">
+            <div class="row-between ai-meal-head"><input class="ai-meal-name" value="${esc(m.name)}" maxlength="60" aria-label="Name der Mahlzeit"><span class="muted small" data-meal-kcal></span></div>
+            <ul>${m.items.map((i, ii) => `<li data-item="${ii}"><span class="ai-food">${esc(i.name)}</span>
+              <span class="input-unit ai-amount"><input inputmode="numeric" value="${i.amount}" aria-label="Menge: ${esc(i.name)}"><span>${esc(i.unit)}</span></span>
+              <span class="ai-kcal" data-kcal></span>
+              <button type="button" class="icon-btn" data-del aria-label="${esc(i.name)} entfernen">✕</button></li>`).join('')}</ul></div>`).join('')}
+          <p class="ai-total">Gesamt <strong data-total></strong></p>
+          <div class="row ai-actions">
+            <button type="button" class="btn-primary" data-ai-apply>Geprüft – an ${esc(client.displayName)} senden</button>
+            <button type="button" class="btn-ghost" data-ai-drop>Verwerfen</button>
+          </div>
+          <p class="muted small ai-meta">Entwurf vom ${esc(aiTime(d.createdAt))}. Nach dem Senden kannst du den Plan wie gewohnt weiter bearbeiten.</p>`;
+      }
+      root.innerHTML = `
+        <div class="row-between ai-head"><h2><span class="ai-spark" aria-hidden="true">✦</span> KI-Entwurf</h2>
+          ${state.enabled && !busy ? `<button type="button" class="${d ? 'btn-ghost' : 'btn-primary'} btn-sm" data-ai-run>${d ? 'Neu erstellen' : 'Entwurf erstellen'}</button>` : ''}</div>
+        ${body}`;
+      const run = root.querySelector('[data-ai-run]');
+      if (run) run.addEventListener('click', async () => {
+        if (d && !confirm('Neuen Entwurf erstellen? Deine Änderungen am aktuellen Entwurf gehen verloren.')) return;
+        busy = true;
+        draw();
+        try {
+          state = await api('POST', `/api/ai/nutrition-draft?userId=${client.id}`);
+        } catch (err) {
+          toast(err.message, true);
+        }
+        busy = false;
+        draw();
+      });
+      if (!d || busy || !state.enabled) return;
+      const recalc = () => {
+        let all = 0;
+        root.querySelectorAll('[data-meal]').forEach((mEl) => {
+          const m = d.meals[Number(mEl.dataset.meal)];
+          const sum = m.items.reduce((b, i) => b + kcalOf(i), 0);
+          all += sum;
+          mEl.querySelector('[data-meal-kcal]').textContent = `${num(sum)} kcal`;
+          mEl.querySelectorAll('[data-item]').forEach((iEl) => {
+            iEl.querySelector('[data-kcal]').textContent = `${num(kcalOf(m.items[Number(iEl.dataset.item)]))} kcal`;
+          });
+        });
+        root.querySelector('[data-total]').textContent = `${num(all)} kcal`;
+      };
+      root.querySelectorAll('[data-meal]').forEach((mEl) => {
+        const mi = Number(mEl.dataset.meal);
+        const m = d.meals[mi];
+        mEl.querySelector('.ai-meal-name').addEventListener('input', (e) => { m.name = e.target.value; });
+        mEl.querySelectorAll('[data-item]').forEach((iEl) => {
+          const idx = Number(iEl.dataset.item);
+          iEl.querySelector('input').addEventListener('input', (e) => {
+            m.items[idx].amount = Math.max(0, Math.round(Number(e.target.value.replace(',', '.')) || 0));
+            recalc();
+          });
+          iEl.querySelector('[data-del]').addEventListener('click', () => {
+            m.items.splice(idx, 1);
+            if (!m.items.length) d.meals.splice(mi, 1);
+            draw();
+          });
+        });
+      });
+      recalc();
+      root.querySelector('[data-ai-drop]').addEventListener('click', async () => {
+        if (!confirm('Entwurf verwerfen?')) return;
+        try {
+          state = await api('DELETE', `/api/ai/nutrition-draft?userId=${client.id}`);
+        } catch (err) {
+          toast(err.message, true);
+        }
+        draw();
+      });
+      root.querySelector('[data-ai-apply]').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        try {
+          await api('POST', `/api/ai/nutrition-draft/apply?userId=${client.id}`, {
+            meals: d.meals.map((m) => ({ name: m.name, items: m.items.filter((i) => i.amount > 0).map((i) => ({ foodId: i.foodId, amount: i.amount })) })),
+          });
+          savedHud('Plan gesendet', client.displayName);
+          onApplied();
+        } catch (err) {
+          toast(err.message, true);
+          btn.disabled = false;
+        }
+      });
+    };
+    draw();
   }
 
   async function renderCheckinDone() {
@@ -2547,8 +2738,9 @@
             ${planRequestSummary(planRequest.questions, planRequest.request.answers)}
             ${planRequest.request.status === 'open' ? '<button type="button" class="btn-secondary btn-sm" data-pr-done>Als erledigt markieren</button>' : ''}
           </section>` : ''}
+          ${plan.meals.length ? '' : '<section class="card ai-card" id="ai-draft" aria-live="polite"></section>'}
           ${planSummary(plan, goals)}
-          ${mealsHtml || '<div class="card empty-state">Noch kein Ernährungsplan. Leg unten die erste Mahlzeit an.</div>'}
+          ${mealsHtml || '<div class="card empty-state">Noch kein Ernährungsplan. Leg unten die erste Mahlzeit an – oder lass oben einen KI-Entwurf erstellen.</div>'}
           <form class="card add-meal" id="add-meal">
             <h3>Mahlzeit hinzufügen</h3>
             <div class="row" style="gap:6px">${['Frühstück', 'Mittagessen', 'Abendessen', 'Snack', 'Pre-Workout', 'Post-Workout']
@@ -2646,6 +2838,13 @@
         );
       })
     );
+    if (!plan.meals.length) {
+      mountAiDraft(root.querySelector('#ai-draft'), client, async () => {
+        const p = await api('GET', `/api/nutrition?userId=${client.id}`);
+        if (planRequest && planRequest.request) planRequest.request.status = 'done';
+        redraw(p);
+      });
+    }
     const prDone = root.querySelector('[data-pr-done]');
     if (prDone) prDone.addEventListener('click', async () => {
       try {
@@ -3741,10 +3940,10 @@
       ${hofHeader(opts, 'medals', opts.coach ? `Was ${esc(opts.clientName || 'dein Klient')} schon geschafft hat – und was als Nächstes kommt.` : 'Jede Medaille steht für etwas, das du durchgezogen hast. Ausgegraute zeigen, was als Nächstes kommt.')}
       ${freshNames.length ? `<div class="fame-new-banner" role="status">🎉 <strong>Neu freigeschaltet:</strong> ${esc(freshNames.slice(0, 3).join(', '))}${freshNames.length > 3 ? ` und ${freshNames.length - 3} weitere` : ''}</div>` : ''}
       <section class="card fame-summary">
-        <div class="fame-count"><span class="fame-big">${s.earned}</span><span class="muted">von ${s.total} Medaillen</span></div>
+        <div class="fame-count"><span class="fame-big">${s.earned}</span><span class="muted">von ${s.total} Medaillen</span><span class="fame-tokens"><i class="coin" aria-hidden="true"></i> ${s.tokens} Token verdient</span></div>
         <div class="fame-bar fame-bar-total" aria-hidden="true"><span style="width:${Math.round((s.earned / s.total) * 100)}%"></span></div>
         <ul class="fame-tally">
-          ${['gold', 'silver', 'bronze'].map((l) => `<li><span class="tally-dot tier-${l}"></span>${s[l]} ${TIER_NAMES[l]}</li>`).join('')}
+          ${['gold', 'silver', 'bronze'].map((l) => `<li><span class="tally-dot tier-${l}"></span>${s[l]} ${TIER_NAMES[l]} <span class="muted small">(je ${{ gold: 3, silver: 2, bronze: 1 }[l]} Token)</span></li>`).join('')}
         </ul>
         ${upcoming.length ? `<div class="fame-next"><h3>Fast geschafft</h3><ul>${upcoming.map(({ a, t }) => `
           <li><span class="tally-dot tier-${t.level}"></span><span class="fn-text"><b>${esc(a.title)} ${TIER_NAMES[t.level]}</b> · noch ${esc(fmtGoal(a, t.goal - a.current))} ${esc(a.unit)}</span><span class="fame-pct">${t.progress} %</span></li>`).join('')}</ul></div>` : ''}
@@ -3922,7 +4121,7 @@
     const shelves = Math.max(3, Math.ceil(cans.length / perShelf));
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    root.innerHTML = `${hofHeader(opts, 'fridge', opts.coach ? 'Was sich dein Klient mit seinen Medaillen gegönnt hat.' : 'Dein Kühlschrank – gefüllt mit dem, was du dir mit Medaillen verdient hast.')}
+    root.innerHTML = `${hofHeader(opts, 'fridge', opts.coach ? 'Was sich dein Klient mit seinen Medaillen gegönnt hat.' : 'Dein Kühlschrank – gefüllt mit dem, was du dir mit deinen Token gegönnt hast.')}
       <div class="fridge-stage ${reduce ? 'skip' : ''}" data-stage>
         <div class="fridge-cam" aria-hidden="true">
           <div class="fridge">
@@ -3938,11 +4137,11 @@
           ${cans.length ? '' : `<div class="fridge-empty-fx" aria-hidden="true">${cobweb('tl')}${cobweb('tr')}<span class="fly f1">${flySvg}</span><span class="fly f2">${flySvg}</span></div>`}
           ${Array.from({ length: shelves }, (_, s) => `<div class="shelf">${cans.slice(s * perShelf, (s + 1) * perShelf)
             .map((f, i) => `<span class="shelf-can" style="--i:${s * perShelf + i}" title="${esc(f.name)} · ${esc(RARITY[f.rarity].name)}">${coldCan(f)}<span class="sr-only">${esc(f.name)}, ${esc(RARITY[f.rarity].name)}</span></span>`).join('')}</div>`).join('')}
-          ${cans.length ? '' : `<p class="fridge-empty">${opts.coach ? 'Noch leer – dein Klient hat sich noch nichts gegönnt.' : 'Noch leer. Im <a href="' + opts.base + '/shop">Shop</a> tauschst du Medaillen gegen Dosen.'}</p>`}
+          ${cans.length ? '' : `<p class="fridge-empty">${opts.coach ? 'Noch leer – dein Klient hat sich noch nichts gegönnt.' : 'Noch leer. Im <a href="' + opts.base + '/shop">Shop</a> tauschst du Token gegen Dosen.'}</p>`}
         </section>
       </div>
       <div class="fridge-meta">
-        <span class="muted">${cans.length} ${cans.length === 1 ? 'Dose' : 'Dosen'} · ${shop.balance.available} ${shop.balance.available === 1 ? 'Medaille' : 'Medaillen'} übrig</span>
+        <span class="muted">${cans.length} ${cans.length === 1 ? 'Dose' : 'Dosen'} · ${shop.balance.available} Token übrig</span>
         ${reduce ? '' : '<button type="button" class="btn-ghost btn-sm" data-replay>↻ Nochmal reingleiten</button>'}
       </div>`;
     const replay = root.querySelector('[data-replay]');
@@ -3970,9 +4169,9 @@
     }
     function draw() {
       const b = shop.balance;
-      root.innerHTML = `${hofHeader(opts, 'shop', 'Tausche deine Medaillen gegen eine kalte Dose für deinen Kühlschrank.')}
+      root.innerHTML = `${hofHeader(opts, 'shop', 'Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen eine kalte Dose für deinen Kühlschrank.')}
         <section class="card shop-balance">
-          <div><span class="fame-big">${b.available}</span> <span class="muted">${b.available === 1 ? 'Medaille' : 'Medaillen'} verfügbar</span></div>
+          <div><span class="fame-big">${b.available}</span> <span class="muted">Token verfügbar</span></div>
           <p class="muted small">${b.earned} verdient · ${b.spent} ausgegeben</p>
           <a class="btn btn-secondary btn-sm" href="${opts.base}/fridge">Zum Kühlschrank →</a>
         </section>
@@ -3982,8 +4181,8 @@
             <div class="shop-can">${coldCan(f, 'data-wobble')}</div>
             <h3>${esc(f.name)}</h3>
             <span class="rarity-tag r-${f.rarity}">${esc(RARITY[f.rarity].name)}</span>
-            <p class="shop-price" aria-label="${f.price} ${f.price === 1 ? 'Medaille' : 'Medaillen'}">${'<i class="coin"></i>'.repeat(f.price)}<span>${f.price}</span></p>
-            <button type="button" class="${can ? 'btn-primary' : 'btn-secondary'} btn-sm btn-block" data-buy="${f.key}" ${can ? '' : 'disabled'}>${can ? 'Kaufen' : `Noch ${f.price - b.available} ${f.price - b.available === 1 ? 'Medaille' : 'Medaillen'}`}</button>
+            <p class="shop-price" aria-label="${f.price} Token">${'<i class="coin"></i>'.repeat(f.price)}<span>${f.price}</span></p>
+            <button type="button" class="${can ? 'btn-primary' : 'btn-secondary'} btn-sm btn-block" data-buy="${f.key}" ${can ? '' : 'disabled'}>${can ? 'Kaufen' : `Noch ${f.price - b.available} Token`}</button>
           </section>`;
         }).join('')}</div>`;
       root.querySelectorAll('[data-buy]').forEach((btn) => btn.addEventListener('click', async () => {

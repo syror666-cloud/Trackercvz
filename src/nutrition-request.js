@@ -53,7 +53,7 @@ function parseAnswers(body, HttpError, textField) {
   return answers;
 }
 
-function nutritionRequestRoutes({ db, notifier, HttpError, readBody, textField, requireUser, requireCoach, targetClient }) {
+function nutritionRequestRoutes({ db, notifier, HttpError, readBody, textField, requireUser, requireCoach, targetClient, autoDraft }) {
   const q = {
     get: db.prepare('SELECT * FROM nutrition_requests WHERE client_id = ?'),
     upsert: db.prepare(
@@ -89,6 +89,7 @@ function nutritionRequestRoutes({ db, notifier, HttpError, readBody, textField, 
           url: `/#/client/${u.id}/nutrition`,
         })
         .catch(() => {});
+      if (autoDraft) autoDraft(u.id, u.display_name); // AI prepares a draft for the coach (if configured)
       return view(u.id);
     }],
 

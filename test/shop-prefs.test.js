@@ -51,7 +51,7 @@ async function withClient() {
 }
 const day = (n) => new Date(Date.UTC(2026, 9, 1) + n * 86400000).toISOString().slice(0, 10);
 
-test('shop: medals are the currency, cans go into the fridge', async (t) => {
+test('shop: medals are worth tokens (bronze 1, silver 2, gold 3), cans go into the fridge', async (t) => {
   const { server, max, coach, id } = await withClient();
   t.after(() => server.close());
   let shop = (await max('GET', '/api/shop')).data;
@@ -71,8 +71,11 @@ test('shop: medals are the currency, cans go into the fridge', async (t) => {
   assert.equal(r.data.items[0].flavor, 'gold');
   const broke = await max('POST', '/api/shop/buy', { flavor: 'white' });
   assert.equal(broke.status, 409);
-  assert.match(broke.data.error, /1 Medaille/);
+  assert.match(broke.data.error, /1 Token/);
   assert.equal((await max('POST', '/api/shop/buy', { flavor: 'cola' })).status, 400);
+  // 15 days in a row: streak silver (+2 on top of bronze) = 3 + 2 more tokens
+  for (let i = 10; i < 15; i++) await max('PUT', `/api/entries/${day(i)}`, { steps: 12000 });
+  assert.equal((await max('GET', '/api/shop')).data.balance.earned, 5);
   // the coach sees the fridge but cannot shop
   assert.equal((await coach('GET', `/api/shop?userId=${id}`)).data.items.length, 1);
   assert.equal((await coach('POST', '/api/shop/buy', { flavor: 'white' })).status, 403);
