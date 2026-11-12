@@ -1,0 +1,354 @@
+{
+ "kniebeuge": {
+  "name": "Kniebeuge",
+  "img": "Barbell_Full_Squat",
+  "muscles": "Oberschenkel vorne, Gesäß, Rumpf",
+  "steps": [
+   "Stange auf dem oberen Rücken ablegen, Füße schulterbreit, Zehen leicht nach außen.",
+   "Einatmen, Rumpf anspannen und Hüfte nach hinten-unten senken, bis die Oberschenkel mindestens parallel sind.",
+   "Über die ganze Fußsohle kraftvoll hochdrücken, Knie zeigen in Richtung Zehen."
+  ],
+  "tip": "Brust bleibt oben, Fersen am Boden."
+ },
+ "bankdrücken": {
+  "name": "Bankdrücken",
+  "img": "Barbell_Bench_Press_-_Medium_Grip",
+  "muscles": "Brust, vordere Schulter, Trizeps",
+  "steps": [
+   "Auf die Bank legen, Schulterblätter zusammen und nach unten ziehen, Füße fest am Boden.",
+   "Stange etwas breiter als schulterbreit greifen und kontrolliert zur unteren Brust senken.",
+   "Stange in einer leichten Bogenbahn zurück über die Schultern drücken."
+  ],
+  "tip": "Ellbogen etwa 45° vom Körper, nicht ganz seitlich."
+ },
+ "rudern am kabel": {
+  "name": "Rudern am Kabel",
+  "img": "Seated_Cable_Rows",
+  "muscles": "Oberer Rücken, Latissimus, Bizeps",
+  "steps": [
+   "Aufrecht sitzen, Füße an der Fußstütze, Knie leicht gebeugt, Griff mit gestreckten Armen.",
+   "Griff zum Bauch ziehen, Schulterblätter zusammenführen.",
+   "Langsam nach vorne lassen, bis die Arme wieder lang sind."
+  ],
+  "tip": "Oberkörper ruhig halten – nicht mit Schwung nach hinten lehnen."
+ },
+ "rumänisches kreuzheben": {
+  "name": "Rumänisches Kreuzheben",
+  "img": "Romanian_Deadlift",
+  "muscles": "Beinbeuger, Gesäß, unterer Rücken",
+  "steps": [
+   "Stehen, Stange vor den Oberschenkeln, Knie leicht gebeugt.",
+   "Hüfte weit nach hinten schieben, Stange nah am Bein bis knapp unter die Knie senken.",
+   "Gesäß anspannen und Hüfte nach vorne bringen, bis du wieder aufrecht stehst."
+  ],
+  "tip": "Rücken bleibt gerade – der Dehnung in den Beinbeugern folgen, nicht tiefer."
+ },
+ "seitheben": {
+  "name": "Seitheben",
+  "img": "Side_Lateral_Raise",
+  "muscles": "Seitliche Schulter",
+  "steps": [
+   "Aufrecht stehen, Kurzhanteln seitlich am Körper, Ellbogen leicht gebeugt.",
+   "Arme seitlich bis auf Schulterhöhe heben, Ellbogen führen.",
+   "Kontrolliert wieder absenken."
+  ],
+  "tip": "Leichtes Gewicht, kein Schwung aus dem Oberkörper."
+ },
+ "bizepscurls": {
+  "name": "Bizepscurls",
+  "img": "Barbell_Curl",
+  "muscles": "Bizeps",
+  "steps": [
+   "Aufrecht stehen, Stange schulterbreit im Untergriff, Arme gestreckt.",
+   "Stange durch Beugen der Ellbogen zur Schulter curlen, Ellbogen bleiben am Körper.",
+   "Langsam bis zur vollen Streckung absenken."
+  ],
+  "tip": "Oberkörper nicht nach hinten schwingen."
+ },
+ "kreuzheben": {
+  "name": "Kreuzheben",
+  "img": "Barbell_Deadlift",
+  "muscles": "Rückseite der Beine, Gesäß, ganzer Rücken",
+  "steps": [
+   "Füße hüftbreit, Stange über der Fußmitte, schulterbreit greifen.",
+   "Brust raus, Rücken gerade, Spannung aufbauen und die Stange am Bein entlang hochziehen.",
+   "Oben Hüfte strecken, dann kontrolliert auf demselben Weg ablegen."
+  ],
+  "tip": "Stange bleibt immer nah am Körper."
+ },
+ "schulterdrücken": {
+  "name": "Schulterdrücken",
+  "img": "Standing_Military_Press",
+  "muscles": "Schultern, Trizeps",
+  "steps": [
+   "Stange auf Schulterhöhe vor dem Hals, Griff etwas breiter als schulterbreit.",
+   "Gesäß und Bauch anspannen, Stange senkrecht über den Kopf drücken.",
+   "Kontrolliert zurück zur Startposition."
+  ],
+  "tip": "Kopf kurz nach hinten nehmen, damit die Stange gerade nach oben laufen kann."
+ },
+ "latzug": {
+  "name": "Latzug",
+  "img": "Wide-Grip_Lat_Pulldown",
+  "muscles": "Latissimus, oberer Rücken, Bizeps",
+  "steps": [
+   "Breit greifen, Oberschenkel unter das Polster, leicht zurücklehnen.",
+   "Stange zur oberen Brust ziehen, Ellbogen nach unten führen.",
+   "Langsam nach oben lassen, bis die Arme gestreckt sind."
+  ],
+  "tip": "Brust zur Stange, nicht die Stange in den Nacken."
+ },
+ "beinpresse": {
+  "name": "Beinpresse",
+  "img": "Leg_Press",
+  "muscles": "Oberschenkel vorne, Gesäß",
+  "steps": [
+   "Füße schulterbreit mittig auf die Platte, Rücken fest an der Lehne.",
+   "Platte kontrolliert absenken, bis die Knie etwa 90° gebeugt sind.",
+   "Über die ganze Fußsohle zurückdrücken, Knie oben nicht durchstrecken."
+  ],
+  "tip": "Unterer Rücken bleibt an der Lehne."
+ },
+ "trizepsdrücken am kabel": {
+  "name": "Trizepsdrücken am Kabel",
+  "img": "Triceps_Pushdown",
+  "muscles": "Trizeps",
+  "steps": [
+   "Vor den Kabelzug stellen, Griff oben fassen, Ellbogen am Körper.",
+   "Griff nach unten drücken, bis die Arme gestreckt sind.",
+   "Langsam zurück, bis die Unterarme etwa waagerecht sind."
+  ],
+  "tip": "Nur der Unterarm bewegt sich."
+ },
+ "hängendes beinheben": {
+  "name": "Hängendes Beinheben",
+  "img": "Hanging_Leg_Raise",
+  "muscles": "Bauch, Hüftbeuger",
+  "steps": [
+   "An einer Stange hängen, Körper ruhig, Arme gestreckt.",
+   "Beine kontrolliert nach vorne-oben heben, Becken leicht einrollen.",
+   "Langsam absenken, ohne zu schwingen."
+  ],
+  "tip": "Zu schwer? Mit angewinkelten Knien beginnen."
+ },
+ "frontkniebeuge": {
+  "name": "Frontkniebeuge",
+  "img": "Front_Barbell_Squat",
+  "muscles": "Oberschenkel vorne, Rumpf",
+  "steps": [
+   "Stange vorne auf den Schultern ablegen, Ellbogen hoch.",
+   "Aufrecht in die tiefe Kniebeuge gehen.",
+   "Hochdrücken und dabei die Ellbogen oben halten."
+  ],
+  "tip": "Oberkörper bleibt aufrechter als bei der normalen Kniebeuge."
+ },
+ "schrägbankdrücken kurzhantel": {
+  "name": "Schrägbankdrücken Kurzhantel",
+  "img": "Incline_Dumbbell_Press",
+  "muscles": "Obere Brust, vordere Schulter",
+  "steps": [
+   "Bank auf ca. 30° stellen, Kurzhanteln auf Brusthöhe.",
+   "Hanteln nach oben drücken, bis die Arme fast gestreckt sind.",
+   "Kontrolliert bis neben die Brust absenken."
+  ],
+  "tip": "Schulterblätter bleiben zusammen und unten."
+ },
+ "klimmzüge": {
+  "name": "Klimmzüge",
+  "img": "Pullups",
+  "muscles": "Latissimus, oberer Rücken, Bizeps",
+  "steps": [
+   "Stange etwas breiter als schulterbreit im Obergriff, frei hängen.",
+   "Brust Richtung Stange ziehen, bis das Kinn über der Stange ist.",
+   "Kontrolliert bis zur vollen Streckung ablassen."
+  ],
+  "tip": "Zu schwer? Mit Band oder Maschine unterstützen."
+ },
+ "hip thrust": {
+  "name": "Hip Thrust",
+  "img": "Barbell_Hip_Thrust",
+  "muscles": "Gesäß, Beinbeuger",
+  "steps": [
+   "Oberer Rücken an der Bank, Stange gepolstert über der Hüfte, Füße hüftbreit.",
+   "Hüfte nach oben drücken, bis Oberkörper und Oberschenkel eine Linie bilden.",
+   "Oben das Gesäß kurz anspannen, dann kontrolliert absenken."
+  ],
+  "tip": "Kinn leicht zur Brust, Rippen unten lassen."
+ },
+ "wadenheben": {
+  "name": "Wadenheben",
+  "img": "Standing_Calf_Raises",
+  "muscles": "Waden",
+  "steps": [
+   "Fußballen auf eine Kante, Fersen frei, aufrecht stehen.",
+   "Auf die Zehenspitzen drücken, so hoch es geht.",
+   "Langsam absenken, bis die Waden gedehnt sind."
+  ],
+  "tip": "Oben kurz halten, unten nicht federn."
+ },
+ "face pulls": {
+  "name": "Face Pulls",
+  "img": "Face_Pull",
+  "muscles": "Hintere Schulter, oberer Rücken",
+  "steps": [
+   "Seil auf Augenhöhe am Kabelzug, mit beiden Händen fassen.",
+   "Seil Richtung Gesicht ziehen und die Hände dabei auseinanderführen.",
+   "Kontrolliert zurück nach vorne."
+  ],
+  "tip": "Ellbogen hoch, Daumen zeigen nach hinten."
+ },
+ "langhantelrudern": {
+  "name": "Langhantelrudern",
+  "img": "Bent_Over_Barbell_Row",
+  "muscles": "Oberer Rücken, Latissimus",
+  "steps": [
+   "Knie leicht gebeugt, Oberkörper etwa 45° nach vorne, Rücken gerade.",
+   "Stange zum Bauchnabel ziehen, Schulterblätter zusammen.",
+   "Kontrolliert ablassen, bis die Arme gestreckt sind."
+  ],
+  "tip": "Der Oberkörper bleibt still – kein Schwung."
+ },
+ "beinbeuger": {
+  "name": "Beinbeuger",
+  "img": "Lying_Leg_Curls",
+  "muscles": "Beinbeuger",
+  "steps": [
+   "Bäuchlings auf die Maschine, Polster knapp über den Fersen.",
+   "Unterschenkel Richtung Gesäß beugen.",
+   "Langsam zurück in die Streckung."
+  ],
+  "tip": "Hüfte bleibt auf dem Polster."
+ },
+ "kurzhantel-schulterdrücken": {
+  "name": "Kurzhantel-Schulterdrücken",
+  "img": "Dumbbell_Shoulder_Press",
+  "muscles": "Schultern, Trizeps",
+  "steps": [
+   "Aufrecht sitzen, Kurzhanteln auf Schulterhöhe, Handflächen nach vorne.",
+   "Hanteln über den Kopf drücken, bis die Arme fast gestreckt sind.",
+   "Kontrolliert zurück auf Schulterhöhe."
+  ],
+  "tip": "Rücken an der Lehne, kein Hohlkreuz."
+ },
+ "hammercurls": {
+  "name": "Hammercurls",
+  "img": "Hammer_Curls",
+  "muscles": "Bizeps, Unterarme",
+  "steps": [
+   "Kurzhanteln seitlich, Handflächen zeigen zum Körper.",
+   "Hanteln im Neutralgriff zur Schulter curlen.",
+   "Langsam absenken."
+  ],
+  "tip": "Ellbogen bleiben am Körper."
+ },
+ "bulgarische split squats": {
+  "name": "Bulgarische Split Squats",
+  "img": "Split_Squat_with_Dumbbells",
+  "muscles": "Oberschenkel vorne, Gesäß",
+  "steps": [
+   "Hinteren Fuß auf eine Bank legen, vorderer Fuß gut einen Schritt vor.",
+   "Senkrecht nach unten gehen, bis das hintere Knie fast den Boden berührt.",
+   "Über das vordere Bein hochdrücken. Danach Seite wechseln."
+  ],
+  "tip": "Das vordere Knie bleibt über dem Fuß."
+ },
+ "beinstrecker": {
+  "name": "Beinstrecker",
+  "img": "Leg_Extensions",
+  "muscles": "Oberschenkel vorne",
+  "steps": [
+   "Hinsetzen, Polster vorne knapp über den Füßen, Knie auf Höhe der Drehachse.",
+   "Beine bis zur Streckung heben.",
+   "Langsam zurück, ohne das Gewicht abzulegen."
+  ],
+  "tip": "Oben kurz halten."
+ },
+ "wadenheben sitzend": {
+  "name": "Wadenheben sitzend",
+  "img": "Seated_Calf_Raise",
+  "muscles": "Waden (tiefer Wadenmuskel)",
+  "steps": [
+   "Sitzen, Polster auf den Oberschenkeln, Fußballen auf der Plattform.",
+   "Fersen so hoch wie möglich drücken.",
+   "Langsam tief absenken."
+  ],
+  "tip": "Volle Bewegung, nicht wippen."
+ },
+ "überkopf-trizepsstrecken": {
+  "name": "Überkopf-Trizepsstrecken",
+  "img": "Cable_Rope_Overhead_Triceps_Extension",
+  "muscles": "Trizeps (langer Kopf)",
+  "steps": [
+   "Mit dem Rücken zum Kabelzug, Seil über dem Kopf, Ellbogen zeigen nach vorne.",
+   "Arme nach vorne-oben strecken.",
+   "Langsam zurück in die Dehnung hinter dem Kopf."
+  ],
+  "tip": "Oberarme bleiben ruhig."
+ },
+ "schrägbankdrücken": {
+  "name": "Schrägbankdrücken",
+  "img": "Barbell_Incline_Bench_Press_-_Medium_Grip",
+  "muscles": "Obere Brust, vordere Schulter, Trizeps",
+  "steps": [
+   "Bank auf ca. 30°, Schulterblätter zusammen, Stange etwas breiter als schulterbreit.",
+   "Stange kontrolliert zur oberen Brust senken.",
+   "Zurück nach oben drücken."
+  ],
+  "tip": "Füße fest am Boden, Gesäß bleibt auf der Bank."
+ },
+ "dips": {
+  "name": "Dips",
+  "img": "Dips_-_Chest_Version",
+  "muscles": "Brust, Trizeps, vordere Schulter",
+  "steps": [
+   "An den Barren stützen, Arme gestreckt.",
+   "Oberkörper leicht nach vorne, Ellbogen beugen, bis die Oberarme etwa waagerecht sind.",
+   "Wieder hochdrücken."
+  ],
+  "tip": "Zu schwer? Mit Band oder Maschine unterstützen."
+ },
+ "butterfly": {
+  "name": "Butterfly",
+  "img": "Butterfly",
+  "muscles": "Brust",
+  "steps": [
+   "An der Maschine sitzen, Griffe auf Brusthöhe, Ellbogen leicht gebeugt.",
+   "Arme in einem Bogen vor der Brust zusammenführen.",
+   "Langsam öffnen, bis die Brust leicht gedehnt ist."
+  ],
+  "tip": "Schultern unten lassen."
+ },
+ "einarmiges kurzhantelrudern": {
+  "name": "Einarmiges Kurzhantelrudern",
+  "img": "One-Arm_Dumbbell_Row",
+  "muscles": "Latissimus, oberer Rücken",
+  "steps": [
+   "Knie und Hand einer Seite auf die Bank, Rücken gerade, Hantel in der anderen Hand.",
+   "Hantel zur Hüfte ziehen, Ellbogen nah am Körper.",
+   "Kontrolliert ablassen. Danach Seite wechseln."
+  ],
+  "tip": "Den Oberkörper nicht aufdrehen."
+ },
+ "reverse butterfly": {
+  "name": "Reverse Butterfly",
+  "img": "Reverse_Machine_Flyes",
+  "muscles": "Hintere Schulter, oberer Rücken",
+  "steps": [
+   "Mit der Brust zur Lehne an die Maschine, Griffe vor dir.",
+   "Arme seitlich nach hinten öffnen.",
+   "Langsam zurück nach vorne."
+  ],
+  "tip": "Leichte Gewichte, Bewegung aus der Schulter."
+ },
+ "kabel-crunches": {
+  "name": "Kabel-Crunches",
+  "img": "Cable_Crunch",
+  "muscles": "Bauch",
+  "steps": [
+   "Vor dem Kabelzug knien, Seil neben dem Kopf halten.",
+   "Oberkörper einrollen und die Ellbogen Richtung Knie ziehen.",
+   "Langsam wieder aufrichten."
+  ],
+  "tip": "Bewegung kommt aus dem Bauch, nicht aus der Hüfte."
+ }
+}

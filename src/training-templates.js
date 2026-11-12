@@ -1,104 +1,83 @@
 'use strict';
 
 // Standard training splits with a sensible default plan each.
-// Volumes follow common hypertrophy guidance: compounds 3–4 × 5–10, accessories 2–3 × 10–15.
+// Every exercise: 2–3 sets; heavy compounds 6–8 reps, everything else 8–10 (never more than 10).
 // Sources: StrengthLog upper/lower 4x, Outlift PPL, J3U torso/limb split, Fitnessvolt full body / upper-lower.
 
 const ex = (name, sets, reps) => ({ name, sets, reps });
 
 const S = {
   fullA: ['Ganzkörper A', [
-    ex('Kniebeuge', 3, '6–8'), ex('Bankdrücken', 3, '6–8'), ex('Rudern am Kabel', 3, '8–12'),
-    ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Seitheben', 2, '12–15'), ex('Bizepscurls', 2, '10–12'),
+    ex('Kniebeuge', 3, '6–8'), ex('Bankdrücken', 3, '6–8'), ex('Rudern am Kabel', 3, '8–10'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Seitheben', 2, '8–10'), ex('Bizepscurls', 2, '8–10'),
   ]],
   fullB: ['Ganzkörper B', [
-    ex('Kreuzheben', 3, '5'), ex('Schulterdrücken', 3, '6–10'), ex('Latzug', 3, '8–12'),
-    ex('Beinpresse', 3, '10–12'), ex('Trizepsdrücken am Kabel', 2, '10–12'), ex('Plank', 3, '30–45 s'),
+    ex('Kreuzheben', 2, '6–8'), ex('Schulterdrücken', 3, '6–8'), ex('Latzug', 3, '8–10'), ex('Beinpresse', 3, '8–10'), ex('Trizepsdrücken am Kabel', 2, '8–10'), ex('Hängendes Beinheben', 2, '8–10'),
   ]],
   fullC: ['Ganzkörper C', [
-    ex('Frontkniebeuge', 3, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Klimmzüge', 3, '6–10'),
-    ex('Hip Thrust', 3, '8–12'), ex('Wadenheben', 3, '12–15'), ex('Face Pulls', 2, '12–15'),
+    ex('Frontkniebeuge', 3, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Klimmzüge', 3, '6–8'), ex('Hip Thrust', 3, '8–10'), ex('Wadenheben', 3, '8–10'), ex('Face Pulls', 2, '8–10'),
   ]],
   upperA: ['Upper A', [
-    ex('Bankdrücken', 4, '5–8'), ex('Langhantelrudern', 4, '6–8'), ex('Schulterdrücken', 3, '8–10'),
-    ex('Latzug', 3, '8–12'), ex('Bizepscurls', 3, '10–12'), ex('Trizepsdrücken am Kabel', 3, '10–12'),
+    ex('Bankdrücken', 3, '6–8'), ex('Langhantelrudern', 3, '6–8'), ex('Schulterdrücken', 3, '6–8'), ex('Latzug', 3, '8–10'), ex('Bizepscurls', 2, '8–10'), ex('Trizepsdrücken am Kabel', 2, '8–10'),
   ]],
   lowerA: ['Lower A', [
-    ex('Kniebeuge', 4, '5–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 3, '10–12'),
-    ex('Beinbeuger', 3, '10–12'), ex('Wadenheben', 4, '10–15'), ex('Plank', 3, '30–45 s'),
+    ex('Kniebeuge', 3, '6–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 3, '8–10'), ex('Beinbeuger', 3, '8–10'), ex('Wadenheben', 3, '8–10'), ex('Hängendes Beinheben', 2, '8–10'),
   ]],
   upperB: ['Upper B', [
-    ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Klimmzüge', 3, '6–10'), ex('Kurzhantel-Schulterdrücken', 3, '8–12'),
-    ex('Rudern am Kabel', 3, '10–12'), ex('Seitheben', 3, '12–15'), ex('Hammercurls', 3, '10–12'),
+    ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Klimmzüge', 3, '6–8'), ex('Kurzhantel-Schulterdrücken', 3, '8–10'), ex('Rudern am Kabel', 3, '8–10'), ex('Seitheben', 3, '8–10'), ex('Hammercurls', 2, '8–10'),
   ]],
   lowerB: ['Lower B', [
-    ex('Kreuzheben', 3, '4–6'), ex('Bulgarische Split Squats', 3, '8–10'), ex('Beinstrecker', 3, '12–15'),
-    ex('Hip Thrust', 3, '8–12'), ex('Beinbeuger', 3, '10–12'), ex('Wadenheben sitzend', 3, '12–15'),
+    ex('Kreuzheben', 2, '6–8'), ex('Bulgarische Split Squats', 3, '8–10'), ex('Beinstrecker', 3, '8–10'), ex('Hip Thrust', 3, '8–10'), ex('Beinbeuger', 3, '8–10'), ex('Wadenheben sitzend', 3, '8–10'),
   ]],
   pushA: ['Push A', [
-    ex('Bankdrücken', 4, '6–8'), ex('Schulterdrücken', 3, '8–10'), ex('Schrägbankdrücken Kurzhantel', 3, '8–12'),
-    ex('Seitheben', 3, '12–15'), ex('Trizepsdrücken am Kabel', 3, '10–12'), ex('Überkopf-Trizepsstrecken', 2, '10–12'),
+    ex('Bankdrücken', 3, '6–8'), ex('Schulterdrücken', 3, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Seitheben', 3, '8–10'), ex('Trizepsdrücken am Kabel', 2, '8–10'), ex('Überkopf-Trizepsstrecken', 2, '8–10'),
   ]],
   pullA: ['Pull A', [
-    ex('Kreuzheben', 3, '5'), ex('Klimmzüge', 3, '6–10'), ex('Langhantelrudern', 3, '8–10'),
-    ex('Face Pulls', 3, '12–15'), ex('Bizepscurls', 3, '10–12'), ex('Hammercurls', 2, '10–12'),
+    ex('Kreuzheben', 2, '6–8'), ex('Klimmzüge', 3, '6–8'), ex('Langhantelrudern', 3, '8–10'), ex('Face Pulls', 3, '8–10'), ex('Bizepscurls', 3, '8–10'), ex('Hammercurls', 2, '8–10'),
   ]],
   legsA: ['Legs A', [
-    ex('Kniebeuge', 4, '6–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 3, '10–12'),
-    ex('Beinbeuger', 3, '10–12'), ex('Wadenheben', 4, '10–15'),
+    ex('Kniebeuge', 3, '6–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 3, '8–10'), ex('Beinbeuger', 3, '8–10'), ex('Wadenheben', 3, '8–10'),
   ]],
   pushB: ['Push B', [
-    ex('Schulterdrücken', 4, '6–8'), ex('Schrägbankdrücken', 3, '8–10'), ex('Dips', 3, '8–12'),
-    ex('Butterfly', 3, '12–15'), ex('Seitheben', 3, '12–15'), ex('Trizepsdrücken am Kabel', 3, '10–12'),
+    ex('Schulterdrücken', 3, '6–8'), ex('Schrägbankdrücken', 3, '6–8'), ex('Dips', 3, '8–10'), ex('Butterfly', 3, '8–10'), ex('Seitheben', 3, '8–10'), ex('Trizepsdrücken am Kabel', 2, '8–10'),
   ]],
   pullB: ['Pull B', [
-    ex('Latzug', 4, '8–10'), ex('Rudern am Kabel', 3, '10–12'), ex('Einarmiges Kurzhantelrudern', 3, '8–12'),
-    ex('Reverse Butterfly', 3, '12–15'), ex('Hammercurls', 3, '10–12'), ex('Bizepscurls', 2, '12–15'),
+    ex('Latzug', 3, '8–10'), ex('Rudern am Kabel', 3, '8–10'), ex('Einarmiges Kurzhantelrudern', 3, '8–10'), ex('Reverse Butterfly', 3, '8–10'), ex('Hammercurls', 3, '8–10'), ex('Bizepscurls', 2, '8–10'),
   ]],
   legsB: ['Legs B', [
-    ex('Frontkniebeuge', 3, '6–8'), ex('Hip Thrust', 3, '8–12'), ex('Bulgarische Split Squats', 3, '8–10'),
-    ex('Beinstrecker', 3, '12–15'), ex('Beinbeuger', 3, '10–12'), ex('Wadenheben sitzend', 3, '12–15'),
+    ex('Frontkniebeuge', 3, '6–8'), ex('Hip Thrust', 3, '8–10'), ex('Bulgarische Split Squats', 3, '8–10'), ex('Beinstrecker', 3, '8–10'), ex('Beinbeuger', 2, '8–10'), ex('Wadenheben sitzend', 3, '8–10'),
   ]],
   torsoA: ['Torso A', [
-    ex('Bankdrücken', 4, '5–8'), ex('Langhantelrudern', 4, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'),
-    ex('Latzug', 3, '8–12'), ex('Face Pulls', 3, '12–15'), ex('Kabel-Crunches', 3, '10–15'),
+    ex('Bankdrücken', 3, '6–8'), ex('Langhantelrudern', 3, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Latzug', 3, '8–10'), ex('Face Pulls', 2, '8–10'), ex('Kabel-Crunches', 3, '8–10'),
   ]],
   limbsA: ['Limbs A', [
-    ex('Kniebeuge', 4, '5–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 3, '10–12'),
-    ex('Bizepscurls', 3, '10–12'), ex('Dips', 3, '8–12'), ex('Wadenheben', 3, '10–15'),
+    ex('Kniebeuge', 3, '6–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 2, '8–10'), ex('Bizepscurls', 3, '8–10'), ex('Dips', 3, '8–10'), ex('Wadenheben', 3, '8–10'),
   ]],
   torsoB: ['Torso B', [
-    ex('Schrägbankdrücken', 3, '6–10'), ex('Klimmzüge', 3, '6–10'), ex('Butterfly', 3, '12–15'),
-    ex('Rudern am Kabel', 3, '10–12'), ex('Reverse Butterfly', 3, '12–15'), ex('Hängendes Beinheben', 3, '10–15'),
+    ex('Schrägbankdrücken', 3, '6–8'), ex('Klimmzüge', 3, '6–8'), ex('Butterfly', 3, '8–10'), ex('Rudern am Kabel', 3, '8–10'), ex('Reverse Butterfly', 2, '8–10'), ex('Hängendes Beinheben', 3, '8–10'),
   ]],
   limbsB: ['Limbs B', [
-    ex('Kreuzheben', 3, '4–6'), ex('Bulgarische Split Squats', 3, '8–10'), ex('Beinbeuger', 3, '10–12'),
-    ex('Seitheben', 3, '12–15'), ex('Hammercurls', 3, '10–12'), ex('Überkopf-Trizepsstrecken', 3, '10–12'),
+    ex('Kreuzheben', 2, '6–8'), ex('Bulgarische Split Squats', 3, '8–10'), ex('Beinbeuger', 3, '8–10'), ex('Seitheben', 3, '8–10'), ex('Hammercurls', 3, '8–10'), ex('Überkopf-Trizepsstrecken', 3, '8–10'),
   ]],
   chestBack: ['Brust & Rücken', [
-    ex('Bankdrücken', 4, '6–8'), ex('Klimmzüge', 4, '6–10'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'),
-    ex('Langhantelrudern', 3, '8–10'), ex('Butterfly', 3, '12–15'), ex('Latzug', 3, '10–12'),
+    ex('Bankdrücken', 3, '6–8'), ex('Klimmzüge', 3, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Langhantelrudern', 3, '8–10'), ex('Butterfly', 2, '8–10'), ex('Latzug', 2, '8–10'),
   ]],
   shouldersArms: ['Schultern & Arme', [
-    ex('Schulterdrücken', 4, '6–10'), ex('Seitheben', 4, '12–15'), ex('Reverse Butterfly', 3, '12–15'),
-    ex('Bizepscurls', 3, '8–12'), ex('Dips', 3, '8–12'), ex('Hammercurls', 3, '10–12'),
+    ex('Schulterdrücken', 3, '6–8'), ex('Seitheben', 3, '8–10'), ex('Reverse Butterfly', 2, '8–10'), ex('Bizepscurls', 3, '8–10'), ex('Dips', 3, '8–10'), ex('Hammercurls', 2, '8–10'),
   ]],
   legs: ['Beine', [
-    ex('Kniebeuge', 4, '6–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 3, '10–12'),
-    ex('Beinstrecker', 3, '12–15'), ex('Beinbeuger', 3, '10–12'), ex('Wadenheben', 4, '10–15'),
+    ex('Kniebeuge', 3, '6–8'), ex('Rumänisches Kreuzheben', 3, '8–10'), ex('Beinpresse', 3, '8–10'), ex('Beinstrecker', 2, '8–10'), ex('Beinbeuger', 3, '8–10'), ex('Wadenheben', 3, '8–10'),
   ]],
   chest: ['Brust', [
-    ex('Bankdrücken', 4, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Dips', 3, '8–12'), ex('Butterfly', 3, '12–15'),
+    ex('Bankdrücken', 3, '6–8'), ex('Schrägbankdrücken Kurzhantel', 3, '8–10'), ex('Dips', 3, '8–10'), ex('Butterfly', 3, '8–10'),
   ]],
   back: ['Rücken', [
-    ex('Kreuzheben', 3, '5'), ex('Klimmzüge', 3, '6–10'), ex('Langhantelrudern', 3, '8–10'), ex('Rudern am Kabel', 3, '10–12'),
+    ex('Kreuzheben', 2, '6–8'), ex('Klimmzüge', 3, '6–8'), ex('Langhantelrudern', 3, '8–10'), ex('Rudern am Kabel', 3, '8–10'),
   ]],
   shoulders: ['Schultern', [
-    ex('Schulterdrücken', 4, '6–10'), ex('Seitheben', 4, '12–15'), ex('Reverse Butterfly', 3, '12–15'), ex('Face Pulls', 3, '12–15'),
+    ex('Schulterdrücken', 3, '6–8'), ex('Seitheben', 3, '8–10'), ex('Reverse Butterfly', 3, '8–10'), ex('Face Pulls', 3, '8–10'),
   ]],
   arms: ['Arme', [
-    ex('Bizepscurls', 3, '8–12'), ex('Trizepsdrücken am Kabel', 3, '10–12'), ex('Hammercurls', 3, '10–12'),
-    ex('Überkopf-Trizepsstrecken', 3, '10–12'), ex('Kabel-Crunches', 3, '10–15'),
+    ex('Bizepscurls', 3, '8–10'), ex('Trizepsdrücken am Kabel', 3, '8–10'), ex('Hammercurls', 3, '8–10'), ex('Überkopf-Trizepsstrecken', 3, '8–10'), ex('Kabel-Crunches', 3, '8–10'),
   ]],
 };
 

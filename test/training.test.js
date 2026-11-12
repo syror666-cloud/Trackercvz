@@ -60,6 +60,10 @@ test('templates: every split builds the requested number of days with exercises'
       assert.equal(r.status, 200, s.key);
       assert.equal(r.data.days.length, days);
       assert.ok(r.data.days.every((d) => d.exercises.length >= 4), s.key);
+      for (const e of r.data.days.flatMap((d) => d.exercises)) {
+        assert.ok(e.sets >= 2 && e.sets <= 3, `${e.name}: ${e.sets} Sätze`);
+        assert.ok(['6–8', '8–10'].includes(e.reps), `${e.name}: ${e.reps}`);
+      }
     }
   }
   const ppl = (await max('GET', '/api/training/template?split=ppl&days=6')).data.days.map((d) => d.name);

@@ -294,6 +294,15 @@ Tage eingetragen|days logged|días registrados|giorni registrati
 1 J|1 y|1 a|1 a
 Medaille|medal|medalla|medaglia
 Auf dem iPhone funktionieren Push-Nachrichten nur, wenn StayOnTrack auf dem Home-Bildschirm liegt: In Safari unten auf das Teilen-Symbol tippen → „Zum Home-Bildschirm“ → danach StayOnTrack über das neue App-Symbol öffnen und hier aktivieren.|On iPhone, push notifications only work when StayOnTrack is on your home screen: in Safari tap the Share icon → “Add to Home Screen” → then open StayOnTrack from the new app icon and turn them on here.|En iPhone, las notificaciones solo funcionan si StayOnTrack está en la pantalla de inicio: en Safari toca Compartir → “Añadir a pantalla de inicio” → abre StayOnTrack desde el nuevo icono y actívalas aquí.|Su iPhone le notifiche funzionano solo se StayOnTrack è nella schermata Home: in Safari tocca Condividi → “Aggiungi alla schermata Home” → poi apri StayOnTrack dalla nuova icona e attivale qui.
+Gewöhnlich|Common|Común|Comune
+Selten|Rare|Rara|Rara
+Episch|Epic|Épica|Epica
+Legendär|Legendary|Legendaria|Leggendaria
+Zielmuskeln|Target muscles|Músculos trabajados|Muscoli target
+Tipp:|Tip:|Consejo:|Consiglio:
+Start|Start|Inicio|Inizio
+Ende|End|Final|Fine
+Anleitung|How to|Cómo se hace|Come si fa
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -327,6 +336,7 @@ noch nie|never|nunca|mai
     [/^(\d+) Tage in Folge eingetragen$/, W(0, (m) => `${m[1]} days logged in a row`, (m) => `${m[1]} días seguidos registrados`, (m) => `${m[1]} giorni di fila registrati`)],
     [/^Tag (\d+)$/, W(0, (m) => `Day ${m[1]}`, (m) => `Día ${m[1]}`, (m) => `Giorno ${m[1]}`)],
     [/^(\d+) Übungen$/, W(0, (m) => `${m[1]} exercises`, (m) => `${m[1]} ejercicios`, (m) => `${m[1]} esercizi`)],
+    [/^Anleitung: (.+)$/, W(0, (m) => `How to: ${m[1]}`, (m) => `Cómo se hace: ${m[1]}`, (m) => `Come si fa: ${m[1]}`)],
     [/^Ziel ([^·]+)$/, W(0, (m) => `Target ${m[1]}`, (m) => `Objetivo ${m[1]}`, (m) => `Obiettivo ${m[1]}`)],
     [/^Ideal: (.+) Tage$/, W(0, (m) => `Ideal: ${m[1].replace('oder', 'or')} days`, (m) => `Ideal: ${m[1].replace('oder', 'o')} días`, (m) => `Ideale: ${m[1].replace('oder', 'o')} giorni`)],
     [/^Ein Split mit „Passt“ ist für (\d+) Trainingstage gedacht\. (.*)$/, W(0, (m) => `A split marked “Fits” is made for ${m[1]} training days. You get a standard plan with exercises, sets and reps.`, (m) => `Un split con “Encaja” está pensado para ${m[1]} días. Recibes un plan estándar con ejercicios, series y repeticiones.`, (m) => `Uno split con “Adatto” è pensato per ${m[1]} giorni. Ricevi un piano standard con esercizi, serie e ripetizioni.`)],

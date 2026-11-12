@@ -57,6 +57,8 @@ test('shop: medals are the currency, cans go into the fridge', async (t) => {
   let shop = (await max('GET', '/api/shop')).data;
   assert.equal(shop.flavors.length, 12);
   assert.ok(shop.flavors.every((f) => f.price >= 1 && f.price <= 3));
+  assert.ok(shop.flavors.every((f) => shop.rarities.includes(f.rarity)));
+  assert.deepEqual(shop.rarities, ['common', 'rare', 'epic', 'legendary']);
   assert.deepEqual(shop.balance, { earned: 0, spent: 0, available: 0 });
   assert.equal((await max('POST', '/api/shop/buy', { flavor: 'white' })).status, 409);
   // 10 days in a row with 12 000 steps: streak, step total and step goal bronze = 3 medals

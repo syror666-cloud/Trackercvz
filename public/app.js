@@ -3160,6 +3160,34 @@
   const fmtSet = (s) => `${s.weight !== null && s.weight !== undefined ? `${num(s.weight, s.weight % 1 ? 1 : 0)} kg` : '–'} × ${s.reps ?? '–'}`;
   const exKey = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
   let tmpSeq = 0;
+
+  // How-to for the standard exercises: steps, muscles and start/end photos (public/exercises, public domain)
+  let exerciseInfo = null;
+  async function loadExerciseInfo() {
+    if (!exerciseInfo) exerciseInfo = await fetch('/exercises/info.json').then((r) => r.json()).catch(() => ({}));
+    return exerciseInfo;
+  }
+  const infoBtn = (name) =>
+    exerciseInfo && exerciseInfo[exKey(name)]
+      ? `<button type="button" class="info-btn" data-info="${esc(name)}" aria-label="Anleitung: ${esc(name)}" title="Anleitung">i</button>`
+      : '';
+  function showExerciseInfo(name) {
+    const i = exerciseInfo && exerciseInfo[exKey(name)];
+    if (!i) return;
+    dialog.innerHTML = `<div class="ex-info">
+        <div class="row-between ex-info-head"><h2>${esc(i.name)}</h2>
+          <button type="button" class="sheet-close ex-close" data-close aria-label="Schließen">✕</button></div>
+        <div class="ex-photos">
+          <figure><img src="/exercises/${esc(i.img)}-0.jpg" alt="${esc(i.name)}: Startposition" loading="lazy" width="420" height="280"><figcaption>Start</figcaption></figure>
+          <figure><img src="/exercises/${esc(i.img)}-1.jpg" alt="${esc(i.name)}: Endposition" loading="lazy" width="420" height="280"><figcaption>Ende</figcaption></figure>
+        </div>
+        <p class="ex-muscles"><span class="muted small">Zielmuskeln</span><br>${esc(i.muscles)}</p>
+        <ol class="ex-steps">${i.steps.map((st) => `<li>${esc(st)}</li>`).join('')}</ol>
+        <p class="ex-tip"><strong>Tipp:</strong> ${esc(i.tip)}</p>
+      </div>`;
+    dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+    dialog.showModal();
+  }
   const tmpId = (p) => `${p}${Date.now().toString(36)}${(tmpSeq++).toString(36)}`;
 
   /**
@@ -3175,6 +3203,11 @@
       root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
       return;
     }
+    await loadExerciseInfo();
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-info]');
+      if (b) showExerciseInfo(b.dataset.info);
+    });
     let mode = data.plan ? 'overview' : 'setup';
     let draft = null; // { split, days } while editing
     let setupDays = data.plan ? data.plan.daysPerWeek : 3;
@@ -3348,7 +3381,7 @@
             <ul class="tp-view-list">${d.exercises.map((e) => {
               const l = data.last[exKey(e.name)];
               const top = l ? l.sets.reduce((b, s) => ((s.weight ?? -1) > (b.weight ?? -1) ? s : b), l.sets[0]) : null;
-              return `<li><span class="tp-view-name">${esc(e.name)}</span><span class="tp-view-target">${esc(e.sets)} × ${esc(e.reps || '–')}</span>
+              return `<li><span class="tp-view-name">${esc(e.name)} ${infoBtn(e.name)}</span><span class="tp-view-target">${esc(e.sets)} × ${esc(e.reps || '–')}</span>
                 <span class="tp-view-last">${top ? `<span class="tp-last-label">Zuletzt </span>${fmtSet(top)}` : '<span class="muted">–</span>'}</span></li>`;
             }).join('') || '<li class="muted small">Noch keine Übungen – über „Plan bearbeiten“ hinzufügen.</li>'}</ul>
           </section>`;
@@ -3385,7 +3418,7 @@
             <div class="field wo-date"><label for="wo-date">Datum</label><input type="date" id="wo-date" value="${todayStr()}" max="${todayStr()}"></div></div>
           <div class="wo-list">${rows.map((r, i) => `
             <section class="card wo-ex" data-r="${i}">
-              <div class="row-between wo-head"><h2>${esc(r.name)}</h2><span class="badge">Ziel ${esc(r.target)}</span></div>
+              <div class="row-between wo-head"><h2>${esc(r.name)} ${infoBtn(r.name)}</h2><span class="badge">Ziel ${esc(r.target)}</span></div>
               <p class="small muted wo-last">${r.last ? `Letztes Mal (${esc(fmtDate(r.last.date, { day: 'numeric', month: 'short' }))}): ${r.last.sets.map(fmtSet).join(' · ')}` : 'Erstes Mal – trag dein Startgewicht ein.'}</p>
               <div class="wo-sets">
                 <div class="wo-set wo-set-head" aria-hidden="true"><span>Satz</span><span>Gewicht</span><span>Wdh.</span></div>
@@ -3442,6 +3475,11 @@
   async function mountTrainingHistory(root, opts) {
     const query = opts.userId ? `?userId=${opts.userId}` : '';
     let exercises;
+    await loadExerciseInfo();
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-info]');
+      if (b) showExerciseInfo(b.dataset.info);
+    });
     try {
       ({ exercises } = await api('GET', `/api/training/history${query}`));
     } catch (err) {
@@ -3457,7 +3495,7 @@
         const lastS = e.sessions[e.sessions.length - 1];
         const diff = first.topWeight !== null && lastS.topWeight !== null && e.sessions.length > 1 ? lastS.topWeight - first.topWeight : null;
         return `<section class="card hist-card">
-          <div class="row-between hist-head"><h2>${esc(e.name)}</h2>
+          <div class="row-between hist-head"><h2>${esc(e.name)} ${infoBtn(e.name)}</h2>
             ${diff !== null ? `<span class="badge ${diff > 0 ? 'good' : ''}">${diff > 0 ? '+' : ''}${num(diff, diff % 1 ? 1 : 0)} kg</span>` : ''}</div>
           <div class="hist-stats">
             <div><span class="metric-value">${esc(fmtKg(lastS.topWeight))}</span><span class="muted small">zuletzt · ${esc(fmtDate(lastS.date, { day: 'numeric', month: 'short' }))}</span></div>
@@ -3713,6 +3751,29 @@
     ], `can ${cls}`);
   }
 
+  // Rarity of a can: name, colour and sort rank (rarest first in the fridge)
+  const RARITY = {
+    common: { name: 'Gewöhnlich', rank: 0 },
+    rare: { name: 'Selten', rank: 1 },
+    epic: { name: 'Episch', rank: 2 },
+    legendary: { name: 'Legendär', rank: 3 },
+  };
+  /** Small faceted gem above a can; colour and animation per rarity (CSS .gem-*). */
+  const gemSvg = (r) => `<svg class="gem gem-${r}" viewBox="0 0 16 14" aria-hidden="true">
+      <path class="g-body" d="M4 1h8l3 4-7 8-7-8z"/><path class="g-top" d="M4 1h8l3 4H1z"/><path class="g-hi" d="M5.5 2.2h3L7 4.6H3.4z"/></svg>`;
+  /** A can with its rarity gem and cold condensation drops running down. */
+  const coldCan = (f, extra = '') => `<span class="cold-can r-${f.rarity}" ${extra}>
+      <span class="gem-wrap" title="${esc(RARITY[f.rarity].name)}">${gemSvg(f.rarity)}</span>
+      <span class="can-body">${canSvg(f)}<span class="frost"></span><i class="drop d1"></i><i class="drop d2"></i><i class="drop d3"></i></span>
+    </span>`;
+  const cobweb = (cls) => `<svg class="cobweb ${cls}" viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M0 0L100 0M0 0L96 30M0 0L80 62M0 0L54 86M0 0L28 98M0 0L0 100"/>
+      <path d="M26 0Q22 6 25 8Q20 14 21 16Q14 20 14 21Q8 24 7 26Q2 26 0 26"/>
+      <path d="M52 0Q45 10 49 16Q40 26 41 33Q30 38 28 43Q16 46 14 51Q4 51 0 52"/>
+      <path d="M80 0Q70 16 74 24Q61 40 62 49Q46 57 43 64Q26 70 21 76Q8 76 0 78"/></svg>`;
+  const flySvg = `<svg viewBox="0 0 20 14" aria-hidden="true"><ellipse class="wing w1" cx="8" cy="4" rx="5" ry="3"/><ellipse class="wing w2" cx="12" cy="4" rx="5" ry="3"/>
+      <ellipse cx="10" cy="9" rx="4" ry="3.2" fill="#1d2b33"/><circle cx="14" cy="8" r="2.2" fill="#1d2b33"/><circle cx="15" cy="7.4" r="0.8" fill="#c0392b"/></svg>`;
+
   // Fridge artwork on a 28×50 grid (8 px per pixel on screen): freezer rows 0–13, main compartment 14–49.
   const FR = { line: '#1d3446', body: '#e9f2f6', shade: '#c4d5df', hi: '#ffffff', handle: '#8ea4b3' };
   const fridgeDoorSvg = () => pixelSvg(28, 36, [
@@ -3745,8 +3806,12 @@
       return;
     }
     const flavor = (k) => shop.flavors.find((f) => f.key === k);
-    const cans = shop.items.map((i) => flavor(i.flavor)).filter(Boolean);
-    const perShelf = 6;
+    // rarest first; within a rarity in the order they were bought. Fills from the top left, row by row.
+    const cans = shop.items
+      .map((i) => ({ ...flavor(i.flavor), boughtId: i.id }))
+      .filter((f) => f.key)
+      .sort((a, b) => RARITY[b.rarity].rank - RARITY[a.rarity].rank || a.boughtId - b.boughtId);
+    const perShelf = matchMedia('(max-width: 720px)').matches ? 5 : 6;
     const shelves = Math.max(3, Math.ceil(cans.length / perShelf));
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -3763,8 +3828,9 @@
         </div>
         <section class="fridge-view" aria-label="Inhalt des Kühlschranks">
           <div class="fridge-light" aria-hidden="true"></div>
+          ${cans.length ? '' : `<div class="fridge-empty-fx" aria-hidden="true">${cobweb('tl')}${cobweb('tr')}<span class="fly f1">${flySvg}</span><span class="fly f2">${flySvg}</span></div>`}
           ${Array.from({ length: shelves }, (_, s) => `<div class="shelf">${cans.slice(s * perShelf, (s + 1) * perShelf)
-            .map((f, i) => `<span class="shelf-can" style="--i:${i}" title="${esc(f.name)}">${canSvg(f)}<span class="sr-only">${esc(f.name)}</span></span>`).join('')}</div>`).join('')}
+            .map((f, i) => `<span class="shelf-can" style="--i:${s * perShelf + i}" title="${esc(f.name)} · ${esc(RARITY[f.rarity].name)}">${coldCan(f)}<span class="sr-only">${esc(f.name)}, ${esc(RARITY[f.rarity].name)}</span></span>`).join('')}</div>`).join('')}
           ${cans.length ? '' : `<p class="fridge-empty">${opts.coach ? 'Noch leer – dein Klient hat sich noch nichts gegönnt.' : 'Noch leer. Im <a href="' + opts.base + '/shop">Shop</a> tauschst du Medaillen gegen Dosen.'}</p>`}
         </section>
       </div>
@@ -3806,8 +3872,9 @@
         <div class="shop-grid">${shop.flavors.map((f) => {
           const can = b.available >= f.price;
           return `<section class="card shop-item" style="--can:${f.colors[0]}">
-            <div class="shop-can">${canSvg(f, 'wobble')}</div>
+            <div class="shop-can">${coldCan(f, 'data-wobble')}</div>
             <h3>${esc(f.name)}</h3>
+            <span class="rarity-tag r-${f.rarity}">${esc(RARITY[f.rarity].name)}</span>
             <p class="shop-price" aria-label="${f.price} ${f.price === 1 ? 'Medaille' : 'Medaillen'}">${'<i class="coin"></i>'.repeat(f.price)}<span>${f.price}</span></p>
             <button type="button" class="${can ? 'btn-primary' : 'btn-secondary'} btn-sm btn-block" data-buy="${f.key}" ${can ? '' : 'disabled'}>${can ? 'Kaufen' : `Noch ${f.price - b.available} ${f.price - b.available === 1 ? 'Medaille' : 'Medaillen'}`}</button>
           </section>`;

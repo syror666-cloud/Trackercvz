@@ -1621,3 +1621,157 @@ html.glass .btn-primary, html.glass .btn-secondary, html.glass .pref-choices but
 
 .tp-last-label { display: none; }
 @media (max-width: 720px) { .tp-last-label { display: inline; } }
+
+/* ==========================================================================
+   Exercise how-to: "i" button and info dialog with photos
+   ========================================================================== */
+.info-btn {
+  width: 24px; height: 24px; min-height: 0; padding: 0; margin-left: 4px; border-radius: 50%; vertical-align: 2px;
+  display: inline-grid; place-items: center; background: transparent; color: var(--steel);
+  border: 1.5px solid var(--field); font: italic 700 0.78rem/1 Georgia, 'Times New Roman', serif; letter-spacing: 0;
+  position: relative;
+}
+.info-btn::after { content: ''; position: absolute; inset: -10px; } /* 44 px touch target */
+.info-btn:hover { background: var(--text); color: var(--surface); border-color: var(--text); }
+.wo-head h2 .info-btn, .hist-head h2 .info-btn { vertical-align: 4px; }
+dialog:has(.ex-info) { width: min(560px, calc(100vw - 24px)); }
+.ex-info-head { align-items: center; margin-bottom: 12px; }
+.ex-info-head h2 { margin: 0; }
+.ex-close { display: inline-flex; align-items: center; justify-content: center; }
+.ex-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 14px; }
+.ex-photos figure { margin: 0; position: relative; border-radius: 12px; overflow: hidden; background: #fff; }
+.ex-photos img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
+.ex-photos figcaption {
+  position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: var(--r-pill);
+  background: rgba(0, 41, 65, 0.78); color: #fff; font: 500 0.75rem var(--font-body);
+}
+.ex-muscles { margin: 0 0 10px; }
+.ex-steps { margin: 0 0 12px; padding-left: 22px; display: grid; gap: 6px; }
+.ex-tip { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 0.93rem; }
+
+/* ==========================================================================
+   Cans: rarity gem (animated), cold condensation drops, bigger on desktop
+   ========================================================================== */
+.r-common { --rar: #8fa1ad; --rar-dark: #5d6f7b; }
+.r-rare { --rar: #3a8ee8; --rar-dark: #1f5ea8; }
+.r-epic { --rar: #a463e0; --rar-dark: #6c33a3; }
+.r-legendary { --rar: #f2c230; --rar-dark: #b8860b; }
+.cold-can { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; height: 100%; }
+.gem-wrap { display: block; height: 16px; }
+.gem { width: 16px; height: 14px; display: block; overflow: visible; animation: gem-bob 2.2s ease-in-out infinite; }
+.g-body { fill: var(--rar); }
+.g-top { fill: var(--rar-dark); opacity: 0.55; }
+.g-hi { fill: #fff; opacity: 0.75; }
+.r-epic .gem { animation: gem-bob 2.2s ease-in-out infinite, gem-glow 1.8s ease-in-out infinite; }
+.r-legendary .gem { animation: gem-bob 2.2s ease-in-out infinite, gem-glow 1.4s ease-in-out infinite, gem-spin 3.2s ease-in-out infinite; }
+.shelf-can:nth-child(2n) .gem { animation-delay: -0.7s, -0.4s, -1s; }
+@keyframes gem-bob { 50% { transform: translateY(-3px); } }
+@keyframes gem-glow { 50% { filter: drop-shadow(0 0 5px var(--rar)) brightness(1.15); } }
+@keyframes gem-spin { 0%, 70% { transform: rotateY(0) translateY(0); } 85% { transform: rotateY(180deg) translateY(-3px); } 100% { transform: rotateY(360deg); } }
+
+.can-body { position: relative; flex: 1; width: 100%; display: block; overflow: hidden; }
+.can-body .can { width: 100%; height: 100%; }
+/* fine condensation on the can */
+.frost {
+  position: absolute; inset: 8% 10% 6%; pointer-events: none; opacity: 0.55; mix-blend-mode: screen;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.9) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 70% 45%, rgba(255,255,255,0.85) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 40% 70%, rgba(255,255,255,0.8) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 80% 80%, rgba(255,255,255,0.8) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 30% 55%, rgba(255,255,255,0.7) 0 0.8px, transparent 1.4px);
+  background-size: 14px 18px, 17px 15px, 19px 21px, 13px 16px, 11px 13px;
+}
+/* drops running down */
+.drop {
+  position: absolute; top: 14%; width: 3px; height: 5px; border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+  background: radial-gradient(circle at 35% 35%, #fff 0 30%, rgba(214, 238, 248, 0.85) 60%, rgba(160, 200, 220, 0.6));
+  box-shadow: 0 0 1px rgba(0, 41, 65, 0.35); opacity: 0; pointer-events: none;
+  animation: drip 4.6s cubic-bezier(0.55, 0, 0.9, 0.5) infinite;
+}
+.drop.d1 { left: 28%; animation-delay: 0.4s; }
+.drop.d2 { left: 58%; animation-delay: 2.1s; animation-duration: 5.4s; }
+.drop.d3 { left: 42%; top: 40%; animation-delay: 3.4s; animation-duration: 3.8s; }
+.shelf-can:nth-child(3n+1) .drop.d1 { animation-delay: 1.3s; }
+.shelf-can:nth-child(2n) .drop.d2 { animation-delay: 0.2s; }
+@keyframes drip {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; transform: translateY(0) scale(1); }
+  45% { transform: translateY(6px); }
+  85% { opacity: 0.9; }
+  100% { transform: translateY(46px) scaleY(1.25); opacity: 0; }
+}
+
+/* fridge sizes: phone 5 per shelf, desktop 8 and bigger cans */
+.shelf-can { width: 44px; height: 98px; }
+.shelf { min-height: 108px; gap: 12px; }
+@media (min-width: 721px) {
+  .fridge-stage { height: 620px; }
+  .shelf-can { width: 66px; height: 140px; }
+  .shelf { min-height: 150px; gap: 22px; padding: 0 22px; }
+  .gem-wrap { height: 20px; }
+  .gem { width: 20px; height: 17px; }
+  .drop { width: 4px; height: 6px; }
+}
+
+/* shop card */
+.shop-can .cold-can { width: 56px; height: 120px; }
+.shop-item:hover [data-wobble] .can-body { animation: can-wobble 0.6s ease-in-out; }
+.rarity-tag {
+  font: 600 0.72rem var(--font-body); letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--rar-dark); background: color-mix(in srgb, var(--rar) 18%, transparent); padding: 2px 9px; border-radius: var(--r-pill);
+}
+:root[data-theme="dark"] .rarity-tag { color: var(--rar); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rarity-tag { color: var(--rar); } }
+
+/* ==========================================================================
+   Empty fridge: cobwebs and two flies
+   ========================================================================== */
+.fridge-empty-fx { position: absolute; inset: 16px; pointer-events: none; overflow: hidden; }
+.cobweb { position: absolute; top: 0; width: 120px; height: 120px; fill: none; stroke: rgba(29, 52, 70, 0.32); stroke-width: 0.9; }
+.cobweb.tl { left: 0; }
+.cobweb.tr { right: 0; transform: scaleX(-1); }
+.cobweb path:first-child { stroke: rgba(29, 52, 70, 0.4); }
+.fly { position: absolute; left: 0; top: 0; width: 20px; height: 14px; }
+.fly svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.wing { fill: rgba(220, 235, 245, 0.85); stroke: rgba(29, 52, 70, 0.4); stroke-width: 0.5; transform-box: fill-box; transform-origin: 50% 100%; animation: flap 0.07s linear infinite alternate; }
+.wing.w2 { animation-delay: 0.035s; }
+@keyframes flap { to { transform: scaleY(0.25); } }
+.fly.f1 { animation: fly-a 9s ease-in-out infinite; }
+.fly.f2 { animation: fly-b 11s ease-in-out infinite; }
+@keyframes fly-a {
+  0% { left: 10%; top: 20%; transform: rotate(10deg); }
+  20% { left: 60%; top: 10%; transform: rotate(-20deg); }
+  35% { left: 75%; top: 45%; transform: rotate(40deg); }
+  50% { left: 40%; top: 60%; transform: rotate(160deg); }
+  65% { left: 15%; top: 40%; transform: rotate(200deg) scaleX(-1); }
+  80% { left: 30%; top: 15%; transform: rotate(-30deg); }
+  100% { left: 10%; top: 20%; transform: rotate(10deg); }
+}
+@keyframes fly-b {
+  0% { left: 80%; top: 70%; transform: rotate(-150deg); }
+  25% { left: 50%; top: 35%; transform: rotate(-60deg); }
+  45% { left: 20%; top: 65%; transform: rotate(120deg); }
+  60% { left: 35%; top: 80%; transform: rotate(30deg); }
+  80% { left: 70%; top: 50%; transform: rotate(-20deg); }
+  100% { left: 80%; top: 70%; transform: rotate(-150deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gem, .drop, .wing, .fly { animation: none !important; }
+  .drop { opacity: 0.8; }
+  .fly.f1 { left: 30%; top: 30%; }
+  .fly.f2 { left: 65%; top: 60%; }
+}
+/* desktop: fridge-shaped interior in the middle of the kitchen, big cans, visible flies */
+.fly { width: 26px; height: 18px; }
+@media (min-width: 721px) {
+  .fridge-stage { height: 700px; }
+  .fridge-view { left: 50%; right: auto; width: min(100%, 760px); transform: translateX(-50%); }
+  .shelf-can { width: 84px; height: 182px; }
+  .shelf { min-height: 196px; gap: 26px; padding: 0 26px; }
+  .gem-wrap { height: 24px; }
+  .gem { width: 24px; height: 21px; }
+  .drop { width: 5px; height: 7px; }
+  .fly { width: 34px; height: 24px; }
+  .cobweb { width: 160px; height: 160px; }
+}
