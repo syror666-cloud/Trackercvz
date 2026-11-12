@@ -21,7 +21,9 @@ const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 const MAX_BODY = 400 * 1024; // room for a small profile picture
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_MAX_ATTEMPTS = 10; // failed logins per client address and window
+const LOGIN_MAX_PER_ACCOUNT = 20; // failed logins per username and window, whatever the address
+const LOGIN_MAX_TRACKED = 10000; // upper bound for the in-memory attempt table
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -555,31 +557,60 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     return { from, to };
   }
 
-  function checkLoginRate(ip) {
-    const now = Date.now();
-    const rec = loginAttempts.get(ip);
-    if (!rec || rec.reset < now) {
-      loginAttempts.set(ip, { count: 1, reset: now + LOGIN_WINDOW_MS });
-      return;
+  /**
+   * Client address of a request. Behind the hosting proxy (trustProxy) the LAST X-Forwarded-For entry is the one the
+   * proxy appended itself; earlier entries come from the client and can be forged, so they are never used.
+   */
+  function clientIp(req) {
+    if (trustProxy) {
+      const hops = String(req.headers['x-forwarded-for'] || '').split(',').map((x) => x.trim()).filter(Boolean);
+      if (hops.length) return hops[hops.length - 1];
     }
-    rec.count += 1;
-    if (rec.count > LOGIN_MAX_ATTEMPTS) {
-      throw new HttpError(429, 'Zu viele Anmeldeversuche. Bitte in 15 Minuten erneut versuchen.');
+    return req.socket.remoteAddress || 'unknown';
+  }
+
+  function pruneLoginAttempts(now) {
+    for (const [k, rec] of loginAttempts) if (rec.reset < now) loginAttempts.delete(k);
+    // still too many live entries: drop the oldest (insertion order) so memory stays bounded
+    while (loginAttempts.size > LOGIN_MAX_TRACKED) loginAttempts.delete(loginAttempts.keys().next().value);
+  }
+
+  /** Blocks further attempts once a key (address or username) has too many failures in the window. */
+  function checkLoginRate(keys) {
+    const now = Date.now();
+    for (const [key, max] of keys) {
+      const rec = loginAttempts.get(key);
+      if (rec && rec.reset >= now && rec.count >= max) {
+        throw new HttpError(429, 'Zu viele Anmeldeversuche. Bitte in 15 Minuten erneut versuchen.');
+      }
+    }
+  }
+
+  function recordLoginFailure(keys) {
+    const now = Date.now();
+    if (loginAttempts.size >= LOGIN_MAX_TRACKED) pruneLoginAttempts(now);
+    for (const [key] of keys) {
+      const rec = loginAttempts.get(key);
+      if (!rec || rec.reset < now) loginAttempts.set(key, { count: 1, reset: now + LOGIN_WINDOW_MS });
+      else rec.count += 1;
     }
   }
 
   const routes = [
     ['POST', /^\/api\/login$/, async (ctx) => {
-      // Behind a hosting proxy every request arrives from the proxy's address; use the forwarded client IP.
-      const forwarded = trustProxy ? String(ctx.req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
-      const ip = forwarded || ctx.req.socket.remoteAddress || 'unknown';
-      checkLoginRate(ip);
+      const ip = clientIp(ctx.req);
       const { username, password } = await readBody(ctx.req);
-      const u = typeof username === 'string' ? q.userByName.get(username.trim()) : null;
+      const name = typeof username === 'string' ? username.trim().toLowerCase().slice(0, 64) : '';
+      // Limited per address AND per account, so changing addresses does not allow unlimited guessing.
+      const keys = [[`ip:${ip}`, LOGIN_MAX_ATTEMPTS], [`user:${name}`, LOGIN_MAX_PER_ACCOUNT]];
+      checkLoginRate(keys);
+      const u = name ? q.userByName.get(username.trim()) : null;
       if (!u || typeof password !== 'string' || !verifyPassword(password, u.password_hash)) {
+        recordLoginFailure(keys);
         throw new HttpError(401, 'Benutzername oder Passwort falsch');
       }
-      loginAttempts.delete(ip);
+      loginAttempts.delete(`ip:${ip}`);
+      loginAttempts.delete(`user:${name}`);
       q.deleteExpiredSessions.run(Date.now());
       const token = crypto.randomBytes(32).toString('hex');
       q.insertSession.run(sha256(token), u.id, Date.now() + SESSION_MS);

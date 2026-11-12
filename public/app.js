@@ -194,6 +194,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-sicherheit', date: 'November 2026',
+      client: [],
+      coach: [
+        ['🔒', 'Mehr Sicherheit', 'Besserer Schutz gegen Passwort-Raten beim Login. Automatische KI-Entwürfe und Push-Nachrichten bei Plan-Anfragen sind begrenzt, damit niemand dein KI-Guthaben aufbrauchen kann.'],
+      ],
+    },
+    {
       id: '2026-11-ki-vorgaben', date: 'November 2026',
       client: [],
       coach: [

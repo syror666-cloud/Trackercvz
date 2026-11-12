@@ -88,6 +88,7 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `AI_MODEL` | optional: Claude-Modell (Standard `claude-opus-5-5`; am günstigsten `claude-haiku-5-5`) |
 | `AI_EFFORT` | optional: `low`, `medium` (Standard) oder `high` – wie gründlich die KI nachdenkt |
 | `AI_AUTO_DRAFT` | `false` = bei einer Plan-Anfrage nicht automatisch einen KI-Entwurf erstellen |
+| `AI_AUTO_DRAFT_MINUTES` | höchstens ein automatischer KI-Entwurf pro Klient in diesem Zeitraum (Standard `30`); dein Knopf „Neu erstellen“ ist nicht begrenzt |
 
 **Mit Docker** (z. B. auf einem eigenen VPS, Railway, Fly.io oder Render mit Persistent Disk):
 

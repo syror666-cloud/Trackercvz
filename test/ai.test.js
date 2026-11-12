@@ -146,3 +146,23 @@ test('nutrition draft follows meal rules: coach guidelines, one-off hint, meals 
   assert.equal((await coach('PUT', '/api/ai/guidelines', { guidelines: '' })).data.custom, false);
   assert.equal((await coach('PUT', '/api/ai/guidelines', { guidelines: 'x'.repeat(5000) })).status, 400);
 });
+
+test('security: a client cannot trigger unlimited AI drafts or push floods by re-saving the request', async (t) => {
+  const ai = fakeClient();
+  const { server, coach, max, id, pushes } = await setup(ai);
+  t.after(() => server.close());
+  const foods = (await coach('GET', '/api/foods')).data.foods;
+  for (let i = 0; i < 12; i++) ai.replies.push({ notes: '', meals: [{ type: 'fruehstueck', name: 'Frühstück', items: [{ foodId: foods[0].id, amount: 50 }] }] });
+  const before = pushes.length;
+  for (let i = 0; i < 10; i++) {
+    assert.equal((await max('PUT', '/api/nutrition/request', { answers: { diet: 'omni', meals: '3', budget: 'low', cooking: 'quick' }, note: `v${i}` })).status, 200);
+  }
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(ai.calls.length, 1); // one automatic draft, not ten
+  const sent = pushes.slice(before).filter((p) => !p.ids.includes(id));
+  assert.equal(sent.length, 2); // "wünscht sich einen Plan" + "KI-Entwurf bereit"
+  // the answers are still saved every time, and the coach can still ask for a new draft at any time
+  assert.equal((await coach('GET', `/api/nutrition/request?userId=${id}`)).data.request.answers.note, 'v9');
+  assert.equal((await coach('POST', `/api/ai/nutrition-draft?userId=${id}`)).status, 200);
+  assert.equal(ai.calls.length, 2);
+});

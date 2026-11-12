@@ -227,13 +227,27 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
   const draftView = (row) => (row ? { ...JSON.parse(row.content), createdAt: row.created_at, model: row.model } : null);
 
   /** Called when a client sends a plan request: prepare a draft in the background (AI_AUTO_DRAFT=false turns it off). */
+  // A client can save the plan request as often as they like; automatic (paid) drafts are limited to one per
+  // client every AUTO_DRAFT_INTERVAL_MS, and never run while one is still in progress. The coach's own
+  // "Neu erstellen" button is not limited.
+  const AUTO_DRAFT_INTERVAL_MS = Number(process.env.AI_AUTO_DRAFT_MINUTES || 30) * 60 * 1000;
+  const lastAutoDraft = new Map(); // clientId -> start time of the last automatic draft
+  const runningDrafts = new Set();
+
   function autoDraft(clientId, clientName) {
     if (!enabled() || process.env.AI_AUTO_DRAFT === 'false' || q.hasPlan.get(clientId)) return;
+    const now = Date.now();
+    if (runningDrafts.has(clientId) || now - (lastAutoDraft.get(clientId) || 0) < AUTO_DRAFT_INTERVAL_MS) return;
+    const existing = q.getDraft.get(clientId);
+    if (existing && now - Date.parse(existing.created_at) < AUTO_DRAFT_INTERVAL_MS) return;
+    lastAutoDraft.set(clientId, now);
+    runningDrafts.add(clientId);
     makeDraft(clientId)
       .then(() => notifier.sendToUsers(notifier.coachIds(), {
         title: '🤖 KI-Entwurf bereit', body: `Ernährungsplan-Entwurf für ${clientName} – bitte prüfen.`, url: `/#/client/${clientId}/nutrition`,
       }))
-      .catch((err) => console.error('KI-Entwurf fehlgeschlagen:', err.message));
+      .catch((err) => console.error('KI-Entwurf fehlgeschlagen:', err.message))
+      .finally(() => runningDrafts.delete(clientId));
   }
 
   const routes = [

@@ -64,6 +64,9 @@ function nutritionRequestRoutes({ db, notifier, HttpError, readBody, textField, 
     done: db.prepare("UPDATE nutrition_requests SET status = 'done', updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE client_id = ?"),
     hasPlan: db.prepare('SELECT 1 FROM meals WHERE client_id = ? LIMIT 1'),
   };
+  const UPDATE_PUSH_INTERVAL_MS = 60 * 60 * 1000;
+  const lastUpdatePush = new Map(); // clientId -> time of the last push about this client's request
+
   const view = (clientId) => {
     const r = q.get.get(clientId);
     return {
@@ -82,13 +85,19 @@ function nutritionRequestRoutes({ db, notifier, HttpError, readBody, textField, 
       const answers = parseAnswers(await readBody(ctx.req), HttpError, textField);
       const before = q.get.get(u.id);
       q.upsert.run(u.id, JSON.stringify(answers));
-      notifier
-        .sendToUsers(notifier.coachIds(), {
-          title: before && before.status === 'open' ? `🍽 Plan-Anfrage aktualisiert: ${u.display_name}` : `🍽 ${u.display_name} wünscht sich einen Ernährungsplan`,
-          body: 'Die Vorlieben findest du beim Klienten unter „Ernährungsplan“.',
-          url: `/#/client/${u.id}/nutrition`,
-        })
-        .catch(() => {});
+      // Push to the coach for a new request; for changes at most once per hour and client.
+      const isUpdate = Boolean(before && before.status === 'open');
+      const now = Date.now();
+      if (!isUpdate || now - (lastUpdatePush.get(u.id) || 0) >= UPDATE_PUSH_INTERVAL_MS) {
+        lastUpdatePush.set(u.id, now);
+        notifier
+          .sendToUsers(notifier.coachIds(), {
+            title: isUpdate ? `🍽 Plan-Anfrage aktualisiert: ${u.display_name}` : `🍽 ${u.display_name} wünscht sich einen Ernährungsplan`,
+            body: 'Die Vorlieben findest du beim Klienten unter „Ernährungsplan“.',
+            url: `/#/client/${u.id}/nutrition`,
+          })
+          .catch(() => {});
+      }
       if (autoDraft) autoDraft(u.id, u.display_name); // AI prepares a draft for the coach (if configured)
       return view(u.id);
     }],
