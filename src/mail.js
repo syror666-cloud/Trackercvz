@@ -17,6 +17,7 @@ function createMailer(env = process.env, { fetchImpl = fetch, log = console } = 
     return {
       enabled: true,
       via: 'resend',
+      from,
       /**
        * One idempotency key per mail, so a retry never sends it twice. Retries with backoff on network errors,
        * 5xx and 429 (honouring retry-after); other 4xx errors are final. Returns the Resend email id.
@@ -56,6 +57,7 @@ function createMailer(env = process.env, { fetchImpl = fetch, log = console } = 
     return {
       enabled: true,
       via: 'smtp',
+      from,
       async send({ to, subject, text, html }) {
         if (!transport) {
           const nodemailer = require('nodemailer');

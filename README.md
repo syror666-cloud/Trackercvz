@@ -92,7 +92,7 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `AI_EFFORT` | optional: `low`, `medium` (Standard) oder `high` – wie gründlich die KI nachdenkt |
 | `AI_AUTO_DRAFT` | `false` = bei einer Plan-Anfrage nicht automatisch einen KI-Entwurf erstellen |
 | `AI_AUTO_DRAFT_MINUTES` | höchstens ein automatischer KI-Entwurf pro Klient in diesem Zeitraum (Standard `30`); dein Knopf „Neu erstellen“ ist nicht begrenzt |
-| `MAIL_FROM` | Absender für E-Mails (Passwort zurücksetzen, Adresse bestätigen), z. B. `StayOnTrack <noreply@deine-domain.de>` |
+| `MAIL_FROM` | Absender für E-Mails (Passwort zurücksetzen, Adresse bestätigen), z. B. `StayOnTrack <noreply@mail.stayontrack.cloud>` – die Domain muss bei Resend bestätigt sein. Admin → „E-Mail-Versand“ zeigt den Absender und schickt eine Test-Mail |
 | `RESEND_API_KEY` | E-Mail über [Resend](https://resend.com) (HTTPS, funktioniert auch auf Renders Gratis-Plan, der SMTP-Ports sperrt) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | alternativ: eigener Mailserver (z. B. Brevo, IONOS, Strato, Gmail mit App-Passwort); Port 465 = TLS, 587 = STARTTLS |
 | `APP_URL` | Adresse der App für Links in E-Mails, z. B. `https://stayontrack.onrender.com` (auf Render automatisch über `RENDER_EXTERNAL_URL`) |

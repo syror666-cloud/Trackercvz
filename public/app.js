@@ -194,6 +194,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-mail-check', date: 'November 2026',
+      client: [],
+      coach: [
+        ['✉️', 'E-Mail-Versand prüfen', 'Im Admin-Tool zeigt „E-Mail-Versand“ jetzt Dienst und Absender, warnt bei einem Beispiel-Absender und schickt auf Knopfdruck eine Test-Mail – mit der genauen Fehlermeldung, falls etwas nicht stimmt.'],
+      ],
+    },
+    {
       id: '2026-11-h2h-token', date: 'November 2026',
       client: [
         ['🪙', 'Head2Head-Sieg = 1 Token', 'Jedes gewonnene Duell bringt dir 1 Token für den Kühlschrank-Shop. Den letzten Tag kannst du noch bis zum nächsten Tag nachtragen, dann steht der Endstand fest.'],
@@ -890,8 +897,9 @@
         if (!email) throw new Error('Bitte eine E-Mail-Adresse angeben.');
         const r = await api('PUT', '/api/me/email', { email, password: f.password.value });
         me = (await api('GET', '/api/me')).user;
-        savedHud('Gespeichert', r.verifySent ? 'Bestätigungslink ist unterwegs' : '');
         draw();
+        if (r.mailError) toast(r.mailError, true);
+        else savedHud('Gespeichert', r.verifySent ? 'Bestätigungslink ist unterwegs' : '');
       }));
       const resend = root.querySelector('[data-email-resend]');
       if (resend) resend.addEventListener('click', async () => {
@@ -4034,6 +4042,7 @@
     setView(`
       <div class="page-head"><div>${eyebrow('Werkzeuge')}<h1>Admin</h1><p class="muted">Aktivität deiner Klienten, automatische Erinnerungen und Lebensmittel-Datenbank.</p></div></div>
       <div class="stack">
+        <section class="card" id="mail-status"></section>
         <section class="card" id="activity"></section>
         <section class="card" id="weight-reminder"></section>
         <section class="card" id="reminder"></section>
@@ -4042,11 +4051,57 @@
         <section class="card ai-card" id="ai-guidelines"></section>
       </div>`);
     drawAiGuidelines();
+    drawMailStatus();
     drawActivity(ov);
     drawReminder(ov);
     drawWeightReminder(ov);
     drawFoods();
     drawMetricsAdmin();
+  }
+
+  /** E-mail setup: sender, provider, a warning for an example sender, and a test mail that shows the real error. */
+  async function drawMailStatus() {
+    const root = document.getElementById('mail-status');
+    let st;
+    try {
+      st = await api('GET', '/api/mail/status');
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    root.innerHTML = `
+      <div class="row-between"><h2>✉️ E-Mail-Versand</h2><span class="badge ${st.enabled && !st.warning ? 'good' : 'warn'}">${st.enabled ? (st.warning ? 'prüfen' : 'aktiv') : 'aus'}</span></div>
+      ${st.enabled ? `<dl class="mail-status">
+          <div><dt>Dienst</dt><dd>${st.via === 'resend' ? 'Resend' : 'SMTP'}</dd></div>
+          <div><dt>Absender</dt><dd><code>${esc(st.from)}</code></dd></div>
+          <div><dt>Links auf</dt><dd><code>${esc(st.appUrl || '–')}</code></dd></div>
+        </dl>
+        ${st.warning ? `<p class="mail-warning">⚠️ ${esc(st.warning)}</p>` : ''}
+        <form class="row mail-test" novalidate>
+          <input name="to" type="email" placeholder="${esc(me.email || 'deine@adresse.de')}" aria-label="Test-Mail an">
+          <button type="submit" class="btn-secondary">Test-Mail senden</button>
+        </form>
+        <p class="small muted" data-mail-result></p>`
+        : '<p class="muted small">Ohne E-Mail-Versand gibt es kein „Passwort vergessen“. Einrichten mit <code>RESEND_API_KEY</code> und <code>MAIL_FROM</code> (siehe README).</p>'}`;
+    const f = root.querySelector('.mail-test');
+    if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const out = root.querySelector('[data-mail-result]');
+      const btn = f.querySelector('button');
+      btn.disabled = true;
+      out.className = 'small muted';
+      out.textContent = 'Wird gesendet…';
+      try {
+        const r = await api('POST', '/api/mail/test', { to: f.to.value.trim() || undefined });
+        out.className = 'small good';
+        out.textContent = `✓ Gesendet an ${r.to}. Schau in dein Postfach (auch im Spam).`;
+      } catch (err) {
+        out.className = 'small bad';
+        out.textContent = err.message;
+      }
+      btn.disabled = false;
+    });
   }
 
   /** Rules the AI follows for nutrition drafts (e.g. what belongs into breakfast). */
@@ -5859,7 +5914,8 @@
            <button type="submit" class="btn-primary">Speichern</button></div>`,
         async (f) => {
           const r = await api('PATCH', `/api/clients/${id}`, { email: f.email.value.trim() || null });
-          savedHud('Gespeichert', r.verifySent ? 'Bestätigungslink ist unterwegs' : '');
+          if (r.mailError) toast(`Gespeichert, aber: ${r.mailError}`, true);
+          else savedHud('Gespeichert', r.verifySent ? 'Bestätigungslink ist unterwegs' : '');
           renderCoachClient(id);
         }
       );

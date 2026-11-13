@@ -564,6 +564,14 @@ Du bist angemeldet|You're logged in|Has iniciado sesión|Hai effettuato l'access
 +1 Token|+1 token|+1 token|+1 token
 Gib deine E-Mail-Adresse oder deinen Benutzernamen ein. Du bekommst einen 6-stelligen Code an deine bestätigte E-Mail-Adresse.|Enter your email or username. You'll get a 6-digit code at your confirmed email address.|Introduce tu correo o usuario. Recibirás un código de 6 dígitos en tu correo confirmado.|Inserisci e-mail o nome utente. Riceverai un codice di 6 cifre all'indirizzo confermato.
 Vorbei – bis morgen könnt ihr den letzten Tag noch nachtragen, dann steht der Endstand fest.|Over – you can still log the last day until tomorrow, then the final score is set.|Terminado – podéis registrar el último día hasta mañana; luego el resultado es definitivo.|Finito – potete registrare l'ultimo giorno fino a domani, poi il risultato è definitivo.
+E-Mail-Versand|Email sending|Envío de correo|Invio e-mail
+Test-Mail senden|Send test email|Enviar correo de prueba|Invia e-mail di prova
+Dienst|Service|Servicio|Servizio
+Absender|Sender|Remitente|Mittente
+Links auf|Links to|Enlaces a|Link a
+prüfen|check|revisar|controllare
+aktiv|active|activo|attivo
+Wird gesendet…|Sending…|Enviando…|Invio…
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

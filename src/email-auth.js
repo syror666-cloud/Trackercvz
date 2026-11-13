@@ -23,7 +23,7 @@ const VERIFY_MS = 7 * 24 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@<>()[\],;:"]{1,64}@[^\s@<>()[\],;:"]{1,253}\.[^\s@<>()[\],;:"]{2,63}$/;
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clientIp, validatePassword, startSession, log = console }) {
+function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer, appUrl, clientIp, validatePassword, startSession, log = console }) {
   const enabled = Boolean(mailer && mailer.enabled && appUrl);
   const base = appUrl ? appUrl.replace(/\/+$/, '') : '';
   const q = {
@@ -102,9 +102,20 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
   function deliver(mail) {
     mailer.send(mail).catch((err) => log.error('E-Mail konnte nicht gesendet werden:', err.message));
   }
+  /** Sends and reports the outcome: { ok } or { error } – for actions of logged-in people, who should see a failure. */
+  async function deliverChecked(mail) {
+    try {
+      await mailer.send(mail);
+      return { ok: true };
+    } catch (err) {
+      log.error('E-Mail konnte nicht gesendet werden:', err.message);
+      return { error: err.message };
+    }
+  }
 
+  /** Returns null when mail is off, otherwise a promise of { ok } / { error }. */
   function sendVerify(user, email) {
-    if (!enabled || !email) return false;
+    if (!enabled || !email) return null;
     const token = newToken(user.id, 'verify', email, VERIFY_MS);
     const { text, html } = renderMail({
       appUrl: base,
@@ -117,8 +128,7 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
       button: { label: 'E-Mail-Adresse bestätigen', link: `${base}/#/verify/${token}` },
       note: 'Der Link ist 7 Tage gültig. Du hast das nicht veranlasst? Dann ignoriere diese Mail einfach – es passiert nichts.',
     });
-    deliver({ to: email, subject: 'Bitte bestätige deine E-Mail-Adresse', text, html });
-    return true;
+    return deliverChecked({ to: email, subject: 'Bitte bestätige deine E-Mail-Adresse', text, html });
   }
 
   /** Sets (or removes) an account's address; a new address is unconfirmed and gets a confirmation mail. */
@@ -130,11 +140,15 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
       if (clash && clash.id !== userId) throw new HttpError(409, 'Diese E-Mail-Adresse wird schon für ein anderes Konto verwendet');
     }
     const same = email && u.email && u.email.toLowerCase() === email.toLowerCase();
-    if (same) return { changed: false, verifySent: false };
-    q.setEmail.run(email, 0, userId);
-    q.dropTokens.run(userId, 'verify');
-    q.dropTokens.run(userId, 'reset');
-    return { changed: true, verifySent: sendVerify(u, email) };
+    if (same && u.email_verified) return { changed: false, verifySent: false, delivery: null };
+    if (!same) {
+      q.setEmail.run(email, 0, userId);
+      q.dropTokens.run(userId, 'verify');
+      q.dropTokens.run(userId, 'reset');
+    }
+    // new address – or the same one, still unconfirmed: (again) a confirmation mail
+    const delivery = sendVerify(u, email);
+    return { changed: !same, verifySent: Boolean(delivery), delivery };
   }
 
   /** For login: an address (case-insensitive) or a username. */
@@ -216,8 +230,9 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
       const u = requireUser(ctx);
       const { email, password } = await readBody(ctx.req);
       if (typeof password !== 'string' || !verifyPassword(password, u.password_hash)) throw new HttpError(400, 'Passwort ist falsch');
-      const r = setEmail(u.id, email);
-      return { ...r, mail: enabled };
+      const { delivery, ...r } = setEmail(u.id, email);
+      const sent = delivery ? await delivery : null;
+      return { ...r, mail: enabled, mailError: sent && sent.error ? friendlyMailError(sent.error) : null };
     }],
 
     ['POST', /^\/api\/me\/email\/verify$/, async (ctx) => {
@@ -226,10 +241,50 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
       if (u.email_verified) return { ok: true, alreadyVerified: true };
       if (!enabled) throw new HttpError(503, 'E-Mail-Versand ist nicht eingerichtet');
       if (limited(`verify:${u.id}`, 3, 60 * 60 * 1000)) throw new HttpError(429, 'Gerade erst gesendet – schau in dein Postfach (auch im Spam).');
-      sendVerify(u, u.email);
+      const sent = await sendVerify(u, u.email);
+      if (sent && sent.error) throw new HttpError(502, friendlyMailError(sent.error));
       return { ok: true };
     }],
+
+    // ---- Coach: is mail set up correctly? Shows the sender and sends a test mail with the real error, if any ----
+    ['GET', /^\/api\/mail\/status$/, async (ctx) => {
+      requireCoach(ctx);
+      return { enabled, via: mailer.via || null, from: mailer.from || null, appUrl: base || null, warning: senderWarning() };
+    }],
+    ['POST', /^\/api\/mail\/test$/, async (ctx) => {
+      const u = requireCoach(ctx);
+      if (!enabled) throw new HttpError(503, base ? 'E-Mail ist nicht eingerichtet (RESEND_API_KEY bzw. SMTP_HOST und MAIL_FROM fehlen).' : 'APP_URL fehlt.');
+      const { to } = await readBody(ctx.req);
+      const target = normalizeEmail(typeof to === 'string' && to.trim() ? to : u.email);
+      if (!target) throw new HttpError(400, 'Bitte eine E-Mail-Adresse angeben');
+      if (limited(`mailtest:${u.id}`, 10, 60 * 60 * 1000)) throw new HttpError(429, 'Genug Test-Mails für diese Stunde.');
+      const { text, html } = renderMail({
+        appUrl: base,
+        title: 'Test-Mail von StayOnTrack',
+        paragraphs: ['Wenn du das liest, funktioniert der E-Mail-Versand.', `Absender: ${mailer.from}`],
+        note: 'Diese Mail hast du selbst im Admin-Tool angefordert.',
+      });
+      const sent = await deliverChecked({ to: target, subject: 'Test-Mail von StayOnTrack', text, html });
+      if (sent.error) throw new HttpError(502, friendlyMailError(sent.error));
+      return { ok: true, to: target };
+    }],
   ];
+
+  /** The sender still the example from the README, or a domain that obviously isn't the own one. */
+  function senderWarning() {
+    const from = String(mailer.from || '');
+    if (/deine-domain|example\.(com|org|de)|beispiel/i.test(from)) return `MAIL_FROM ist noch der Beispielwert (${from}). Trag deine eigene Absenderadresse ein.`;
+    return null;
+  }
+
+  /** Mail provider errors in words people understand, with the original detail. */
+  function friendlyMailError(msg) {
+    const m = String(msg);
+    const dom = m.match(/The ([^ ]+) domain is not verified/);
+    if (dom) return `E-Mail konnte nicht gesendet werden: Die Absender-Domain ${dom[1]} ist bei Resend nicht bestätigt. Prüfe MAIL_FROM (aktuell ${mailer.from}).`;
+    if (/\b401\b|API key is invalid|restricted_api_key/i.test(m)) return 'E-Mail konnte nicht gesendet werden: Der API-Schlüssel (RESEND_API_KEY) ist ungültig oder darf nicht senden.';
+    return `E-Mail konnte nicht gesendet werden: ${m.slice(0, 200)}`;
+  }
 
   return { routes, setEmail, findForLogin, enabled };
 }

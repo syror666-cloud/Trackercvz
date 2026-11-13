@@ -67,6 +67,7 @@ const mailer = createMailer(process.env);
 const appUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || null;
 if (mailer.enabled && !appUrl) console.warn('E-Mail ist eingerichtet, aber APP_URL fehlt – Passwort-Zurücksetzen bleibt aus.');
 else if (mailer.enabled) console.log(`E-Mail aktiv (${mailer.via}), Links auf ${appUrl}`);
+if (mailer.enabled && /deine-domain|beispiel|example\./i.test(mailer.from)) console.warn(`E-Mail: MAIL_FROM ist noch ein Beispielwert (${mailer.from}) – Mails werden abgelehnt.`);
 
 const app = createApp({
   db,

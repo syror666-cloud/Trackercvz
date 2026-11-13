@@ -615,7 +615,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   }
 
   const mail = emailAuth({
-    db, HttpError, readBody, requireUser, clientIp, validatePassword, startSession,
+    db, HttpError, readBody, requireUser, requireCoach, clientIp, validatePassword, startSession,
     mailer: mailer || createMailer({}), appUrl,
   });
 
@@ -803,8 +803,14 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         q.deleteAllUserSessions.run(c.id);
       }
       let verifySent = false;
-      if (body.email !== undefined) verifySent = mail.setEmail(c.id, body.email).verifySent;
-      return { client: publicUser(q.userById.get(c.id)), verifySent };
+      let mailError = null;
+      if (body.email !== undefined) {
+        const r = mail.setEmail(c.id, body.email);
+        verifySent = r.verifySent;
+        const sent = r.delivery ? await r.delivery : null;
+        if (sent && sent.error) mailError = sent.error;
+      }
+      return { client: publicUser(q.userById.get(c.id)), verifySent, mailError };
     }],
 
     ['DELETE', /^\/api\/clients\/(\d+)$/, async (ctx, [, id]) => {

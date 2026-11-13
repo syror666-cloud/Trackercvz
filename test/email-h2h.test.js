@@ -10,7 +10,7 @@ const { createNotifier } = require('../src/notify');
 const { createReminders } = require('../src/admin');
 const { createMailer } = require('../src/mail');
 
-async function setup({ mail = true } = {}) {
+async function setup({ mail = true, from = 'StayOnTrack <noreply@mail.example-app.de>', fail = null } = {}) {
   const db = openDb(':memory:');
   createUser(db, { username: 'coach', displayName: 'Coach', password: 'coachpass123', role: 'coach' });
   const notifier = createNotifier(db, { subject: 'mailto:t@example.com', fetchImpl: async () => ({ status: 201 }) });
@@ -21,7 +21,9 @@ async function setup({ mail = true } = {}) {
   };
   const reminders = createReminders(db, notifier);
   const outbox = [];
-  const mailer = mail ? { enabled: true, via: 'test', send: async (m) => { outbox.push(m); } } : createMailer({});
+  const mailer = mail
+    ? { enabled: true, via: 'resend', from, send: async (m) => { if (fail) throw new Error(fail); outbox.push(m); } }
+    : createMailer({});
   const server = http.createServer(createApp({ db, notifier, reminders, mailer, appUrl: 'https://app.example.com', publicDir: path.join(__dirname, '..', 'public') }));
   await new Promise((r) => server.listen(0, r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -252,4 +254,37 @@ test('head2head: weight is compared in percent of the starting weight', async (t
   assert.equal(d.me.value, 2);
   assert.equal(d.them.value, 1);
   assert.equal(JSON.stringify(d).includes('59.4'), false, 'no kilograms');
+});
+
+test('e-mail: failures are shown, not swallowed; same unconfirmed address re-sends; coach test mail', async (t) => {
+  const { server, coach, login, outbox, tick } = await setup({
+    from: 'StayOnTrack <noreply@deine-domain.de>',
+    fail: 'Resend antwortet mit 403: {"name":"validation_error","message":"The deine-domain.de domain is not verified."}',
+  });
+  t.after(() => server.close());
+  const st = (await coach('GET', '/api/mail/status')).data;
+  assert.match(st.warning, /Beispielwert/);
+  const test1 = await coach('POST', '/api/mail/test', { to: 'coach@example.com' });
+  assert.equal(test1.status, 502);
+  assert.match(test1.data.error, /Absender-Domain deine-domain\.de ist bei Resend nicht bestätigt/);
+  const id = (await coach('POST', '/api/clients', { username: 'max', displayName: 'Max', password: 'maxpass123' })).data.client.id;
+  const r = (await coach('PATCH', `/api/clients/${id}`, { email: 'max@example.com' })).data;
+  assert.match(r.mailError, /not verified/);
+  const max = await login('max', 'maxpass123');
+  const again = (await max('PUT', '/api/me/email', { email: 'max@example.com', password: 'maxpass123' })).data;
+  assert.equal(again.verifySent, true, 'same unconfirmed address: confirmation is sent again');
+  assert.match(again.mailError, /nicht bestätigt/);
+  assert.equal((await max('POST', '/api/me/email/verify')).status, 502);
+  await tick();
+  assert.equal(outbox.length, 0);
+});
+
+test('e-mail: coach test mail goes out when set up', async (t) => {
+  const { server, coach, outbox } = await setup();
+  t.after(() => server.close());
+  assert.equal((await coach('GET', '/api/mail/status')).data.warning, null);
+  const r = await coach('POST', '/api/mail/test', { to: 'coach@example.com' });
+  assert.equal(r.status, 200);
+  assert.equal(outbox[0].to, 'coach@example.com');
+  assert.equal(outbox[0].subject, 'Test-Mail von StayOnTrack');
 });

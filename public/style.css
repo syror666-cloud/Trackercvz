@@ -2278,3 +2278,10 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .coin-inline .coin { vertical-align: -2px; }
 .code-input { font: 600 1.6rem/1 var(--font-display); letter-spacing: 0.45em; text-align: center; font-variant-numeric: tabular-nums; padding-left: 0.45em; }
 .code-input::placeholder { letter-spacing: 0.45em; color: var(--line); }
+.mail-status { display: grid; gap: 6px; margin: 10px 0; }
+.mail-status div { display: flex; gap: 12px; flex-wrap: wrap; }
+.mail-status dt { min-width: 80px; color: var(--muted); font-size: 0.88rem; }
+.mail-status dd { margin: 0; word-break: break-all; }
+.mail-warning { padding: 10px 12px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); margin: 8px 0; }
+.mail-test { gap: 8px; flex-wrap: nowrap; }
+.mail-test input { flex: 1; min-width: 0; }
