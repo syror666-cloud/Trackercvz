@@ -141,9 +141,11 @@ test('coach test fridge: free, only for the coach, can be emptied', async (t) =>
   assert.equal(own.free, true);
   assert.equal(own.items.length, 0);
   // everything is free, even the mythic vial, as often as wanted
-  for (const flavor of ['testo_vial', 'mcd_cup', 'testo_vial']) assert.equal((await coach('POST', '/api/shop/buy', { flavor })).status, 201);
+  for (const flavor of ['testo_vial', 'mcd_cup']) assert.equal((await coach('POST', '/api/shop/buy', { flavor })).status, 201);
+  // sold out after one purchase, for the coach too (emptying the fridge brings it back)
+  assert.equal((await coach('POST', '/api/shop/buy', { flavor: 'testo_vial' })).status, 409);
   own = (await coach('GET', '/api/shop')).data;
-  assert.deepEqual(own.items.map((i) => [i.flavor, i.cost]), [['testo_vial', 0], ['mcd_cup', 0], ['testo_vial', 0]]);
+  assert.deepEqual(own.items.map((i) => [i.flavor, i.cost]), [['testo_vial', 0], ['mcd_cup', 0]]);
   // clients get nothing for free and do not see the coach's items
   const client = (await max('GET', '/api/shop')).data;
   assert.equal(client.free, undefined);
@@ -154,4 +156,22 @@ test('coach test fridge: free, only for the coach, can be emptied', async (t) =>
   assert.equal((await coach('GET', `/api/shop?userId=${id}`)).data.free, undefined);
   // empty again
   assert.equal((await coach('DELETE', '/api/shop/items')).data.items.length, 0);
+  assert.equal((await coach('POST', '/api/shop/buy', { flavor: 'testo_vial' })).status, 201);
+});
+
+test('shop: each item can be bought once (sold out), and is back once it was taken back', async (t) => {
+  const { server, max } = await withClient();
+  t.after(() => server.close());
+  for (let i = 0; i < 10; i++) await max('PUT', `/api/entries/${day(i)}`, { steps: 12000 }); // 3 tokens
+  assert.equal((await max('POST', '/api/shop/buy', { flavor: 'white' })).status, 201);
+  const again = await max('POST', '/api/shop/buy', { flavor: 'white' });
+  assert.equal(again.status, 409);
+  assert.match(again.data.error, /ausverkauft/);
+  assert.equal((await max('GET', '/api/shop')).data.balance.available, 2); // no token was taken for the refused try
+  // a correction takes the can back – then it can be bought again
+  await max('DELETE', `/api/entries/${day(4)}`);
+  for (let i = 4; i < 10; i++) await max('DELETE', `/api/entries/${day(i)}`);
+  assert.equal((await max('GET', '/api/shop')).data.items.length, 0);
+  for (let i = 0; i < 10; i++) await max('PUT', `/api/entries/${day(i)}`, { steps: 12000 });
+  assert.equal((await max('POST', '/api/shop/buy', { flavor: 'white' })).status, 201);
 });

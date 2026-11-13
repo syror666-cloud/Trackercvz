@@ -413,6 +413,12 @@ Gratis holen|Get for free|Coger gratis|Prendi gratis
 Gratis|Free|Gratis|Gratis
 Dein Test-Kühlschrank|Your test fridge|Tu nevera de prueba|Il tuo frigo di prova
 Unter Konto → Test-Kühlschrank: Kühlschrank und Shop nur für dich, alles gratis. Probier Seltenheiten und Kaufanimationen aus und leere ihn jederzeit wieder.|Under Account → Test fridge: fridge and shop just for you, everything free. Try rarities and purchase animations and empty it any time.|En Cuenta → Nevera de prueba: nevera y tienda solo para ti, todo gratis. Prueba rarezas y animaciones y vacíala cuando quieras.|In Account → Frigo di prova: frigo e negozio solo per te, tutto gratis. Prova rarità e animazioni e svuotalo quando vuoi.
+Sold out|Sold out|Agotado|Esaurito
+Jedes Getränk gibt es einmal: Nach dem Kauf ist es im Shop ausverkauft.|Every drink exists once: after buying it, it is sold out in the shop.|Cada bebida existe una vez: tras comprarla, se agota en la tienda.|Ogni bevanda esiste una volta: dopo l'acquisto è esaurita nel negozio.
+Sanftere Übergänge|Smoother transitions|Transiciones más suaves|Transizioni più fluide
+Seiten, Fenster und Fortschrittsanzeigen gleiten jetzt ruhig ins Bild.|Pages, windows and progress indicators now glide in calmly.|Páginas, ventanas e indicadores de progreso aparecen ahora con suavidad.|Pagine, finestre e indicatori di avanzamento ora entrano con calma.
+Sold out im Shop|Sold out in the shop|Agotado en la tienda|Esaurito nel negozio
+Jedes Getränk kann ein Klient nur einmal kaufen – im Test-Kühlschrank kannst du es durch Leeren zurückholen.|Clients can buy each drink only once – in your test fridge, emptying it brings drinks back.|Cada cliente puede comprar cada bebida una sola vez – en tu nevera de prueba, al vaciarla vuelven.|Ogni cliente può comprare ogni bevanda una sola volta – nel frigo di prova svuotandolo tornano disponibili.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -469,6 +475,7 @@ noch nie|never|nunca|mai
     [/^Aus deinem Kühlschrank genommen: (.+) – die Medaille dafür ist durch die Korrektur weggefallen\.$/, W(0, (m) => `Taken out of your fridge: ${m[1]} – the medal for it was lost through the correction.`, (m) => `Retirado de tu nevera: ${m[1]} – la medalla se perdió con la corrección.`, (m) => `Tolto dal tuo frigo: ${m[1]} – la medaglia è venuta meno con la correzione.`)],
     [/^(\d+) Getränke? · Testmodus: alles gratis$/, W(0, (m) => `${m[1]} drink${m[1] === '1' ? '' : 's'} · test mode: everything free`, (m) => `${m[1]} bebida${m[1] === '1' ? '' : 's'} · modo de prueba: todo gratis`, (m) => `${m[1]} bevand${m[1] === '1' ? 'a' : 'e'} · modalità prova: tutto gratis`)],
     [/^(\d+) Getränke? im Test-Kühlschrank$/, W(0, (m) => `${m[1]} drink${m[1] === '1' ? '' : 's'} in the test fridge`, (m) => `${m[1]} bebida${m[1] === '1' ? '' : 's'} en la nevera de prueba`, (m) => `${m[1]} bevand${m[1] === '1' ? 'a' : 'e'} nel frigo di prova`)],
+    [/^(.+) ist ausverkauft – steht schon in deinem Kühlschrank\.$/, W(0, (m) => `${m[1]} is sold out – it is already in your fridge.`, (m) => `${m[1]} está agotado – ya está en tu nevera.`, (m) => `${m[1]} è esaurito – è già nel tuo frigo.`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

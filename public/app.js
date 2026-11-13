@@ -194,6 +194,17 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-motion-soldout', date: 'November 2026',
+      client: [
+        ['🏷️', 'Sold out', 'Jedes Getränk gibt es einmal: Nach dem Kauf ist es im Shop ausverkauft.'],
+        ['✨', 'Sanftere Übergänge', 'Seiten, Fenster und Fortschrittsanzeigen gleiten jetzt ruhig ins Bild.'],
+      ],
+      coach: [
+        ['🏷️', 'Sold out im Shop', 'Jedes Getränk kann ein Klient nur einmal kaufen – im Test-Kühlschrank kannst du es durch Leeren zurückholen.'],
+        ['✨', 'Sanftere Übergänge', 'Seiten, Fenster und Fortschrittsanzeigen gleiten jetzt ruhig ins Bild.'],
+      ],
+    },
+    {
       id: '2026-11-coach-fridge', date: 'November 2026',
       client: [],
       coach: [
@@ -374,11 +385,26 @@
   const LOGO = '<svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><rect class="lm-tile" width="64" height="64" rx="18"/><circle cx="32" cy="32" r="17" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="86.04 106.81" transform="rotate(-10 32 32)" class="lm-ring"/><circle cx="44.02" cy="19.98" r="5.2" class="lm-dot"/></svg>';
   const LOADING = '<div class="page-loading" role="status" aria-label="Lädt">' + LOGO + '<span></span></div>';
 
+  // Page transition: content rises in briefly when the screen changes – not when the same screen redraws
+  // (e.g. after an action), so frequent interactions stay calm.
+  let lastViewKey = null;
   function setView(html) {
     cleanups.forEach((fn) => fn());
     cleanups = [];
     app.innerHTML = html;
     window.scrollTo(0, 0);
+    const key = location.hash.split('?')[0];
+    const isLoader = html === LOADING;
+    if (key !== lastViewKey || app.dataset.loading === '1') {
+      app.classList.remove('view-enter');
+      void app.offsetWidth; // restart the entrance animation
+      app.classList.add('view-enter');
+      // only the first appearance animates; later redraws inside the screen stay still
+      clearTimeout(setView.enterTimer);
+      setView.enterTimer = setTimeout(() => app.classList.remove('view-enter'), 750);
+    }
+    app.dataset.loading = isLoader ? '1' : '';
+    if (!isLoader) lastViewKey = key;
   }
 
   function route() {
@@ -4472,7 +4498,19 @@
       root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
       return;
     }
+    let justBought = null;
+    const ownedSet = () => new Set(shop.items.map((i) => i.flavor));
+    let owned = ownedSet();
+    /** Already in the fridge: sold out. The stamp animates in right after buying. */
+    const soldOutCard = (f, price) => `<section class="card shop-item sold-out ${justBought === f.key ? 'just-sold' : ''}" style="--can:${f.colors[0]}" aria-label="${esc(f.name)}: Sold out">
+        <div class="shop-can">${coldCan(f)}<span class="sold-stamp" aria-hidden="true">Sold out</span></div>
+        <h3>${esc(f.name)}</h3>
+        <span class="rarity-tag r-${f.rarity}">${esc(RARITY[f.rarity].name)}</span>
+        ${price}
+        <button type="button" class="btn-secondary btn-sm btn-block" disabled>Sold out</button>
+      </section>`;
     function draw() {
+      owned = ownedSet();
       const b = shop.balance;
       if (shop.free) return drawFree();
       root.innerHTML = `${hofHeader(opts, 'shop', 'Jede Medaille ist Token wert – Bronze 1, Silber 2, Gold 3. Tausch sie gegen etwas für deinen Kühlschrank.')}
@@ -4482,6 +4520,7 @@
           <a class="btn btn-secondary btn-sm" href="${opts.base}/fridge">Zum Kühlschrank →</a>
         </section>
         <div class="shop-grid">${shop.flavors.map((f) => {
+          if (owned.has(f.key)) return soldOutCard(f, `<p class="shop-price" aria-label="${f.price} Token">${'<i class="coin"></i>'.repeat(f.price)}<span>${f.price}</span></p>`);
           const can = b.available >= f.price;
           return `<section class="card shop-item" style="--can:${f.colors[0]}">
             <div class="shop-can">${coldCan(f, 'data-wobble')}</div>
@@ -4496,8 +4535,10 @@
         const f = shop.flavors.find((x) => x.key === btn.dataset.buy);
         try {
           shop = await api('POST', '/api/shop/buy', { flavor: f.key });
+          await playPurchaseFx(f);
+          justBought = f.key; // the sold-out stamp lands once the celebration is over
           draw();
-          playPurchaseFx(f);
+          justBought = null;
         } catch (err) {
           toast(err.message, true);
           btn.disabled = false;
@@ -4505,6 +4546,7 @@
       }));
     }
     function drawFree() {
+      owned = ownedSet();
       root.innerHTML = `${hofHeader(opts, 'shop', '')}
         <section class="card shop-balance">
           <div><span class="fame-big">∞</span> <span class="muted">Testmodus – alles gratis</span></div>
@@ -4514,20 +4556,22 @@
             <a class="btn btn-secondary btn-sm" href="${opts.base}/fridge">Zum Kühlschrank →</a>
           </span>
         </section>
-        <div class="shop-grid">${shop.flavors.map((f) => `<section class="card shop-item" style="--can:${f.colors[0]}">
+        <div class="shop-grid">${shop.flavors.map((f) => (owned.has(f.key) ? soldOutCard(f, '<p class="shop-price"><span class="muted">Gratis</span></p>') : `<section class="card shop-item" style="--can:${f.colors[0]}">
             <div class="shop-can">${coldCan(f, 'data-wobble')}</div>
             <h3>${esc(f.name)}</h3>
             <span class="rarity-tag r-${f.rarity}">${esc(RARITY[f.rarity].name)}</span>
             <p class="shop-price"><span class="muted">Gratis</span> <s class="muted small">${f.price} Token</s></p>
             <button type="button" class="btn-primary btn-sm btn-block" data-buy="${f.key}">Gratis holen</button>
-          </section>`).join('')}</div>`;
+          </section>`)).join('')}</div>`;
       root.querySelectorAll('[data-buy]').forEach((btn) => btn.addEventListener('click', async () => {
         btn.disabled = true;
         const f = shop.flavors.find((x) => x.key === btn.dataset.buy);
         try {
           shop = await api('POST', '/api/shop/buy', { flavor: f.key });
+          await playPurchaseFx(f);
+          justBought = f.key;
           drawFree();
-          playPurchaseFx(f);
+          justBought = null;
         } catch (err) {
           toast(err.message, true);
           btn.disabled = false;

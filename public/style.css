@@ -2006,3 +2006,92 @@ body.fx-open { overflow: hidden; }
 .buy-fx.calm .fx-rays, .buy-fx.calm .fx-rings, .buy-fx.calm .fx-flash { display: none; }
 .buy-fx.calm .fx-glow { opacity: 1; }
 .buy-fx.calm .fx-item { filter: none; }
+
+/* ==========================================================================
+   Motion system: brief, purposeful, cancellable. Tokens first, then each moment.
+   Reduce Motion: movement is replaced by short fades (HIG accessibility › Motion).
+   ========================================================================== */
+:root {
+  --ease-out: cubic-bezier(0.22, 0.8, 0.24, 1);
+  --ease-spring: cubic-bezier(0.2, 1.25, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur-med: 240ms;
+  --dur-slow: 380ms;
+}
+
+/* 1 · screen change: content rises in, cards one after another (max. ~300 ms delay) */
+#app.view-enter > * { animation: view-in var(--dur-slow) var(--ease-out) both; }
+#app.view-enter > :nth-child(2) { animation-delay: 40ms; }
+#app.view-enter > :nth-child(3) { animation-delay: 80ms; }
+#app.view-enter > :nth-child(4) { animation-delay: 120ms; }
+#app.view-enter > :nth-child(n + 5) { animation-delay: 160ms; }
+#app.view-enter :is(.metric-list, .shop-grid, .fame-grid, .tp-overview, .dash-grid, .hist-grid, .split-grid, .client-grid) > * { animation: view-in var(--dur-slow) var(--ease-out) both; }
+#app.view-enter :is(.metric-list, .shop-grid, .fame-grid, .tp-overview, .dash-grid, .hist-grid, .split-grid, .client-grid) > :nth-child(2) { animation-delay: 60ms; }
+#app.view-enter :is(.metric-list, .shop-grid, .fame-grid, .tp-overview, .dash-grid, .hist-grid, .split-grid, .client-grid) > :nth-child(3) { animation-delay: 100ms; }
+#app.view-enter :is(.metric-list, .shop-grid, .fame-grid, .tp-overview, .dash-grid, .hist-grid, .split-grid, .client-grid) > :nth-child(4) { animation-delay: 140ms; }
+#app.view-enter :is(.metric-list, .shop-grid, .fame-grid, .tp-overview, .dash-grid, .hist-grid, .split-grid, .client-grid) > :nth-child(5) { animation-delay: 180ms; }
+#app.view-enter :is(.metric-list, .shop-grid, .fame-grid, .tp-overview, .dash-grid, .hist-grid, .split-grid, .client-grid) > :nth-child(n + 6) { animation-delay: 220ms; }
+@keyframes view-in { from { opacity: 0; transform: translateY(10px); } }
+
+/* 2 · dialogs and sheets: grow in from slightly smaller, backdrop fades */
+dialog[open] { animation: dialog-in var(--dur-med) var(--ease-spring); }
+dialog[open]::backdrop { animation: fade-in var(--dur-med) ease; }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
+
+/* 3 · toast and "saved" feedback slide up */
+.toast:not([hidden]) { animation: toast-in var(--dur-med) var(--ease-spring); }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* 4 · menus */
+.user-menu:not([hidden]) { animation: menu-in var(--dur-fast) var(--ease-out); transform-origin: top right; }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.97); } }
+
+/* 5 · progress fills up instead of appearing finished */
+@property --p { syntax: '<number>'; inherits: false; initial-value: 0; }
+.today-ring { animation: ring-fill 700ms var(--ease-out) 120ms both; }
+@keyframes ring-fill { from { --p: 0; } }
+.fame-bar span, .bar-fill { animation: bar-grow 700ms var(--ease-out) 150ms both; }
+@keyframes bar-grow { from { width: 0; } }
+.medal-prog { animation: medal-prog 900ms var(--ease-out) 200ms both; }
+@keyframes medal-prog { from { stroke-dasharray: 0 999; } }
+
+/* 6 · expanding a metric row reveals the chart gently */
+.metric.open .metric-detail { animation: detail-in var(--dur-med) var(--ease-out); }
+@keyframes detail-in { from { opacity: 0; transform: translateY(-6px); } }
+
+/* 7 · tactile press feedback (very short, no bounce) */
+button:not(:disabled), .btn, .nav a, .hof-nav a, .medal, .metric-row { transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-fast); }
+button:not(:disabled):active, .btn:active, .nav a:active, .hof-nav a:active { transform: scale(0.97); }
+.nav-icon, .pref-choices button, .segmented button, .pr-choice span, .days-picker button { transition: background-color var(--dur-med) var(--ease-out), color var(--dur-med), border-color var(--dur-med); }
+
+/* 8 · pointer devices: interactive cards lift a little */
+@media (hover: hover) {
+  .shop-item:not(.sold-out), .client-card, .split-card, button.metric-row { transition: transform var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out); }
+  .shop-item:not(.sold-out):hover, .split-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0, 41, 65, 0.12); }
+}
+
+/* ==========================================================================
+   Sold out (shop)
+   ========================================================================== */
+.shop-item.sold-out .shop-can { position: relative; }
+.shop-item.sold-out .shop-can .cold-can { filter: grayscale(0.85) opacity(0.55); }
+.shop-item.sold-out h3, .shop-item.sold-out .shop-price { opacity: 0.6; }
+.sold-stamp {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-14deg);
+  padding: 4px 12px; border: 3px solid var(--bad); border-radius: 6px; color: var(--bad);
+  font: 700 0.95rem/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+.shop-item.just-sold .sold-stamp { animation: stamp-in 420ms var(--ease-spring) 80ms both; }
+.shop-item.just-sold .cold-can { animation: sold-fade 500ms ease both; }
+@keyframes stamp-in { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-14deg) scale(2.2); } 60% { opacity: 1; } 100% { transform: translate(-50%, -50%) rotate(-14deg) scale(1); } }
+@keyframes sold-fade { from { filter: none; } }
+
+/* Reduce Motion: no movement, only short fades; progress shows its final state */
+@media (prefers-reduced-motion: reduce) {
+  #app.view-enter > *, #app.view-enter :is(.metric-list, .shop-grid, .fame-grid, .tp-overview, .dash-grid, .hist-grid, .split-grid, .client-grid) > * { animation: fade-in var(--dur-fast) ease both !important; animation-delay: 0ms !important; }
+  dialog[open], .toast:not([hidden]), .user-menu:not([hidden]), .metric.open .metric-detail { animation: fade-in var(--dur-fast) ease !important; }
+  .today-ring, .fame-bar span, .bar-fill, .medal-prog, .shop-item.just-sold .sold-stamp, .shop-item.just-sold .cold-can { animation: none !important; }
+  button:not(:disabled):active, .btn:active, .nav a:active, .hof-nav a:active { transform: none; }
+  .shop-item:hover, .split-card:hover { transform: none !important; }
+}

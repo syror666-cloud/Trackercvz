@@ -32,6 +32,7 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
     newest: db.prepare('SELECT * FROM fridge_items WHERE client_id = ? ORDER BY id DESC LIMIT 1'),
     remove: db.prepare('DELETE FROM fridge_items WHERE id = ?'),
     clear: db.prepare('DELETE FROM fridge_items WHERE client_id = ?'),
+    owns: db.prepare('SELECT 1 FROM fridge_items WHERE client_id = ? AND flavor = ? LIMIT 1'),
   };
 
   /**
@@ -100,6 +101,8 @@ function shopRoutes({ db, HttpError, readBody, requireUser, targetClient, achiev
       const { flavor } = await readBody(ctx.req);
       const f = FLAVORS.find((x) => x.key === flavor);
       if (!f) throw new HttpError(400, 'Diese Sorte gibt es nicht');
+      // every item exists once per fridge: after buying it, it is sold out for this person
+      if (q.owns.get(u.id, f.key)) throw new HttpError(409, `${f.name} ist ausverkauft – steht schon in deinem Kühlschrank.`);
       if (u.role === 'coach') {
         // coach test fridge: free, always into the coach's own fridge (never a client's)
         q.insert.run(u.id, f.key, 0);
