@@ -2292,3 +2292,5 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .google-scopes li.off { color: var(--muted); }
 .google-privacy { margin: 8px 0 14px; }
 .google-privacy summary { cursor: pointer; font-size: 0.9rem; color: var(--brass); }
+.login-legal { text-align: center; margin: 14px 0 0; color: var(--muted); }
+.login-legal a { color: var(--muted); }

@@ -99,6 +99,7 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | alternativ: eigener Mailserver (z. B. Brevo, IONOS, Strato, Gmail mit App-Passwort); Port 465 = TLS, 587 = STARTTLS |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | optional: Google Health (Schritte und Schlaf automatisch), siehe unten |
 | `GOOGLE_TOKEN_KEY` | optional: eigener Schlüssel zum Verschlüsseln der Google-Tokens (sonst aus dem Clientschlüssel abgeleitet) |
+| `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_EMAIL`, `LEGAL_PHONE` | Betreiberangaben für `/datenschutz` und `/impressum` (Adresszeilen mit `|` trennen, z. B. `Musterweg 1|12345 Musterstadt`) |
 | `APP_URL` | Adresse der App für Links in E-Mails, z. B. `https://stayontrack.onrender.com` (auf Render automatisch über `RENDER_EXTERNAL_URL`) |
 
 **Google Health einrichten (Schritte und Schlaf automatisch):**

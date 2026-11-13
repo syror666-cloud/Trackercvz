@@ -20,6 +20,7 @@ const { createMailer } = require('./mail');
 const { h2hRoutes } = require('./h2h');
 const { reportRoutes } = require('./reports');
 const { googleHealth } = require('./google-health');
+const { legalHandler } = require('./legal');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -286,7 +287,7 @@ function parseSteps(value) {
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 // Apple Health import (Shortcuts) is switched off for now; `health: true` turns the routes back on.
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null, googleEnv, googleFetch }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null, googleEnv, googleFetch, legalEnv }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
@@ -1366,6 +1367,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     fs.createReadStream(file).pipe(res);
   }
 
+  const legal = legalHandler(legalEnv || process.env);
   return async function handler(req, res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -1379,6 +1381,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     try {
       if (!url.pathname.startsWith('/api/')) {
         if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Methode nicht erlaubt');
+        if (legal(req, res, url.pathname)) return undefined; // /datenschutz, /impressum
         return serveStatic(req, res, url.pathname);
       }
 

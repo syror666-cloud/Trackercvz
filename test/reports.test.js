@@ -107,3 +107,23 @@ test('reports: check-in and plan go out by e-mail with the PDF – only to confi
   await tick();
   assert.equal(outbox.length, n);
 });
+
+test('legal pages: privacy policy and imprint, operator from environment, Google limited-use statement', async () => {
+  const { legalHandler } = require('../src/legal');
+  const run = (env, p) => {
+    let out = null;
+    const res = { writeHead: (s, h) => { out = { status: s, headers: h }; }, end: (b) => { out.body = b; } };
+    const ok = legalHandler(env)({ method: 'GET' }, res, p);
+    return ok ? out : null;
+  };
+  const env = { LEGAL_NAME: 'Lena Coach', LEGAL_ADDRESS: 'Musterweg 1|12345 Musterstadt', LEGAL_EMAIL: 'kontakt@example.de' };
+  const priv = run(env, '/datenschutz');
+  assert.equal(priv.status, 200);
+  assert.match(priv.body, /Lena Coach<br>Musterweg 1<br>12345 Musterstadt/);
+  assert.match(priv.body, /googlehealth\.sleep\.readonly/);
+  assert.match(priv.body, /Limited Use requirements/);
+  assert.match(run(env, '/impressum').body, /§ 5 DDG/);
+  assert.match(run({}, '/datenschutz').body, /fehlen noch/);
+  assert.equal(run(env, '/irgendwas'), null);
+  assert.ok(run({ LEGAL_NAME: '<script>' }, '/impressum').body.includes('&lt;script&gt;'));
+});

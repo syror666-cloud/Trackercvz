@@ -770,6 +770,7 @@
           <button class="btn-primary btn-block" type="submit">Anmelden</button>
           <p class="error" hidden></p>
           <p class="small login-forgot" hidden><button type="button" class="link-btn" data-forgot>Passwort vergessen?</button></p>
+          <p class="small login-legal"><a href="/datenschutz">Datenschutz</a> · <a href="/impressum">Impressum</a></p>
         </form>
       </div>`);
     const form = document.getElementById('login-form');
@@ -2215,7 +2216,7 @@
             <button type="button" class="btn-ghost danger-text" data-google-off>Trennen</button>
           </div>`
         : `<details class="google-privacy"><summary>Was wird übertragen?</summary>
-            <p class="small muted">Nur deine täglichen <strong>Schritte</strong> und deine <strong>Schlafdauer</strong> (Nickerchen zählen nicht) – lesend, nichts wird bei Google verändert. Werte, die du selbst einträgst, wie Gewicht oder Notizen, bleiben unberührt. Trennen kannst du jederzeit hier oder in deinem Google-Konto.</p></details>
+            <p class="small muted">Nur deine täglichen <strong>Schritte</strong> und deine <strong>Schlafdauer</strong> (Nickerchen zählen nicht) – lesend, nichts wird bei Google verändert. Werte, die du selbst einträgst, wie Gewicht oder Notizen, bleiben unberührt. Trennen kannst du jederzeit hier oder in deinem Google-Konto. Mehr in der <a href="/datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a>.</p></details>
           ${st.revoked ? '<p class="small bad">Der Zugriff wurde in deinem Google-Konto entfernt. Verbinde dich neu, damit wieder Daten kommen.</p>' : ''}
           <button type="button" class="btn-primary" data-google-connect>${st.revoked ? 'Neu verbinden' : 'Mit Google Health verbinden'}</button>`}`;
       root.querySelectorAll('[data-google-connect]').forEach((b) => b.addEventListener('click', async () => {
