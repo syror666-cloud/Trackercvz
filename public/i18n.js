@@ -469,6 +469,13 @@ Nicht für alle Lebensmittel sind Makros hinterlegt.|Not all foods have macros.|
 Bitte eine Menge angeben.|Please enter an amount.|Introduce una cantidad.|Inserisci una quantità.
 Tipp los, z. B. „Skyr“ – oder scann einen Barcode.|Start typing, e.g. "skyr" – or scan a barcode.|Empieza a escribir, p. ej. «skyr» – o escanea un código.|Inizia a scrivere, ad es. «skyr» – o scansiona un codice.
 Nichts gefunden. Scann die Packung oder trag es selbst ein.|Nothing found. Scan the package or enter it yourself.|Nada encontrado. Escanea el envase o introdúcelo tú.|Niente trovato. Scansiona la confezione o inseriscilo tu.
+Markenprodukte|Branded products|Productos de marca|Prodotti di marca
+Lebensmittel|Foods|Alimentos|Alimenti
+Lebensmittel oder Marke suchen…|Search foods or brands…|Buscar alimentos o marcas…|Cerca alimenti o marchi…
+Lebensmittel oder Marke suchen|Search foods or brands|Buscar alimentos o marcas|Cerca alimenti o marchi
+Tipp los, z. B. „Skyr“ oder „Barebells“ – oder scann einen Barcode.|Start typing, e.g. "skyr" or "Barebells" – or scan a barcode.|Empieza a escribir, p. ej. «skyr» o «Barebells» – o escanea un código.|Inizia a scrivere, ad es. «skyr» o «Barebells» – o scansiona un codice.
+Die Produktdatenbank ist gerade nicht erreichbar – trag die Werte von der Packung ein.|The product database can't be reached right now – enter the values from the package.|La base de datos de productos no está disponible – introduce los valores del envase.|Il database prodotti non è raggiungibile – inserisci i valori della confezione.
+Fitness & Sporternährung|Fitness & sports nutrition|Fitness y nutrición deportiva|Fitness e nutrizione sportiva
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

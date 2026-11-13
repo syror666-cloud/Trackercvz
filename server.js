@@ -7,6 +7,7 @@ const { openDb, createUser } = require('./src/db');
 const { createApp } = require('./src/app');
 const { createNotifier } = require('./src/notify');
 const { createReminders } = require('./src/admin');
+const { openCatalog } = require('./src/catalog');
 
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
@@ -51,8 +52,17 @@ setInterval(() => {
   reminders.runWeightScheduled().catch((err) => console.error(err));
 }, 30000).unref();
 
+// Barcode product database (built once from the bundled Open Food Facts extract).
+let catalog = null;
+try {
+  catalog = openCatalog(DATA_DIR);
+} catch (err) {
+  console.error('Produktdatenbank konnte nicht geladen werden – Barcodes werden nur online gesucht:', err.message);
+}
+
 const app = createApp({
   db,
+  catalog,
   notifier,
   reminders,
   publicDir: path.join(__dirname, 'public'),

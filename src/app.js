@@ -277,7 +277,7 @@ function parseSteps(value) {
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 // Apple Health import (Shortcuts) is switched off for now; `health: true` turns the routes back on.
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
@@ -1262,7 +1262,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   const achievements = achievementsModule(deps);
   const ai = aiRoutes(deps);
   shop = shopRoutes({ ...deps, achievements });
-  routes.push(...foodlogRoutes({ ...deps, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();
@@ -1313,7 +1313,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'"
+      "default-src 'self'; connect-src 'self' https://world.openfoodfacts.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'"
     );
 
     const url = new URL(req.url, 'http://localhost');

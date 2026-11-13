@@ -375,9 +375,10 @@ function migrate(db) {
   addColumns(db, 'foods', [['protein', 'REAL'], ['carbs', 'REAL'], ['fat', 'REAL']]);
   addColumns(db, 'meal_items', [['protein', 'REAL'], ['carbs', 'REAL'], ['fat', 'REAL']]);
 
-  // Food database v2 (about 470 foods with macros): add what is missing, fill macros of the standard foods.
-  // Foods the coach created or edited keep their values.
-  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'foods_seeded_v2'").get()) {
+  // Food database v3 (about 600 foods with macros, many for fitness): add what is missing, fill macros of the
+  // standard foods. Foods the coach created or edited keep their values. Raise FOODS_SEED when the list grows.
+  const FOODS_SEED = 'foods_seeded_v3';
+  if (!db.prepare('SELECT 1 FROM settings WHERE key = ?').get(FOODS_SEED)) {
     const insert = db.prepare('INSERT OR IGNORE INTO foods (name, kcal, unit, category, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const fill = db.prepare('UPDATE foods SET protein = ?, carbs = ?, fat = ? WHERE name = ? AND is_custom = 0 AND protein IS NULL');
     const fillItems = db.prepare(
@@ -389,7 +390,7 @@ function migrate(db) {
       fill.run(protein, carbs, fat, name);
       fillItems.run(protein, carbs, fat, name);
     }
-    db.exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('foods_seeded_v2', 'done')");
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, 'done')").run(FOODS_SEED);
     db.exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('foods_seeded', 'done')");
     db.exec('COMMIT');
   }

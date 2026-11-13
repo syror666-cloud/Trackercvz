@@ -9,6 +9,7 @@
 const MEALS = ['fruehstueck', 'mittag', 'abend', 'snack'];
 const OFF_FIELDS = 'product_name,product_name_de,brands,nutriments,serving_size,quantity';
 const CACHE_DAYS = 30;
+const MISS_DAYS = 2; // unknown products are asked again soon – Open Food Facts grows daily
 
 /** Default lookup against Open Food Facts. Returns null when the product is unknown. */
 async function offLookup(code) {
@@ -49,7 +50,7 @@ function productFromOff(p) {
   };
 }
 
-function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate, reconcileFor, barcodeLookup = offLookup }) {
+function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate, reconcileFor, barcodeLookup = offLookup, catalog = null }) {
   const q = {
     day: db.prepare('SELECT * FROM food_log WHERE client_id = ? AND date = ? ORDER BY id'),
     one: db.prepare('SELECT * FROM food_log WHERE id = ?'),
@@ -138,14 +139,19 @@ function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requir
   }
 
   async function lookup(code) {
+    // 1. the bundled product database (≈ 320 000 products from DE/AT/CH)
+    const hit = catalog && catalog.lookup(code);
+    if (hit) return { found: true, source: 'catalog', ...hit };
+    // 2. products looked up before or entered by clients
     const c = q.cached.get(code);
-    const fresh = c && Date.now() - Date.parse(`${c.fetched_at.replace(' ', 'T')}Z`) < CACHE_DAYS * 864e5;
-    if (c && fresh) return cachedProduct(c);
+    const age = c ? Date.now() - Date.parse(`${c.fetched_at.replace(' ', 'T')}Z`) : Infinity;
+    if (c && age < (c.found ? CACHE_DAYS : MISS_DAYS) * 864e5) return cachedProduct(c);
+    // 3. live at Open Food Facts
     let p;
     try {
       p = await barcodeLookup(code);
     } catch {
-      if (c) return cachedProduct(c);
+      if (c && c.found) return cachedProduct(c);
       throw new HttpError(502, 'Die Produktdatenbank ist gerade nicht erreichbar. Versuch es gleich nochmal oder trag die Werte selbst ein.');
     }
     const prod = p ? productFromOff(p) : null;
@@ -191,6 +197,13 @@ function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requir
           protein: macro('protein', 'Eiweiß'), carbs: macro('carbs', 'Kohlenhydrate'), fat: macro('fat', 'Fett'),
         };
       }
+      // a product typed in for an unknown barcode is remembered, so the next scan finds it
+      if (f.barcode && !(catalog && catalog.lookup(f.barcode))) {
+        const known = q.cached.get(f.barcode);
+        if (!known || !known.found) {
+          q.cache.run(f.barcode, 1, f.name, f.brand, f.kcal, f.protein, f.carbs, f.fat, f.unit, known ? known.serving : null);
+        }
+      }
       const id = Number(q.insert.run(u.id, b.date, meal, f.name, f.brand, f.barcode, f.foodId, amount, f.unit, f.kcal, f.protein, f.carbs, f.fat).lastInsertRowid);
       const revoked = syncCalories(u.id, b.date);
       return { item: row(q.one.get(id)), day: dayOf(u.id, b.date), revoked };
@@ -228,6 +241,14 @@ function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requir
     ['GET', /^\/api\/barcode\/(\d{8,14})$/, async (ctx, [, code]) => {
       requireUser(ctx);
       return { product: await lookup(code) };
+    }],
+
+    /** Branded products by name (from the bundled product database). */
+    ['GET', /^\/api\/products$/, async (ctx) => {
+      requireUser(ctx);
+      const term = (ctx.url.searchParams.get('q') || '').trim().slice(0, 60);
+      if (!catalog || term.length < 2) return { products: [] };
+      return { products: catalog.search(term, 25) };
     }],
   ];
 }

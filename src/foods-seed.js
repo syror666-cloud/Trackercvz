@@ -500,6 +500,145 @@ Overnight Oats (zubereitet)|150|6|20|5|g
 Porridge mit Milch|110|4.5|16|3|g
 Proteinpancakes (zubereitet)|180|17|18|4|g
 
+# Fitness & Sporternährung
+Whey-Isolat|370|88|2|1|g
+Whey-Hydrolysat|375|82|5|2.5|g
+Mehrkomponenten-Protein|365|76|6|4|g
+Eiprotein-Pulver|360|80|4|1|g
+Reisprotein-Pulver|380|80|4|4|g
+Sojaprotein-Isolat|370|88|1|1.5|g
+Hanfprotein-Pulver|360|50|12|10|g
+Kollagen-Pulver|360|90|0|0|g
+Beef-Protein-Isolat|370|90|1|0.5|g
+Weight Gainer|385|20|70|3|g
+Maltodextrin|380|0|95|0|g
+Dextrose (Traubenzucker)|370|0|92|0|g
+Cyclic Dextrin|380|0|95|0|g
+Instant Oats (Hafermehl)|375|13|59|7|g
+Proteinpulver Schoko (Whey)|375|72|10|5|g
+Proteinpulver Vanille (Whey)|380|74|9|5|g
+Protein-Porridge (Pulver)|380|30|45|7|g
+Protein-Müsli|380|30|35|11|g
+Protein-Granola|420|25|38|17|g
+Protein-Cornflakes|370|30|52|3|g
+Proteinbrot|260|24|8|13|g
+Low-Carb-Brot|240|22|6|13|g
+Protein-Wrap|290|20|35|6|g
+Protein-Nudeln (Linsen/Erbsen, roh)|345|45|30|3|g
+Proteinriegel (low sugar)|360|32|25|14|g
+Proteinriegel 50 %|360|50|20|8|g
+Proteinriegel vegan|370|25|35|13|g
+Protein-Waffel|500|20|38|28|g
+Protein-Cookie|420|20|45|17|g
+Protein-Chips|400|40|35|9|g
+Protein-Crispies (Sojacrisps)|370|60|20|3|g
+Proteincreme (Schoko-Aufstrich)|520|20|25|38|g
+Protein-Milchshake (Flasche)|65|8|5|1.3|ml
+Protein-Drink Clear (Flasche)|25|6|0.3|0|ml
+Protein-Pudding Schoko|80|10|6|1.5|g
+Protein-Pudding Vanille|75|10|6|1.3|g
+Protein-Mousse|90|10|7|2.5|g
+Protein-Quarkcreme|75|10|6|1|g
+Protein-Joghurt Frucht|70|10|6|0.4|g
+Protein-Skyr-Drink|60|8|5|0.5|ml
+Protein-Milch (laktosefrei)|55|6|4|1.5|ml
+Protein-Eiscreme (Becher)|110|9|11|3|g
+Protein-Pancake-Mix (Pulver)|370|40|38|6|g
+Protein-Kekse (Low Sugar)|430|25|35|20|g
+Protein-Pizza (Fertig)|200|18|18|6|g
+Fitness-Bowl (Fertig)|130|10|12|4|g
+Reiswaffeln mit Zartbitterschokolade|475|7|65|21|g
+Haferkekse (Vollkorn)|440|8|65|16|g
+Energy-Gel|275|0|69|0|g
+Energy-Riegel (Sport)|370|5|70|7|g
+Isotonisches Getränk|25|0|6|0|ml
+Elektrolyt-Pulver|340|0|85|0|g
+Pre-Workout (Pulver)|80|5|15|0|g
+BCAA (Pulver)|370|85|5|0|g
+EAA (Pulver)|370|85|5|0|g
+Glutamin|400|100|0|0|g
+Omega-3-Kapseln (Fischöl)|900|0|0|100|g
+MCT-Öl|860|0|0|100|ml
+Erdnussbutter (Pulver, entölt)|420|50|25|12|g
+Erdnussmus 100 %|610|27|12|50|g
+Kokosmus|670|7|8|65|g
+Zuckerfreier Sirup|2|0|0.5|0|ml
+Flavour Drops|0|0|0|0|ml
+Geschmackspulver (Flavour)|300|5|65|3|g
+Kalorienreduzierte Konfitüre|90|0.4|21|0.2|g
+Light-Ketchup|50|1.2|10|0.2|g
+Zero-Sauce (kalorienarm)|15|0.5|2.5|0.2|g
+Energy-Drink zuckerfrei|3|0|0.5|0|ml
+Energy-Drink|45|0|11|0|ml
+Iso-Drink zuckerfrei|5|0|1|0|ml
+Shirataki-Nudeln|8|0|3|0|g
+Shirataki-Reis|8|0|3|0|g
+Konjak-Spaghetti|10|0.1|3.5|0|g
+Blumenkohlreis|25|2|3|0.3|g
+Zucchini-Nudeln|17|1.2|2.5|0.3|g
+# Eier & Milchprodukte
+Eiklar (flüssig, Packung)|48|11|0.7|0.2|ml
+Eiklar-Pulver|370|80|5|0.5|g
+Magerquark laktosefrei|70|12|4|0.3|g
+Körniger Frischkäse light|70|13|1.5|1.5|g
+Hüttenkäse (High Protein)|80|15|2|1.5|g
+Skyr Vanille|75|9|8|0.2|g
+Griechischer Joghurt 0,2 %|55|10|4|0.2|g
+Isländischer Joghurt (Skyr-Style)|65|11|4|0.4|g
+Light-Käse (Scheiben, 16 %)|260|31|0|15|g
+Proteinjoghurt Natur|55|10|3.5|0.2|g
+# Fleisch & Fisch
+Hähnchenbrust (gegart)|155|31|0|3.5|g
+Hähnchenbrustfilet (Aufschnitt)|105|21|1.5|1.5|g
+Putenbrust (gegart)|150|30|0|3|g
+Putenhackfleisch|150|20|0|8|g
+Hähnchenhackfleisch|140|21|0|6|g
+Rinderhackfleisch 5 % Fett|125|21|0|5|g
+Chicken Jerky|260|55|7|2|g
+Thunfisch im eigenen Saft|105|25|0|0.8|g
+Thunfisch in Öl (abgetropft)|200|25|0|11|g
+Lachsfilet (roh)|205|20|0|14|g
+Wildlachs (roh)|140|21|0|6|g
+Kabeljaufilet (roh)|80|18|0|0.7|g
+Seelachsfilet (roh)|75|17|0|0.6|g
+Pangasiusfilet (roh)|90|15|0|3|g
+Hähnchen-Dönerfleisch (Fitness)|160|25|3|5|g
+# Pflanzliche Proteine
+Sojamedaillons (trocken)|340|50|14|1.5|g
+Lupinen-Protein (Filets)|170|18|3|9|g
+Edamame (geschält)|125|12|4|5|g
+Linsen rot (roh)|340|25|50|2|g
+# Beilagen & Getreide
+Süßkartoffel (gegart)|90|2|20|0.2|g
+Haferflocken (Vollkorn, kernig)|370|13.5|59|7|g
+Reis-Nudeln (roh)|360|6|80|0.6|g
+# Brot & Backwaren
+Knäckebrot (Roggen)|335|9|63|1.5|g
+Bagel (Vollkorn)|250|10|45|2|g
+# Obst
+Banane (reif)|95|1.2|21|0.3|g
+Gefriergetrocknete Beeren|350|5|70|2|g
+Beerenmix (TK)|45|1|8|0.5|g
+Mango (TK)|60|0.8|14|0.4|g
+Apfelmus ungesüßt|45|0.3|10|0.1|g
+# Gemüse
+Brokkoli (TK)|30|3|3|0.4|g
+Spinat (TK)|25|2.5|1.5|0.4|g
+Mixed Pickles|20|1|3|0.2|g
+# Fette, Nüsse & Samen
+Leinsamen (geschrotet)|510|24|1.6|37|g
+Butterschmalz (Ghee)|900|0.3|0|99.5|g
+# Getränke
+Kokoswasser|20|0.2|4.5|0|ml
+Sojadrink|40|3.5|1.5|2|ml
+Sojadrink ungesüßt|33|3.3|0.2|1.9|ml
+Mandeldrink ungesüßt|13|0.4|0.1|1.1|ml
+Ayran|35|1.7|2.5|1.7|ml
+Proteinwasser|20|5|0|0|ml
+Espresso|5|0.2|0.5|0|ml
+Cappuccino mit Hafermilch|35|1|5|1.3|ml
+Grüner Tee|1|0|0.2|0|ml
+
 # Sonstiges
 Kokosmilch|195|2|3|20|ml
 Kokosmilch light|80|0.8|2|7.5|ml

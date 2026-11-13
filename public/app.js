@@ -194,6 +194,18 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-barcode-db', date: 'November 2026',
+      client: [
+        ['📦', 'Scanner kennt jetzt über 320.000 Produkte', 'Fast alles aus deutschen, österreichischen und Schweizer Supermärkten wird beim Scannen sofort erkannt – mit Kalorien und Makros. Was fehlt, trägst du einmal ein; danach erkennt der Scanner es.'],
+        ['🔎', 'Markenprodukte suchen', 'In der Suche findest du jetzt auch Markenprodukte, z. B. „Ehrmann Protein“ oder „Barebells“.'],
+        ['💪', 'Mehr Fitness-Lebensmittel', 'Neue Kategorie Fitness & Sporternährung: Whey, Isolat, Proteinbrot, Shirataki, Reiswaffeln und vieles mehr – rund 600 Lebensmittel insgesamt.'],
+      ],
+      coach: [
+        ['📦', 'Barcode-Datenbank mit 320.000 Produkten', 'Der Scanner sucht zuerst in einer mitgelieferten Open-Food-Facts-Datenbank (DE/AT/CH), dann online. Unbekannte Produkte, die ein Klient einträgt, werden für den nächsten Scan gemerkt.'],
+        ['💪', 'Fitness & Sporternährung', 'Die Lebensmittel-Datenbank hat jetzt rund 600 Einträge, davon über 120 neue mit Fitness-Fokus.'],
+      ],
+    },
+    {
       id: '2026-11-food-diary', date: 'November 2026',
       client: [
         ['📷', 'Ernährungstagebuch mit Barcode-Scanner', 'Unter Ernährung → Tagebuch trägst du ein, was du isst – Packung scannen, aus der Datenbank wählen oder selbst eintragen. Kalorien und Makros werden mitgezählt, die Tageskalorien landen automatisch im Tracker.'],
@@ -2886,6 +2898,10 @@
         if (done) return stream.getTracks().forEach((t) => t.stop());
         video.srcObject = stream;
         await video.play().catch(() => {});
+        // sharp picture up close: continuous autofocus where the camera supports it
+        const track = stream.getVideoTracks()[0];
+        const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+        if (caps.focusMode && caps.focusMode.includes('continuous')) track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
         ov.classList.add('live');
         status.textContent = 'Barcode in den Rahmen halten';
         let detect;
@@ -2907,13 +2923,15 @@
           reader.setHints(hints);
           const canvas = document.createElement('canvas');
           const g = canvas.getContext('2d', { willReadFrequently: true });
+          let round = 0;
           detect = async () => {
             const w = video.videoWidth;
             const h = video.videoHeight;
             if (!w || !h) return null;
-            // only the middle band, where the frame is: faster and less noise
-            const cw = Math.round(w * 0.8);
-            const ch = Math.round(h * 0.45);
+            // mostly the middle band, where the frame is (faster, less noise); every third try the whole picture
+            const full = ++round % 3 === 0;
+            const cw = full ? w : Math.round(w * 0.8);
+            const ch = full ? h : Math.round(h * 0.45);
             canvas.width = cw;
             canvas.height = ch;
             g.drawImage(video, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, cw, ch);
@@ -3046,11 +3064,16 @@
     async function scanAndAdd(meal) {
       const code = await scanBarcode();
       if (!code) return;
-      let product;
+      let product = null;
       try {
         product = (await api('GET', `/api/barcode/${code}`)).product;
-      } catch (err) {
-        toast(err.message, true);
+      } catch {
+        product = null;
+      }
+      // the server couldn't find or reach it: ask Open Food Facts straight from the phone
+      if (!product || !product.found) product = (await offFromBrowser(code)) || product;
+      if (!product) {
+        toast('Die Produktdatenbank ist gerade nicht erreichbar – trag die Werte von der Packung ein.', true);
         return openManual(meal, { barcode: code });
       }
       if (!product.found) {
@@ -3060,13 +3083,36 @@
       openAmount(meal, { ...product, source: 'barcode' });
     }
 
+    /** Direct lookup at Open Food Facts from the browser (fallback when the server can't reach it). */
+    async function offFromBrowser(code) {
+      try {
+        const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_de,brands,nutriments,serving_size,quantity`, { signal: AbortSignal.timeout(7000) });
+        if (!res.ok) return null;
+        const d = await res.json();
+        const p = d && d.status === 1 && d.product;
+        if (!p) return null;
+        const n = p.nutriments || {};
+        const v = (x) => (x === undefined || x === null || x === '' || Number.isNaN(Number(x)) ? null : Math.round(Number(x) * 10) / 10);
+        const kcal = v(n['energy-kcal_100g']) ?? (v(n.energy_100g) !== null ? Math.round(n.energy_100g / 4.184) : null);
+        const name = String(p.product_name_de || p.product_name || '').trim();
+        if (!name || kcal === null) return null;
+        return {
+          found: true, barcode: code, name: name.slice(0, 80), brand: String(p.brands || '').split(',')[0].trim().slice(0, 60) || null,
+          kcal: Math.round(kcal), protein: v(n.proteins_100g), carbs: v(n.carbohydrates_100g), fat: v(n.fat_100g),
+          unit: /\d\s*(ml|cl|l)\b/i.test(p.quantity || '') ? 'ml' : 'g', serving: p.serving_size || null,
+        };
+      } catch {
+        return null;
+      }
+    }
+
     /** Step 1: search the database, recent foods, scan or type in. */
     async function openAddFood(meal) {
       const mealName = DIARY_MEALS.find(([k]) => k === meal)[1];
       openDialog(`
         <h2>${esc(mealName)}</h2>
         <div class="add-food-top">
-          <input type="search" name="q" autocomplete="off" placeholder="Lebensmittel suchen…" aria-label="Lebensmittel suchen">
+          <input type="search" name="q" autocomplete="off" placeholder="Lebensmittel oder Marke suchen…" aria-label="Lebensmittel oder Marke suchen">
           <button type="button" class="btn-secondary" data-scan-here><span aria-hidden="true">▥</span> Scannen</button>
         </div>
         <ul class="food-results add-food-list" role="listbox" aria-label="Treffer"></ul>
@@ -3077,7 +3123,28 @@
       let recent = [];
       const [foods] = await Promise.all([loadFoods(), api('GET', '/api/foodlog/recent').then((r) => { recent = r.recent; }).catch(() => {})]);
       let shown = [];
-      const show = () => {
+      let brands = [];
+      let brandTimer = null;
+      let brandSeq = 0;
+      const searchBrands = () => {
+        clearTimeout(brandTimer);
+        const term = input.value.trim();
+        if (term.length < 3) {
+          brands = [];
+          return;
+        }
+        const seq = ++brandSeq;
+        brandTimer = setTimeout(async () => {
+          try {
+            const r = await api('GET', `/api/products?q=${encodeURIComponent(term)}`);
+            if (seq !== brandSeq) return;
+            brands = r.products;
+            show(true);
+          } catch { /* the basic list still works */ }
+        }, 250);
+      };
+      const show = (keepBrands) => {
+        if (!keepBrands) searchBrands();
         const term = input.value.trim().toLowerCase();
         if (!term) {
           shown = recent.map((r) => ({ ...r, recent: true }));
@@ -3086,20 +3153,30 @@
           shown = foods
             .filter((f) => f.name.toLowerCase().includes(term) || (f.category || '').toLowerCase().includes(term))
             .sort((a, b) => Number(!a.name.toLowerCase().startsWith(term)) - Number(!b.name.toLowerCase().startsWith(term)) || a.name.length - b.name.length)
-            .slice(0, 40);
+            .slice(0, term.length >= 3 ? 12 : 40);
+        }
+        const generic = shown.length;
+        if (term.length >= 3) shown = shown.concat(brands.map((b) => ({ ...b, branded: true })));
+        const row = (f, i) => `<li role="option" tabindex="0" data-i="${i}"><span><span class="item-name">${esc(f.name)}</span>${f.brand ? ` <span class="muted small">${esc(f.brand)}</span>` : ''}
+            <span class="muted small di-sub">${num(f.kcal)} kcal/100 ${f.unit} ${macroInline(f)}</span></span>${f.recent ? `<span class="muted small">${esc(fmtAmount(f.amount, f.unit))}</span>` : ''}</li>`;
+        if (term.length >= 3) {
+          list.innerHTML = (generic ? '<li class="list-label muted small" aria-hidden="true">Lebensmittel</li>' : '') + shown.slice(0, generic).map(row).join('') +
+            (brands.length ? '<li class="list-label muted small" aria-hidden="true">Markenprodukte</li>' + shown.slice(generic).map((f, j) => row(f, generic + j)).join('') : '') +
+            (shown.length ? '' : '<li class="muted small" data-none>Nichts gefunden. Scann die Packung oder trag es selbst ein.</li>');
+          return;
         }
         list.innerHTML = (!term && shown.length ? '<li class="list-label muted small" aria-hidden="true">Zuletzt gegessen</li>' : '') +
           (shown.map((f, i) => `<li role="option" tabindex="0" data-i="${i}"><span><span class="item-name">${esc(f.name)}</span>${f.brand ? ` <span class="muted small">${esc(f.brand)}</span>` : ''}
             <span class="muted small di-sub">${num(f.kcal)} kcal/100 ${f.unit} ${macroInline(f)}</span></span>${f.recent ? `<span class="muted small">${esc(fmtAmount(f.amount, f.unit))}</span>` : ''}</li>`).join('') ||
-          `<li class="muted small" data-none>${term ? 'Nichts gefunden. Scann die Packung oder trag es selbst ein.' : 'Tipp los, z. B. „Skyr“ – oder scann einen Barcode.'}</li>`);
+          `<li class="muted small" data-none>${term ? 'Nichts gefunden. Scann die Packung oder trag es selbst ein.' : 'Tipp los, z. B. „Skyr“ oder „Barebells“ – oder scann einen Barcode.'}</li>`);
       };
-      input.addEventListener('input', show);
+      input.addEventListener('input', () => show());
       const choose = (li) => {
         if (!li || li.dataset.i === undefined) return;
         const f = shown[Number(li.dataset.i)];
         openAmount(meal, f.recent
           ? { ...f, source: f.foodId ? 'db' : 'custom', id: f.foodId, suggested: f.amount }
-          : { ...f, source: 'db' });
+          : f.branded ? { ...f, source: 'barcode' } : { ...f, source: 'db' });
       };
       list.addEventListener('click', (e) => choose(e.target.closest('li')));
       list.addEventListener('keydown', (e) => e.key === 'Enter' && choose(e.target.closest('li')));

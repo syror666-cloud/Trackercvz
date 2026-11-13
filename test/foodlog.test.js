@@ -10,6 +10,8 @@ const { createNotifier } = require('../src/notify');
 const { createReminders } = require('../src/admin');
 const seed = require('../src/foods-seed');
 const { productFromOff } = require('../src/foodlog');
+const os = require('node:os');
+const { catalogFromLines } = require('../src/catalog');
 
 const OFF = {
   '4000417025005': {
@@ -22,7 +24,7 @@ const OFF = {
   },
 };
 
-async function setup() {
+async function setup({ catalog = null } = {}) {
   const db = openDb(':memory:');
   createUser(db, { username: 'coach', displayName: 'Coach', password: 'coachpass123', role: 'coach' });
   const notifier = createNotifier(db, { subject: 'mailto:t@example.com', fetchImpl: async () => ({ status: 201 }) });
@@ -33,7 +35,7 @@ async function setup() {
     if (code === '99999999') throw new Error('offline');
     return OFF[code] || null;
   };
-  const server = http.createServer(createApp({ db, notifier, reminders, barcodeLookup, publicDir: path.join(__dirname, '..', 'public') }));
+  const server = http.createServer(createApp({ db, notifier, reminders, barcodeLookup, catalog, publicDir: path.join(__dirname, '..', 'public') }));
   await new Promise((r) => server.listen(0, r));
   const base = `http://127.0.0.1:${server.address().port}`;
   const client = () => {
@@ -149,4 +151,43 @@ test('food diary: add from database, barcode and by hand; totals and tracker cal
 test('Open Food Facts mapping', () => {
   const p = productFromOff({ product_name: '  Skyr  ', brands: 'Arla', quantity: '450g', nutriments: { 'energy-kcal_100g': '63', proteins_100g: 11, carbohydrates_100g: 4, fat_100g: 0.2 } });
   assert.deepEqual(p, { name: 'Skyr', brand: 'Arla', kcal: 63, protein: 11, carbs: 4, fat: 0.2, unit: 'g', serving: null });
+});
+
+test('product catalog: barcodes are found offline, brand products by name; typed-in products are remembered', async (t) => {
+  const catalog = catalogFromLines(os.tmpdir(), [
+    '4005906002208\tHigh Protein Pudding Schoko\tEhrmann\t75\t10\t6.2\t1.5\tg\t200\t500',
+    '7350053940009\tProtein Bar Salty Peanut\tBarebells\t369\t36.4\t27\t16\tg\t55\t300',
+    '012345678905\tUPC Snack\tAcme\t500\t5\t60\t25\tg\t\t1',
+  ]);
+  assert.equal(catalog.count, 3);
+  const { server, max, lookups } = await setup({ catalog });
+  t.after(() => server.close());
+  let p = (await max('GET', '/api/barcode/4005906002208')).data.product;
+  assert.equal(p.found, true);
+  assert.equal(p.brand, 'Ehrmann');
+  assert.equal(p.serving, '200 g');
+  assert.equal(lookups.length, 0, 'no online lookup needed');
+  // UPC-A scanned as EAN-13 with a leading zero
+  assert.equal((await max('GET', '/api/barcode/0012345678905')).data.product.name, 'UPC Snack');
+  // search by brand and name, prefix words
+  const hits = (await max('GET', '/api/products?q=ehrm pudd')).data.products;
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].barcode, '4005906002208');
+  assert.equal((await max('GET', '/api/products?q=barebells')).data.products[0].protein, 36.4);
+  assert.deepEqual((await max('GET', '/api/products?q=x')).data.products, []);
+  // unknown everywhere → typed in by the client → known on the next scan
+  assert.equal((await max('GET', '/api/barcode/40000001')).data.product.found, false);
+  const d = today();
+  await max('POST', '/api/foodlog', { date: d, meal: 'snack', barcode: '40000001', name: 'Hofladen-Quark', kcal: 70, protein: 12, carbs: 4, fat: 0.3, amount: 250 });
+  p = (await max('GET', '/api/barcode/40000001')).data.product;
+  assert.equal(p.found, true);
+  assert.equal(p.name, 'Hofladen-Quark');
+});
+
+test('seeded food database contains the fitness basics', () => {
+  const names = new Set(seed.map((f) => f[0]));
+  for (const n of ['Whey-Isolat', 'Magerquark', 'Skyr', 'Proteinbrot', 'Reiswaffeln', 'Shirataki-Nudeln', 'Hähnchenbrust (gegart)', 'Eiklar (flüssig, Packung)']) {
+    assert.ok(names.has(n), n);
+  }
+  assert.ok(seed.filter((f) => f[3] === 'Fitness & Sporternährung').length >= 50);
 });
