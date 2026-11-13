@@ -332,6 +332,22 @@ CREATE TABLE IF NOT EXISTS email_tokens (
 );
 CREATE INDEX IF NOT EXISTS email_tokens_user ON email_tokens (user_id, purpose);
 
+-- Google Health: encrypted refresh token per client, and one-time OAuth states (CSRF + PKCE).
+CREATE TABLE IF NOT EXISTS google_links (
+  user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  refresh_token  TEXT NOT NULL,
+  scopes         TEXT NOT NULL DEFAULT '',
+  connected_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  last_sync_at   TEXT,
+  last_error     TEXT
+);
+CREATE TABLE IF NOT EXISTS google_oauth_states (
+  state_hash  TEXT PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  verifier    TEXT NOT NULL,
+  expires_at  INTEGER NOT NULL
+);
+
 -- Head2Head: two clients challenge each other in one discipline for a fixed time.
 CREATE TABLE IF NOT EXISTS h2h_challenges (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

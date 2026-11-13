@@ -19,6 +19,7 @@ const { emailAuth } = require('./email-auth');
 const { createMailer } = require('./mail');
 const { h2hRoutes } = require('./h2h');
 const { reportRoutes } = require('./reports');
+const { googleHealth } = require('./google-health');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -285,7 +286,7 @@ function parseSteps(value) {
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 // Apple Health import (Shortcuts) is switched off for now; `health: true` turns the routes back on.
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null, googleEnv, googleFetch }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
@@ -323,6 +324,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
          (SELECT last_used_at FROM health_tokens ht WHERE ht.user_id = u.id) AS health_last_used,
          (SELECT COUNT(*) FROM health_tokens ht WHERE ht.user_id = u.id) AS health_linked,
+         (SELECT gl.last_sync_at FROM google_links gl WHERE gl.user_id = u.id AND COALESCE(gl.last_error, '') <> 'revoked') AS google_sync,
+         (SELECT COUNT(*) FROM google_links gl WHERE gl.user_id = u.id AND COALESCE(gl.last_error, '') <> 'revoked') AS google_linked,
          (SELECT COUNT(*) FROM nutrition_requests nr WHERE nr.client_id = u.id AND nr.status = 'open') AS plan_request,
          (SELECT COUNT(*) FROM swap_requests sr WHERE sr.client_id = u.id AND sr.status = 'open') AS open_swaps,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND e.date = :today) AS weight_today
@@ -765,6 +768,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           pushStatus: r.push_status || 'unknown',
           pushDevices: r.push_devices,
           healthLinked: Boolean(r.health_linked),
+          googleLinked: Boolean(r.google_linked),
+          googleSyncAt: r.google_sync || null,
           healthLastUsed: r.health_last_used,
           openSwaps: r.open_swaps,
           planRequest: Boolean(r.plan_request),
@@ -1310,9 +1315,13 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   const achievements = achievementsModule(deps);
   const ai = aiRoutes(deps);
   const nutrition = nutritionRoutes(deps);
+  const google = googleHealth({
+    ...deps, appUrl, reconcileFor: (id) => shop.reconcileFor(id),
+    ...(googleEnv ? { env: googleEnv } : {}), ...(googleFetch ? { fetchImpl: googleFetch } : {}),
+  });
   reports = reportRoutes({ ...deps, mailer, appUrl, planOf: nutrition.planOf, describeProposal, goalsRow, prefsOf });
   shop = shopRoutes({ ...deps, achievements });
-  routes.push(...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

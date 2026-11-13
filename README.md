@@ -30,6 +30,7 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **PDF-Berichte:** Ernährungsplan und Wochen-Check-in als PDF (Download in der App; automatisch per E-Mail an bestätigte Adressen, Check-in mit Kennzahlen im Vergleich zur Vorwoche, Diagrammen und Coach-Kommentar; vom Klienten abbestellbar). Schrift: Inter (SIL OFL, `src/pdf-fonts/`)
 - **Anmelden mit Benutzername oder E-Mail;** Passwort vergessen → Link per E-Mail (nur an bestätigte Adressen)
 - **Ernährungstagebuch** mit Barcode-Scanner: Packung scannen (Kamera, eingebauter `BarcodeDetector` oder mitgeliefertes ZXing unter `public/vendor/`, Apache-2.0) oder Nummer eintippen, aus der Datenbank wählen oder selbst eintragen. Kalorien und Makros pro Tag gegen die Ziele; die Tageskalorien landen automatisch im Tracker. Produktdaten: rund 320.000 Produkte aus DE/AT/CH von [Open Food Facts](https://world.openfoodfacts.org) (ODbL) sind mitgeliefert (`src/data/`, beim ersten Start wird daraus `products.db` im Datenordner gebaut, ca. 50 MB, 2 Sekunden); fehlende Produkte werden online bei Open Food Facts gesucht, notfalls direkt vom Handy aus, und von Klienten eingetragene Produkte für den nächsten Scan gemerkt. Markenprodukte sind auch per Name suchbar. Die Kamera braucht HTTPS
+- **Google Health:** Klienten verbinden ihr Google-Konto (Einstellungen → Google Health); Schritte (Tagessumme) und Schlafdauer (ohne Nickerchen) werden beim Verbinden für 14 Tage und danach alle 2 Stunden übernommen – aus Fitbit, Pixel Watch und Health Connect. Nur lesend, Refresh-Token verschlüsselt gespeichert, jederzeit trennbar
 - **Apple Health:** vorerst deaktiviert (der Code ist noch da; `createApp({ health: true })` schaltet die Import-Schnittstelle wieder ein)
 
 **Coach**
@@ -96,7 +97,19 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `MAIL_FROM` | Absender für E-Mails (Passwort zurücksetzen, Adresse bestätigen), z. B. `StayOnTrack <noreply@mail.stayontrack.cloud>` – die Domain muss bei Resend bestätigt sein. Admin → „E-Mail-Versand“ zeigt den Absender und schickt eine Test-Mail |
 | `RESEND_API_KEY` | E-Mail über [Resend](https://resend.com) (HTTPS, funktioniert auch auf Renders Gratis-Plan, der SMTP-Ports sperrt) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | alternativ: eigener Mailserver (z. B. Brevo, IONOS, Strato, Gmail mit App-Passwort); Port 465 = TLS, 587 = STARTTLS |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | optional: Google Health (Schritte und Schlaf automatisch), siehe unten |
+| `GOOGLE_TOKEN_KEY` | optional: eigener Schlüssel zum Verschlüsseln der Google-Tokens (sonst aus dem Clientschlüssel abgeleitet) |
 | `APP_URL` | Adresse der App für Links in E-Mails, z. B. `https://stayontrack.onrender.com` (auf Render automatisch über `RENDER_EXTERNAL_URL`) |
+
+**Google Health einrichten (Schritte und Schlaf automatisch):**
+1. [console.cloud.google.com](https://console.cloud.google.com) → neues Projekt anlegen (z. B. „StayOnTrack“).
+2. **APIs & Dienste → Bibliothek** → „Google Health API“ suchen → **Aktivieren**.
+3. **Google Auth Platform → Branding:** App-Name „StayOnTrack“, Support-E-Mail, Logo optional, App-Domain `stayontrack.cloud`. **Zielgruppe:** „Extern“, Veröffentlichungsstatus **„In Produktion“** (im Testmodus laufen Verbindungen nach 7 Tagen ab).
+4. **Datenzugriff:** die Bereiche `…/auth/googlehealth.activity_and_fitness.readonly` und `…/auth/googlehealth.sleep.readonly` hinzufügen.
+5. **Clients → Client erstellen:** Typ „Webanwendung“, autorisierte Weiterleitungs-URI `https://<deine-app>/api/google/callback` (genau deine App-Adresse, z. B. die `onrender.com`-Adresse).
+6. Client-ID und Clientschlüssel auf Render als `GOOGLE_CLIENT_ID` und `GOOGLE_CLIENT_SECRET` eintragen. Optional `GOOGLE_TOKEN_KEY` (beliebige lange Zufallszeichenkette) für die Verschlüsselung der gespeicherten Tokens.
+
+Ohne Prüfung durch Google sehen Klienten beim Verbinden den Hinweis „Google hat diese App nicht überprüft“ (→ „Erweitert“ → „Weiter zu StayOnTrack“), und es können höchstens 100 Personen verbunden werden.
 
 **E-Mail einrichten (für „Passwort vergessen“):** Ohne E-Mail-Versand können sich Klienten trotzdem mit ihrer E-Mail-Adresse anmelden; nur das Zurücksetzen per Mail ist dann aus. Am einfachsten: bei Resend ein Konto anlegen, die eigene Domain bestätigen, einen API-Key erzeugen und `RESEND_API_KEY` sowie `MAIL_FROM` (Adresse dieser Domain) setzen. Zurücksetzen geht nur an **bestätigte** Adressen; Links sind 60 Minuten gültig und nur einmal nutzbar.
 

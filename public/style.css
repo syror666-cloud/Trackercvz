@@ -2287,3 +2287,8 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .mail-test input { flex: 1; min-width: 0; }
 .pdf-row { margin: -8px 0 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .coach-pdf { margin: 0; }
+.google-scopes { list-style: none; padding: 0; margin: 10px 0; display: flex; gap: 18px; }
+.google-scopes li.ok span { color: var(--good); font-weight: 700; }
+.google-scopes li.off { color: var(--muted); }
+.google-privacy { margin: 8px 0 14px; }
+.google-privacy summary { cursor: pointer; font-size: 0.9rem; color: var(--brass); }

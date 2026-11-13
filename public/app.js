@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-google-health', date: 'November 2026',
+      client: [
+        ['🔗', 'Google Health verbinden', 'Unter Einstellungen kannst du Google Health verbinden. Dann kommen deine Schritte und dein Schlaf automatisch in den Tracker – von Fitbit, Pixel Watch oder Apps über Health Connect. Kein Abtippen mehr.'],
+      ],
+      coach: [
+        ['🔗', 'Google Health', 'Klienten können Google Health verbinden; Schritte und Schlaf werden alle 2 Stunden übernommen. Im Klientenprofil siehst du, wer verbunden ist. Einrichtung: siehe README (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET).'],
+      ],
+    },
+    {
       id: '2026-11-pdf-reports', date: 'November 2026',
       client: [
         ['📄', 'Berichte als PDF', 'Deinen Ernährungsplan und jeden Wochen-Check-in gibt es jetzt als schön gestaltetes PDF – zum Herunterladen in der App und automatisch per E-Mail. Abbestellen kannst du die Mails unter Einstellungen.'],
@@ -509,7 +518,8 @@
       return renderCoachHome();
     }
     if (location.hash === '#/chat') return renderClientChat();
-    if (location.hash === '#/settings') return renderClientSettings();
+    const settings = location.hash.match(/^#\/settings(?:\/(.+))?$/);
+    if (settings) return renderClientSettings(settings[1]);
     if (location.hash === '#/nutrition') return renderClientNutrition();
     if (location.hash === '#/nutrition/diary') return renderFoodDiary();
     if (location.hash === '#/training' || location.hash === '#/training/history') return renderClientTraining(location.hash === '#/training/history');
@@ -524,7 +534,7 @@
     let current =
       me.role === 'coach'
         ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash.startsWith('#/messages') ? '#/messages' : location.hash === '#/admin' ? '#/admin' : '#/'
-        : location.hash.startsWith('#/training') ? '#/training' : location.hash.startsWith('#/nutrition') ? '#/nutrition' : ['#/chat', '#/settings'].includes(location.hash) ? location.hash : '#/';
+        : location.hash.startsWith('#/training') ? '#/training' : location.hash.startsWith('#/nutrition') ? '#/nutrition' : location.hash.startsWith('#/settings') ? '#/settings' : location.hash === '#/chat' ? '#/chat' : '#/';
     if (location.hash.startsWith('#/account')) current = null; // the account page lives in the profile menu
     nav.innerHTML = links
       .map(
@@ -2159,14 +2169,106 @@
     }
   }
 
+
+  // ---------- Google Health: steps and sleep automatically ----------
+  const GOOGLE_RESULT = {
+    'google-ok': ['Google Health verbunden', 'Schritte und Schlaf kommen jetzt automatisch'],
+    'google-partial': ['Teilweise verbunden', 'Nicht alle Daten sind freigegeben'],
+  };
+  const GOOGLE_ERRORS = {
+    denied: 'Du hast die Freigabe bei Google abgebrochen. Du kannst es jederzeit nochmal versuchen.',
+    state: 'Die Anmeldung bei Google ist abgelaufen. Bitte starte die Verbindung nochmal.',
+    token: 'Google hat die Verbindung nicht bestätigt. Bitte versuch es nochmal.',
+    scopes: 'Ohne Freigabe von Schritten oder Schlaf kann StayOnTrack nichts übernehmen. Wähle bei Google mindestens eins davon aus.',
+    google: 'Google meldet einen Fehler. Bitte versuch es später nochmal.',
+  };
+
+  async function mountGoogleCard(root) {
+    if (!root) return;
+    let st;
+    try {
+      st = await api('GET', '/api/google');
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    if (!st.configured && !st.connected) {
+      root.hidden = true; // not set up on the server: nothing to offer
+      return;
+    }
+    const when = (iso) => (iso ? new Date(iso).toLocaleString((window.I18N ? I18N.locale : 'de-DE'), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'noch nie');
+    const draw = (busy) => {
+      const on = st.connected;
+      root.innerHTML = `
+        <div class="row-between"><h2>Google Health</h2>
+          <span class="badge ${on ? 'good' : st.revoked ? 'bad' : ''}">${on ? 'Verbunden' : st.revoked ? 'Zugriff entzogen' : 'Nicht verbunden'}</span></div>
+        <p class="muted small">Schritte und Schlaf kommen automatisch in deinen Tracker – von deinem Fitbit, deiner Pixel Watch oder aus Apps, die mit Google Health bzw. Health Connect verbunden sind.</p>
+        ${on ? `<ul class="google-scopes">
+            <li class="${st.steps ? 'ok' : 'off'}"><span aria-hidden="true">${st.steps ? '✓' : '–'}</span> Schritte ${st.steps ? '' : '<span class="muted small">(nicht freigegeben)</span>'}</li>
+            <li class="${st.sleep ? 'ok' : 'off'}"><span aria-hidden="true">${st.sleep ? '✓' : '–'}</span> Schlaf ${st.sleep ? '' : '<span class="muted small">(nicht freigegeben)</span>'}</li>
+          </ul>
+          <p class="small muted">Zuletzt abgeglichen: <strong>${esc(when(st.lastSyncAt))}</strong> · automatisch alle 2 Stunden</p>
+          ${st.lastError ? `<p class="small bad">Letzter Abgleich fehlgeschlagen: ${esc(st.lastError)}</p>` : ''}
+          ${!st.steps || !st.sleep ? '<p class="small">Fehlt etwas? <button type="button" class="link-btn" data-google-connect>Freigabe erweitern</button></p>' : ''}
+          <div class="row" style="gap:8px">
+            <button type="button" class="btn-secondary" data-google-sync ${busy ? 'disabled' : ''}>${busy ? 'Gleiche ab…' : 'Jetzt abgleichen'}</button>
+            <button type="button" class="btn-ghost danger-text" data-google-off>Trennen</button>
+          </div>`
+        : `<details class="google-privacy"><summary>Was wird übertragen?</summary>
+            <p class="small muted">Nur deine täglichen <strong>Schritte</strong> und deine <strong>Schlafdauer</strong> (Nickerchen zählen nicht) – lesend, nichts wird bei Google verändert. Werte, die du selbst einträgst, wie Gewicht oder Notizen, bleiben unberührt. Trennen kannst du jederzeit hier oder in deinem Google-Konto.</p></details>
+          ${st.revoked ? '<p class="small bad">Der Zugriff wurde in deinem Google-Konto entfernt. Verbinde dich neu, damit wieder Daten kommen.</p>' : ''}
+          <button type="button" class="btn-primary" data-google-connect>${st.revoked ? 'Neu verbinden' : 'Mit Google Health verbinden'}</button>`}`;
+      root.querySelectorAll('[data-google-connect]').forEach((b) => b.addEventListener('click', async () => {
+        b.disabled = true;
+        try {
+          const { url } = await api('POST', '/api/google/connect');
+          location.href = url;
+        } catch (err) {
+          toast(err.message, true);
+          b.disabled = false;
+        }
+      }));
+      const sync = root.querySelector('[data-google-sync]');
+      if (sync) sync.addEventListener('click', async () => {
+        draw(true);
+        try {
+          const r = await api('POST', '/api/google/sync');
+          st = r.status;
+          savedHud('Abgeglichen', `${r.steps} Tage Schritte · ${r.sleep} Nächte Schlaf`);
+        } catch (err) {
+          toast(err.message, true);
+          st = await api('GET', '/api/google').catch(() => st);
+        }
+        draw(false);
+      });
+      const off = root.querySelector('[data-google-off]');
+      if (off) off.addEventListener('click', async () => {
+        if (!confirm('Google Health trennen? Bereits übertragene Werte bleiben im Tracker.')) return;
+        st = await api('DELETE', '/api/google');
+        toast('Google Health getrennt');
+        draw(false);
+      });
+    };
+    draw(false);
+  }
+
   // ---------- client: settings (push + appearance) ----------
-  async function renderClientSettings() {
+  async function renderClientSettings(sub) {
     setView(`
       <div class="page-head"><div>${eyebrow('Konto')}<h1>Einstellungen</h1></div></div>
       <div class="settings-grid">
+        <section class="card" id="google-card"></section>
         <section class="card" id="push-card"><p class="muted">Lade…</p></section>
         <section class="card" id="prefs-card"></section>
       </div>`);
+    mountGoogleCard(document.getElementById('google-card'));
+    // back from Google: show the result once, then clean up the address
+    if (sub) {
+      const [kind, code] = sub.split('/');
+      if (GOOGLE_RESULT[kind]) savedHud(...GOOGLE_RESULT[kind]);
+      else if (kind === 'google-error') toast(GOOGLE_ERRORS[code] || GOOGLE_ERRORS.google, true);
+      history.replaceState(null, '', '#/settings');
+    }
     mountPushCard(document.getElementById('push-card'), {
       title: 'Push-Benachrichtigungen',
       intro: 'Erinnerungen deines Coaches und neue Chat-Nachrichten direkt aufs Handy.',
@@ -5778,7 +5880,7 @@
       <a class="back" href="#/">← Alle Klienten</a>
       <div class="page-head">
         <div>${eyebrow('Klient')}<h1>${esc(client.displayName)} ${catTag(client.category)}</h1><p class="muted">@${esc(client.username)} · Klient seit ${esc(fmtDate(client.createdAt.slice(0, 10), { month: 'long', year: 'numeric' }))}</p>
-          <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}</div></div>
+          <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}${client.googleLinked ? `<span class="badge good" title="Schritte und Schlaf kommen automatisch">Google Health ✓${client.googleSyncAt ? ` · ${esc(relDay(client.googleSyncAt.slice(0, 10)))}` : ''}</span>` : ''}</div></div>
         <div class="row">
           <a class="btn btn-secondary" href="/api/entries.csv?userId=${id}">CSV exportieren</a>
         </div>

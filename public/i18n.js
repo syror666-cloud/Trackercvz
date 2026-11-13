@@ -578,6 +578,25 @@ Plan als PDF|Plan as PDF|Plan en PDF|Piano in PDF
 PDF herunterladen|Download PDF|Descargar PDF|Scarica PDF
 Plan gesendet|Plan sent|Plan enviado|Piano inviato
 Wochen-Check-in und Ernährungsplan als PDF an deine bestätigte E-Mail-Adresse.|Weekly check-in and nutrition plan as PDF to your confirmed email address.|Check-in semanal y plan de nutrición en PDF a tu correo confirmado.|Check-in settimanale e piano alimentare in PDF al tuo indirizzo confermato.
+Google Health|Google Health|Google Health|Google Health
+Verbunden|Connected|Conectado|Collegato
+Nicht verbunden|Not connected|No conectado|Non collegato
+Zugriff entzogen|Access revoked|Acceso revocado|Accesso revocato
+Mit Google Health verbinden|Connect Google Health|Conectar Google Health|Collega Google Health
+Neu verbinden|Reconnect|Volver a conectar|Ricollega
+Jetzt abgleichen|Sync now|Sincronizar ahora|Sincronizza ora
+Gleiche ab…|Syncing…|Sincronizando…|Sincronizzazione…
+Trennen|Disconnect|Desconectar|Scollega
+Was wird übertragen?|What is shared?|¿Qué se transfiere?|Cosa viene condiviso?
+Freigabe erweitern|Extend access|Ampliar acceso|Estendi l'accesso
+(nicht freigegeben)|(not shared)|(no compartido)|(non condiviso)
+Google Health verbunden|Google Health connected|Google Health conectado|Google Health collegato
+Google Health getrennt|Google Health disconnected|Google Health desconectado|Google Health scollegato
+Abgeglichen|Synced|Sincronizado|Sincronizzato
+Teilweise verbunden|Partly connected|Conectado en parte|Collegato in parte
+Schritte und Schlaf kommen jetzt automatisch|Steps and sleep now arrive automatically|Pasos y sueño llegan ahora automáticamente|Passi e sonno arrivano ora automaticamente
+Nicht alle Daten sind freigegeben|Not all data is shared|No se comparten todos los datos|Non tutti i dati sono condivisi
+Schritte und Schlaf kommen automatisch in deinen Tracker – von deinem Fitbit, deiner Pixel Watch oder aus Apps, die mit Google Health bzw. Health Connect verbunden sind.|Steps and sleep arrive in your tracker automatically – from your Fitbit, Pixel Watch or apps connected to Google Health or Health Connect.|Pasos y sueño llegan solos a tu tracker – desde tu Fitbit, Pixel Watch o apps conectadas a Google Health o Health Connect.|Passi e sonno arrivano da soli nel tracker – da Fitbit, Pixel Watch o app collegate a Google Health o Health Connect.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -646,6 +665,7 @@ noch nie|never|nunca|mai
     [/^(\d+) Head2Head-Siege?$/, W(0, (m) => `${m[1]} Head2Head win${m[1] === '1' ? '' : 's'}`, (m) => `${m[1]} victoria${m[1] === '1' ? '' : 's'} Head2Head`, (m) => `${m[1]} vittori${m[1] === '1' ? 'a' : 'e'} Head2Head`)],
     [/^Der Code ist falsch oder abgelaufen\. Noch (\d) Versuche?\.$/, W(0, (m) => `The code is wrong or expired. ${m[1]} tries left.`, (m) => `Código incorrecto o caducado. Quedan ${m[1]} intentos.`, (m) => `Codice errato o scaduto. Ancora ${m[1]} tentativi.`)],
     [/^Per E-Mail an (.+)$/, W(0, (m) => `Email to ${m[1]}`, (m) => `Enviar a ${m[1]}`, (m) => `Invia a ${m[1]}`)],
+    [/^(\d+) Tage Schritte · (\d+) Nächte Schlaf$/, W(0, (m) => `${m[1]} days of steps · ${m[2]} nights of sleep`, (m) => `${m[1]} días de pasos · ${m[2]} noches de sueño`, (m) => `${m[1]} giorni di passi · ${m[2]} notti di sonno`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],
