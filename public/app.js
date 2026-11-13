@@ -194,6 +194,17 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-h2h-token', date: 'November 2026',
+      client: [
+        ['🪙', 'Head2Head-Sieg = 1 Token', 'Jedes gewonnene Duell bringt dir 1 Token für den Kühlschrank-Shop. Den letzten Tag kannst du noch bis zum nächsten Tag nachtragen, dann steht der Endstand fest.'],
+        ['🔢', 'Passwort vergessen? Jetzt mit Code', 'Du bekommst einen 6-stelligen Code per E-Mail, gibst ihn direkt in der App ein und legst dort dein neues Passwort fest.'],
+      ],
+      coach: [
+        ['🪙', 'Head2Head-Siege bringen Token', 'Jedes gewonnene Duell zählt 1 Token im Shop (Endstand wird einen Tag nach Ende festgeschrieben).'],
+        ['✉️', 'Neues E-Mail-Design, Reset per Code', 'Mails kommen jetzt im StayOnTrack-Look. Zum Zurücksetzen gibt es einen 6-stelligen Code (15 Minuten, 5 Versuche) statt eines Links.'],
+      ],
+    },
+    {
       id: '2026-11-email-h2h', date: 'November 2026',
       client: [
         ['⚔️', 'Head2Head', 'Fordere andere heraus: Schritte, Trainingstage, Schlaf, Kalorienziel oder Gewicht verlieren (in %), 1–4 Wochen. Unter Konto → Head2Head einschalten – nur wer mitmacht, ist sichtbar, und verglichen wird nur die Disziplin des Duells.'],
@@ -445,8 +456,6 @@
 
   function route() {
     // links from e-mails work with or without being logged in
-    const reset = location.hash.match(/^#\/reset\/([a-f0-9]{64})$/);
-    if (reset) return renderResetPassword(reset[1]);
     const verify = location.hash.match(/^#\/verify\/([a-f0-9]{64})$/);
     if (verify) return renderVerifyEmail(verify[1]);
     if (!me) {
@@ -769,59 +778,63 @@
     return authConfig;
   }
 
+  /** Forgot password: step 1 asks for the account, step 2 takes the code from the mail and the new password. */
   function openForgotDialog(prefill) {
     openDialog(`
       <h2>Passwort vergessen?</h2>
-      <p class="muted small" style="margin-top:-6px">Gib deine E-Mail-Adresse oder deinen Benutzernamen ein. Ist bei deinem Konto eine bestätigte E-Mail-Adresse hinterlegt, bekommst du einen Link zum Zurücksetzen.</p>
+      <p class="muted small" style="margin-top:-6px">Gib deine E-Mail-Adresse oder deinen Benutzernamen ein. Du bekommst einen 6-stelligen Code an deine bestätigte E-Mail-Adresse.</p>
       <div class="field"><label for="fg-login">E-Mail oder Benutzername</label>
-        <input id="fg-login" name="login" autocomplete="username" autocapitalize="none" value="${esc(prefill || '')}" required></div>
-      <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Link senden</button></div>`,
+        <input id="fg-login" name="login" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(prefill || '')}" required></div>
+      <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Code senden</button></div>`,
     async (f) => {
-      if (!f.login.value.trim()) throw new Error('Bitte E-Mail-Adresse oder Benutzernamen angeben.');
-      await api('POST', '/api/password/forgot', { login: f.login.value.trim() });
-      openDialog(`
-        <h2>Schau in dein Postfach</h2>
-        <p>Falls ein Konto mit bestätigter E-Mail-Adresse dazu passt, ist der Link unterwegs. Er ist 60 Minuten gültig.</p>
-        <p class="muted small">Nichts angekommen? Schau auch im Spam-Ordner nach. Ohne hinterlegte E-Mail-Adresse kann dir dein Coach ein neues Passwort geben.</p>
-        <div class="dialog-actions"><button type="button" class="btn-primary" data-close>Alles klar</button></div>`, async () => {});
-      return false;
+      const login = f.login.value.trim();
+      if (!login) throw new Error('Bitte E-Mail-Adresse oder Benutzernamen angeben.');
+      await api('POST', '/api/password/forgot', { login });
+      setTimeout(() => openCodeDialog(login), 0);
     });
   }
 
-  function renderResetPassword(token) {
+  function openCodeDialog(login) {
     if (dialog.open) dialog.close();
-    topbar.hidden = true;
-    setView(`
-      <div class="login-wrap single">
-        <form class="card login-card" id="reset-form" novalidate>
-          <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
-          <h2>Neues Passwort festlegen</h2>
-          <div class="field"><label for="rp-1">Neues Passwort</label>
-            <input id="rp-1" name="pw" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mindestens 8 Zeichen</div></div>
-          <div class="field"><label for="rp-2">Wiederholen</label>
-            <input id="rp-2" name="pw2" type="password" autocomplete="new-password" minlength="8" required></div>
-          <button class="btn-primary btn-block" type="submit">Passwort speichern</button>
-          <p class="error" hidden></p>
-          <p class="small" style="text-align:center"><a href="#/">Zur Anmeldung</a></p>
-        </form>
-      </div>`);
-    const form = document.getElementById('reset-form');
-    form.pw.focus();
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const err = form.querySelector('.error');
-      err.hidden = true;
+    openDialog(`
+      <h2>Code eingeben</h2>
+      <p class="muted small" style="margin-top:-6px">Falls ein Konto mit bestätigter E-Mail-Adresse zu <strong>${esc(login)}</strong> passt, ist ein 6-stelliger Code unterwegs. Er ist 15 Minuten gültig – schau auch im Spam-Ordner nach.</p>
+      <div class="field"><label for="rc-code">Code aus der E-Mail</label>
+        <input id="rc-code" name="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" placeholder="••••••" required></div>
+      <div class="field"><label for="rc-pw">Neues Passwort</label>
+        <input id="rc-pw" name="pw" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mindestens 8 Zeichen</div></div>
+      <div class="field"><label for="rc-pw2">Neues Passwort wiederholen</label>
+        <input id="rc-pw2" name="pw2" type="password" autocomplete="new-password" minlength="8" required></div>
+      <p class="small"><button type="button" class="link-btn" data-resend>Keinen Code bekommen? Neuen senden</button></p>
+      <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Passwort ändern</button></div>`,
+    async (f) => {
+      const code = f.code.value.replace(/\D/g, '');
+      if (code.length !== 6) throw new Error('Der Code hat 6 Ziffern.');
+      if (f.pw.value.length < 8) throw new Error('Das Passwort braucht mindestens 8 Zeichen.');
+      if (f.pw.value !== f.pw2.value) throw new Error('Die beiden Passwörter stimmen nicht überein.');
+      const r = await api('POST', '/api/password/reset', { login, code, password: f.pw.value });
+      if (r.user) {
+        me = r.user;
+        whatsNewChecked = false;
+        applyPrefs(me.prefs);
+        location.hash = '#/';
+        route();
+        savedHud('Passwort geändert', 'Du bist angemeldet');
+        setTimeout(maybeShowWhatsNew, 900);
+      }
+    });
+    const f = dialog.querySelector('form');
+    f.code.addEventListener('input', () => {
+      const d = f.code.value.replace(/\D/g, '').slice(0, 6);
+      if (f.code.value !== d) f.code.value = d;
+      if (d.length === 6) f.pw.focus();
+    });
+    f.querySelector('[data-resend]').addEventListener('click', async () => {
       try {
-        if (form.pw.value.length < 8) throw new Error('Das Passwort braucht mindestens 8 Zeichen.');
-        if (form.pw.value !== form.pw2.value) throw new Error('Die beiden Passwörter stimmen nicht überein.');
-        const r = await api('POST', '/api/password/reset', { token, password: form.pw.value });
-        me = null;
-        history.replaceState(null, '', '#/');
-        savedHud('Passwort gespeichert', 'Melde dich jetzt an');
-        renderLogin(r.username);
-      } catch (ex) {
-        err.textContent = ex.message;
-        err.hidden = false;
+        await api('POST', '/api/password/forgot', { login });
+        toast('Neuer Code ist unterwegs.');
+      } catch (err) {
+        toast(err.message, true);
       }
     });
   }
@@ -945,7 +958,8 @@
       const left = c.days - c.dayOf;
       body = `${h2hScore(c, m)}<p class="muted small h2h-meta">${c.status === 'running'
         ? `Tag ${c.dayOf} von ${c.days} · ${left ? `noch ${left} ${left === 1 ? 'Tag' : 'Tage'}` : 'letzter Tag'}`
-        : `Beendet am ${esc(fmtDate(c.endDate, { day: 'numeric', month: 'long' }))}`}</p>`;
+        : c.final ? `Beendet am ${esc(fmtDate(c.endDate, { day: 'numeric', month: 'long' }))}${c.token ? ' · <span class="coin-inline"><i class="coin" aria-hidden="true"></i> +1 Token</span>' : ''}`
+          : 'Vorbei – bis morgen könnt ihr den letzten Tag noch nachtragen, dann steht der Endstand fest.'}</p>`;
       if (link) actions = `<a class="btn btn-secondary btn-sm" href="#/account/h2h/${c.id}">Verlauf ansehen</a>`;
     } else {
       body = `<p class="muted small">${{ declined: 'Abgelehnt', cancelled: 'Zurückgezogen', expired: 'Nicht beantwortet – abgelaufen' }[c.status]}</p>`;
@@ -1029,7 +1043,7 @@
       root.innerHTML = `<section class="card h2h-intro">
         <p class="h2h-hero" aria-hidden="true">⚔️</p>
         <h2>Head2Head</h2>
-        <p>Fordere andere Klienten heraus – Schritte, Trainingstage, Schlaf, Kalorienziel oder Gewicht verlieren – für 1, 2 oder 4 Wochen. Wer am Ende vorne liegt, gewinnt.</p>
+        <p>Fordere andere Klienten heraus – Schritte, Trainingstage, Schlaf, Kalorienziel oder Gewicht verlieren – für 1, 2 oder 4 Wochen. Wer am Ende vorne liegt, gewinnt – und bekommt 1 Token für den Kühlschrank-Shop.</p>
         <ul class="h2h-privacy small">
           <li>Andere sehen nur deinen Namen <strong>${esc(me.displayName)}</strong> und dein Profilbild.</li>
           <li>In einem Duell wird nur die gewählte Disziplin verglichen – und nur für dessen Dauer.</li>
@@ -5117,6 +5131,7 @@
         <div class="fame-bar fame-bar-total" aria-hidden="true"><span style="width:${Math.round((s.earned / s.total) * 100)}%"></span></div>
         <ul class="fame-tally">
           ${['gold', 'silver', 'bronze'].map((l) => `<li><span class="tally-dot tier-${l}"></span>${s[l]} ${TIER_NAMES[l]} <span class="muted small">(je ${{ gold: 3, silver: 2, bronze: 1 }[l]} Token)</span></li>`).join('')}
+          ${s.h2hWins ? `<li><span aria-hidden="true">⚔️</span> ${s.h2hWins} Head2Head-${s.h2hWins === 1 ? 'Sieg' : 'Siege'} <span class="muted small">(je 1 Token)</span></li>` : ''}
         </ul>
         ${upcoming.length ? `<div class="fame-next"><h3>Fast geschafft</h3><ul>${upcoming.map(({ a, t }) => `
           <li><span class="tally-dot tier-${t.level}"></span><span class="fn-text"><b>${esc(a.title)} ${TIER_NAMES[t.level]}</b> · noch ${esc(fmtGoal(a, t.goal - a.current))} ${esc(a.unit)}</span><span class="fame-pct">${t.progress} %</span></li>`).join('')}</ul></div>` : ''}

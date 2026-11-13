@@ -553,6 +553,17 @@ Kampfansage|Trash talk|Provocación|Provocazione
 Startet, sobald die Herausforderung angenommen wird. Unbeantwortet verfällt sie nach 7 Tagen.|Starts as soon as the challenge is accepted. Unanswered, it expires after 7 days.|Empieza en cuanto se acepta. Sin respuesta caduca a los 7 días.|Inizia appena viene accettata. Senza risposta scade dopo 7 giorni.
 Nicht beantwortet – abgelaufen|Not answered – expired|Sin respuesta – caducado|Senza risposta – scaduta
 Sehen dein Coach und – weil Head2Head an ist – andere Head2Head-Spieler.|Seen by your coach and – since Head2Head is on – other Head2Head players.|Lo ven tu coach y – al tener Head2Head activo – otros jugadores.|Lo vedono il coach e – con Head2Head attivo – gli altri giocatori.
+Code senden|Send code|Enviar código|Invia codice
+Code eingeben|Enter code|Introducir código|Inserisci codice
+Code aus der E-Mail|Code from the email|Código del correo|Codice dall'e-mail
+Neues Passwort wiederholen|Repeat new password|Repetir nueva contraseña|Ripeti nuova password
+Keinen Code bekommen? Neuen senden|No code? Send a new one|¿No llegó? Enviar otro|Nessun codice? Invia di nuovo
+Neuer Code ist unterwegs.|A new code is on its way.|Un nuevo código está en camino.|Un nuovo codice è in arrivo.
+Der Code hat 6 Ziffern.|The code has 6 digits.|El código tiene 6 dígitos.|Il codice ha 6 cifre.
+Du bist angemeldet|You're logged in|Has iniciado sesión|Hai effettuato l'accesso
++1 Token|+1 token|+1 token|+1 token
+Gib deine E-Mail-Adresse oder deinen Benutzernamen ein. Du bekommst einen 6-stelligen Code an deine bestätigte E-Mail-Adresse.|Enter your email or username. You'll get a 6-digit code at your confirmed email address.|Introduce tu correo o usuario. Recibirás un código de 6 dígitos en tu correo confirmado.|Inserisci e-mail o nome utente. Riceverai un codice di 6 cifre all'indirizzo confermato.
+Vorbei – bis morgen könnt ihr den letzten Tag noch nachtragen, dann steht der Endstand fest.|Over – you can still log the last day until tomorrow, then the final score is set.|Terminado – podéis registrar el último día hasta mañana; luego el resultado es definitivo.|Finito – potete registrare l'ultimo giorno fino a domani, poi il risultato è definitivo.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -618,6 +629,8 @@ noch nie|never|nunca|mai
     [/^Tag (\d+) von (\d+) · letzter Tag$/, W(0, (m) => `Day ${m[1]} of ${m[2]} · last day`, (m) => `Día ${m[1]} de ${m[2]} · último día`, (m) => `Giorno ${m[1]} di ${m[2]} · ultimo giorno`)],
     [/^(.+) führt$/, W(0, (m) => `${m[1]} is ahead`, (m) => `${m[1]} va ganando`, (m) => `${m[1]} è in vantaggio`)],
     [/^(.+) · (\d) Wochen?$/, null],
+    [/^(\d+) Head2Head-Siege?$/, W(0, (m) => `${m[1]} Head2Head win${m[1] === '1' ? '' : 's'}`, (m) => `${m[1]} victoria${m[1] === '1' ? '' : 's'} Head2Head`, (m) => `${m[1]} vittori${m[1] === '1' ? 'a' : 'e'} Head2Head`)],
+    [/^Der Code ist falsch oder abgelaufen\. Noch (\d) Versuche?\.$/, W(0, (m) => `The code is wrong or expired. ${m[1]} tries left.`, (m) => `Código incorrecto o caducado. Quedan ${m[1]} intentos.`, (m) => `Codice errato o scaduto. Ancora ${m[1]} tentativi.`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

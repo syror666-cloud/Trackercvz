@@ -2274,3 +2274,7 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .h2h-home-score { margin-left: auto; font: 600 1rem var(--font-display); font-variant-numeric: tabular-nums; }
 .h2h-home-score.me { color: var(--good); }
 @media (prefers-reduced-motion: reduce) { .h2h-tug i { transition: none; } }
+.coin-inline { white-space: nowrap; font-weight: 600; color: var(--text); }
+.coin-inline .coin { vertical-align: -2px; }
+.code-input { font: 600 1.6rem/1 var(--font-display); letter-spacing: 0.45em; text-align: center; font-variant-numeric: tabular-nums; padding-left: 0.45em; }
+.code-input::placeholder { letter-spacing: 0.45em; color: var(--line); }

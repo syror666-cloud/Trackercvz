@@ -20,6 +20,7 @@ const METRICS = {
 const DURATIONS = [7, 14, 28];
 const PENDING_DAYS = 7; // an unanswered challenge expires
 const MAX_OPEN = 5;
+const GRACE_DAYS = 1; // the last day can still be logged the next day; then the result is final
 
 const dayNum = (s) => Math.round(Date.parse(`${s}T00:00:00Z`) / 864e5);
 const dayStr = (n) => new Date(n * 864e5).toISOString().slice(0, 10);
@@ -38,8 +39,9 @@ function h2hRoutes({ db, notifier, HttpError, readBody, textField, requireUser, 
     accept: db.prepare("UPDATE h2h_challenges SET status = 'active', start_date = ?, end_date = ?, responded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"),
     setStatus: db.prepare("UPDATE h2h_challenges SET status = ?, responded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"),
     cancelPendingOf: db.prepare("UPDATE h2h_challenges SET status = 'cancelled' WHERE status = 'pending' AND (challenger_id = ? OR opponent_id = ?)"),
-    ended: db.prepare("SELECT * FROM h2h_challenges WHERE status = 'active' AND end_date < ? AND ended_notified = 0"),
-    markNotified: db.prepare('UPDATE h2h_challenges SET ended_notified = 1 WHERE id = ?'),
+    toFreeze: db.prepare("SELECT * FROM h2h_challenges WHERE status = 'active' AND end_date < ? AND frozen_at IS NULL"),
+    freeze: db.prepare(`UPDATE h2h_challenges SET final_challenger = ?, final_opponent = ?, winner_id = ?, ended_notified = 1,
+      frozen_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ? AND frozen_at IS NULL`),
     // data for the disciplines
     entries: db.prepare('SELECT * FROM entries WHERE user_id = ? AND date BETWEEN ? AND ? ORDER BY date'),
     weightBefore: db.prepare('SELECT weight FROM entries WHERE user_id = ? AND weight IS NOT NULL AND date < ? AND date >= ? ORDER BY date DESC LIMIT 1'),
@@ -121,10 +123,19 @@ function h2hRoutes({ db, notifier, HttpError, readBody, textField, requireUser, 
       const b = series(themId, c.metric, c.start_date, c.end_date);
       out.me.value = a.length ? a[a.length - 1].value : 0;
       out.them.value = b.length ? b[b.length - 1].value : 0;
+      if (c.frozen_at) {
+        // the final score, no longer changed by corrected entries
+        out.me.value = meId === c.challenger_id ? c.final_challenger : c.final_opponent;
+        out.them.value = meId === c.challenger_id ? c.final_opponent : c.final_challenger;
+      }
       const mv = out.me.value ?? -Infinity;
       const tv = out.them.value ?? -Infinity;
       out.leader = mv === tv ? 'tie' : mv > tv ? 'me' : 'them';
-      if (status === 'finished') out.result = out.leader === 'tie' ? 'draw' : out.leader === 'me' ? 'won' : 'lost';
+      if (status === 'finished') {
+        out.result = out.leader === 'tie' ? 'draw' : out.leader === 'me' ? 'won' : 'lost';
+        out.final = Boolean(c.frozen_at);
+        out.token = out.final && out.result === 'won';
+      }
       out.dayOf = Math.min(c.days, dayNum(today()) - dayNum(c.start_date) + 1);
       if (withSeries) out.series = { me: a, them: b };
     }
@@ -132,6 +143,7 @@ function h2hRoutes({ db, notifier, HttpError, readBody, textField, requireUser, 
   }
 
   function record(userId) {
+    notifyEnded();
     const r = { won: 0, lost: 0, draw: 0 };
     for (const c of q.mine.all(userId, userId)) {
       if (statusOf(c) !== 'finished') continue;
@@ -140,16 +152,22 @@ function h2hRoutes({ db, notifier, HttpError, readBody, textField, requireUser, 
     return r;
   }
 
-  /** Both players get a push when a duel ends (checked regularly and on every visit). */
+  /**
+   * One day after a duel ends its score is written down for good: the winner gets 1 token for the shop,
+   * and both players get a push with the result. Checked regularly and on every visit.
+   */
   function notifyEnded() {
-    for (const c of q.ended.all(today())) {
-      q.markNotified.run(c.id);
+    const cutoff = dayStr(dayNum(today()) - GRACE_DAYS);
+    for (const c of q.toFreeze.all(cutoff)) {
+      const v = view(c, c.challenger_id);
+      const winner = v.leader === 'me' ? c.challenger_id : v.leader === 'them' ? c.opponent_id : null;
+      if (!q.freeze.run(v.me.value, v.them.value, winner, c.id).changes) continue;
       for (const uid of [c.challenger_id, c.opponent_id]) {
-        const v = view(c, uid);
-        const title = v.result === 'won' ? '🏆 Head2Head gewonnen!' : v.result === 'draw' ? '🤝 Head2Head unentschieden' : '⚔️ Head2Head vorbei';
+        const w = view(q.one.get(c.id), uid);
+        const title = w.result === 'won' ? '🏆 Head2Head gewonnen – +1 Token!' : w.result === 'draw' ? '🤝 Head2Head unentschieden' : '⚔️ Head2Head vorbei';
         notifier.sendToUsers([uid], {
           title,
-          body: `${METRICS[c.metric].label} gegen ${v.them.displayName}: ${v.me.value ?? '–'} zu ${v.them.value ?? '–'}`,
+          body: `${METRICS[c.metric].label} gegen ${w.them.displayName}: ${w.me.value ?? '–'} zu ${w.them.value ?? '–'}`,
           url: `/#/account/h2h/${c.id}`,
         }).catch(() => {});
       }

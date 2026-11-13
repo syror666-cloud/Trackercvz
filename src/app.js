@@ -604,8 +604,18 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     }
   }
 
+  /** New login session for u (cookie on this response). */
+  function startSession(ctx, u) {
+    q.deleteExpiredSessions.run(Date.now());
+    const token = crypto.randomBytes(32).toString('hex');
+    q.insertSession.run(sha256(token), u.id, Date.now() + SESSION_MS);
+    q.insertLogin.run(u.id);
+    ctx.res.setHeader('Set-Cookie', cookie(token, SESSION_MS / 1000));
+    return publicUser(u);
+  }
+
   const mail = emailAuth({
-    db, HttpError, readBody, requireUser, clientIp, validatePassword,
+    db, HttpError, readBody, requireUser, clientIp, validatePassword, startSession,
     mailer: mailer || createMailer({}), appUrl,
   });
 
@@ -625,12 +635,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       }
       loginAttempts.delete(`ip:${ip}`);
       loginAttempts.delete(`user:${name}`);
-      q.deleteExpiredSessions.run(Date.now());
-      const token = crypto.randomBytes(32).toString('hex');
-      q.insertSession.run(sha256(token), u.id, Date.now() + SESSION_MS);
-      q.insertLogin.run(u.id);
-      ctx.res.setHeader('Set-Cookie', cookie(token, SESSION_MS / 1000));
-      return { user: publicUser(u) };
+      return { user: startSession(ctx, u) };
     }],
 
     ['POST', /^\/api\/logout$/, async (ctx) => {

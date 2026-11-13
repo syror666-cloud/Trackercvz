@@ -79,28 +79,43 @@ test('e-mail: confirm, log in with it, reset a forgotten password', async (t) =>
   assert.deepEqual((await anon('POST', '/api/password/forgot', { login: 'nobody@example.com' })).data, { ok: true });
   await tick();
   assert.equal(outbox.length, 1);
-  // by username works too
+  // by username works too → a 6-digit code, no link
   assert.equal((await anon('POST', '/api/password/forgot', { login: 'max' })).status, 200);
   await tick();
   assert.equal(outbox.length, 2);
-  assert.equal(outbox[1].subject, 'Passwort zurücksetzen');
-  const token = tokenIn(outbox[1], 'reset');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM email_tokens WHERE token_hash = ?').get(token).n, 0, 'only the hash is stored');
-  assert.equal((await anon('POST', '/api/password/reset', { token, password: 'kurz' })).status, 400);
-  const r = await anon('POST', '/api/password/reset', { token, password: 'neuesPasswort1' });
+  const code = outbox[1].text.match(/Dein Code: (\d{6})/)[1];
+  assert.equal(outbox[1].subject, `${code} ist dein StayOnTrack-Code`);
+  assert.doesNotMatch(outbox[1].text + outbox[1].html, /#\/reset\//);
+  assert.match(outbox[1].html, new RegExp(code.split('').map((d) => `>${d}<`).join('[\\s\\S]*')));
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM email_tokens WHERE purpose = 'reset' AND token_hash LIKE ?").get(`%${code}%`).n, 0, 'only a hash is stored');
+  const wrongCode = code === '000000' ? '111111' : '000000';
+  assert.equal((await anon('POST', '/api/password/reset', { login: 'max@example.com', code, password: 'kurz' })).status, 400);
+  let r = await anon('POST', '/api/password/reset', { login: 'max', code: wrongCode, password: 'neuesPasswort1' });
+  assert.match(r.data.error, /Noch 4 Versuche/);
+  // unknown accounts: same answer
+  assert.match((await anon('POST', '/api/password/reset', { login: 'niemand', code, password: 'neuesPasswort1' })).data.error, /falsch oder abgelaufen/);
+  r = await anon('POST', '/api/password/reset', { login: 'Max@Example.com', code, password: 'neuesPasswort1' });
   assert.equal(r.status, 200);
-  assert.equal(r.data.username, 'max');
-  assert.equal((await anon('POST', '/api/password/reset', { token, password: 'nochEinPasswort' })).status, 400, 'one-time');
-  // all sessions ended, new password works, old doesn't
+  assert.equal(r.data.user.username, 'max', 'logged in right away');
+  assert.equal((await anon('GET', '/api/me')).status, 200);
+  assert.equal((await anon('POST', '/api/password/reset', { login: 'max', code, password: 'nochEinPasswort' })).status, 400, 'one-time');
+  // other sessions ended, new password works, old doesn't
   assert.equal((await max('GET', '/api/me')).status, 401);
   assert.equal((await client()('POST', '/api/login', { username: 'max', password: 'maxpass123' })).status, 401);
   await login('max@example.com', 'neuesPasswort1');
-  // expired link
+  // 5 wrong tries burn the code
+  await anon('POST', '/api/password/forgot', { login: 'max' });
+  await tick();
+  const code2 = outbox[2].text.match(/Dein Code: (\d{6})/)[1];
+  const bad = code2 === '000000' ? '111111' : '000000';
+  for (let k = 0; k < 4; k++) await anon('POST', '/api/password/reset', { login: 'max', code: bad, password: 'abcdefgh1' });
+  assert.match((await anon('POST', '/api/password/reset', { login: 'max', code: bad, password: 'abcdefgh1' })).data.error, /Zu viele Fehlversuche/);
+  assert.equal((await anon('POST', '/api/password/reset', { login: 'max', code: code2, password: 'abcdefgh1' })).status, 400, 'burnt');
+  // expired code
   await anon('POST', '/api/password/forgot', { login: 'max' });
   await tick();
   db.prepare('UPDATE email_tokens SET expires_at = 1').run();
-  assert.match((await anon('POST', '/api/password/reset', { token: tokenIn(outbox[2], 'reset'), password: 'abcdefgh1' })).data.error, /abgelaufen/);
-  assert.equal((await anon('POST', '/api/password/reset', { token: 'abc', password: 'abcdefgh1' })).status, 400);
+  assert.match((await anon('POST', '/api/password/reset', { login: 'max', code: outbox[3].text.match(/Dein Code: (\d{6})/)[1], password: 'abcdefgh1' })).data.error, /abgelaufen/);
   void id;
 });
 
@@ -183,16 +198,32 @@ test('head2head: opt in, challenge, accept, compare, finish', async (t) => {
   // the coach can look (read-only)
   assert.equal((await coach('GET', `/api/h2h/${c.id}?userId=${maxId}`)).data.challenge.me.value, 12000);
   // time passes: the duel ends, both get a push
-  db.prepare("UPDATE h2h_challenges SET start_date = date(start_date, '-8 days'), end_date = date(end_date, '-8 days')").run();
+  db.prepare("UPDATE h2h_challenges SET start_date = date(start_date, '-7 days'), end_date = date(end_date, '-7 days')").run();
   db.prepare("UPDATE entries SET date = date(date, '-5 days')").run();
   h = (await max('GET', '/api/h2h')).data;
+  assert.equal(h.challenges[0].status, 'finished');
+  assert.equal(h.challenges[0].final, false, 'yesterday ended: the last day can still be logged');
+  assert.equal(h.record.won, 1);
+  assert.equal((await max('GET', '/api/achievements')).data.summary.h2hWins, 0);
+  db.prepare("UPDATE h2h_challenges SET start_date = date(start_date, '-1 days'), end_date = date(end_date, '-1 days')").run();
+  h = (await max('GET', '/api/h2h')).data;
+  assert.equal(h.challenges[0].final, true);
+  assert.equal(h.challenges[0].token, true);
   assert.equal(h.challenges[0].status, 'finished');
   assert.equal(h.challenges[0].result, 'won');
   assert.deepEqual(h.record, { won: 1, lost: 0, draw: 0 });
   assert.deepEqual((await jana('GET', '/api/h2h')).data.record, { won: 0, lost: 1, draw: 0 });
   const ends = pushes.filter((p) => /Head2Head/.test(p.payload.title) && p.payload.url.endsWith(`/${c.id}`) && !/Herausforderung/.test(p.payload.title));
   assert.deepEqual(ends.map((p) => p.ids[0]).sort(), [maxId, janaId].sort());
-  assert.equal(ends.find((p) => p.ids[0] === maxId).payload.title, '🏆 Head2Head gewonnen!');
+  assert.equal(ends.find((p) => p.ids[0] === maxId).payload.title, '🏆 Head2Head gewonnen – +1 Token!');
+  // the win is worth 1 token in the shop; the final score no longer changes with corrected entries
+  const shop = (await max('GET', '/api/shop')).data;
+  const ach = (await max('GET', '/api/achievements')).data.summary;
+  assert.equal(ach.h2hWins, 1);
+  assert.equal(shop.balance.earned, ach.medalTokens + 1);
+  assert.equal((await jana('GET', '/api/achievements')).data.summary.h2hWins, 0);
+  db.prepare('UPDATE entries SET steps = 1 WHERE user_id = ?').run(maxId);
+  assert.equal((await max('GET', `/api/h2h/${c.id}`)).data.challenge.me.value, 12000);
   // opting out cancels open challenges
   const c2 = (await jana('POST', '/api/h2h', { opponentId: maxId, metric: 'weight_loss', days: 14 })).data.challenge;
   await max('PUT', '/api/h2h/visible', { visible: false });

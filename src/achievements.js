@@ -105,6 +105,8 @@ function achievementsModule({ db, targetClient }) {
       `SELECT w.id, w.date, s.exercise_key, s.weight, s.reps FROM workouts w JOIN workout_sets s ON s.workout_id = w.id
        WHERE w.client_id = ? ORDER BY w.date, w.id`
     ),
+    // Head2Head: every won duel (final score) is worth 1 token
+    h2hWins: db.prepare('SELECT COUNT(*) AS n FROM h2h_challenges WHERE winner_id = ? AND frozen_at IS NOT NULL'),
     checkins: db.prepare(
       "SELECT substr(accepted_at, 1, 10) AS date FROM checkins WHERE client_id = ? AND status = 'accepted' AND accepted_at IS NOT NULL ORDER BY accepted_at"
     ),
@@ -164,7 +166,7 @@ function achievementsModule({ db, targetClient }) {
       return { key: a.key, icon: a.icon, title: a.title, unit: a.unit, current, running: a.best ? running : undefined, tiers };
     });
     const all = list.flatMap((a) => a.tiers);
-    return {
+    const out = {
       achievements: list,
       summary: {
         earned: all.filter((t) => t.achievedAt).length,
@@ -173,9 +175,13 @@ function achievementsModule({ db, targetClient }) {
         silver: list.filter((a) => a.tiers[1].achievedAt).length,
         gold: list.filter((a) => a.tiers[2].achievedAt).length,
         // shop currency: bronze 1, silver 2, gold 3 tokens
-        tokens: list.reduce((sum, a) => sum + a.tiers.reduce((t, tier, i) => t + (tier.achievedAt ? TOKENS[i] : 0), 0), 0),
+        medalTokens: list.reduce((sum, a) => sum + a.tiers.reduce((t, tier, i) => t + (tier.achievedAt ? TOKENS[i] : 0), 0), 0),
+        h2hWins: q.h2hWins.get(clientId).n,
       },
     };
+    // shop currency: bronze 1, silver 2, gold 3 tokens per medal, plus 1 per won Head2Head duel
+    out.summary.tokens = out.summary.medalTokens + out.summary.h2hWins;
+    return out;
   }
 
   return {

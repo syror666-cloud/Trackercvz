@@ -4,9 +4,10 @@
  * E-mail address per account: log in with it, confirm it, reset a forgotten password.
  *
  * Security:
- *  - links carry a random 256-bit token; only its SHA-256 hash is stored; one-time use
- *  - reset links expire after 60 minutes, confirmation links after 7 days
- *  - a reset mail only goes to a CONFIRMED address (a typo can't hand an account to a stranger)
+ *  - password reset: a 6-digit code by mail, typed into the app together with the new password;
+ *    valid 15 minutes, at most 5 tries, then a new code is needed; only a salted hash is stored
+ *  - address confirmation: a link with a random 256-bit token (hash stored), valid 7 days, one-time use
+ *  - a reset code only goes to a CONFIRMED address (a typo can't hand an account to a stranger)
  *  - "forgot password" answers the same whether or not the account exists (no enumeration),
  *    and is rate-limited per address and per account
  *  - changing the own address needs the current password; a reset ends all sessions
@@ -14,14 +15,15 @@
 
 const crypto = require('node:crypto');
 const { hashPassword, verifyPassword } = require('./db');
-const { mailBody } = require('./mail');
+const { renderMail } = require('./mail');
 
-const RESET_MS = 60 * 60 * 1000;
+const RESET_MS = 15 * 60 * 1000;
+const RESET_TRIES = 5;
 const VERIFY_MS = 7 * 24 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@<>()[\],;:"]{1,64}@[^\s@<>()[\],;:"]{1,253}\.[^\s@<>()[\],;:"]{2,63}$/;
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clientIp, validatePassword, log = console }) {
+function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clientIp, validatePassword, startSession, log = console }) {
   const enabled = Boolean(mailer && mailer.enabled && appUrl);
   const base = appUrl ? appUrl.replace(/\/+$/, '') : '';
   const q = {
@@ -34,6 +36,8 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
     dropSessions: db.prepare('DELETE FROM sessions WHERE user_id = ?'),
     insertToken: db.prepare('INSERT INTO email_tokens (token_hash, user_id, purpose, email, expires_at) VALUES (?, ?, ?, ?, ?)'),
     token: db.prepare('SELECT * FROM email_tokens WHERE token_hash = ? AND purpose = ?'),
+    resetOf: db.prepare("SELECT * FROM email_tokens WHERE user_id = ? AND purpose = 'reset' AND used_at IS NULL ORDER BY expires_at DESC LIMIT 1"),
+    failTry: db.prepare('UPDATE email_tokens SET attempts = attempts + 1 WHERE token_hash = ?'),
     useToken: db.prepare('UPDATE email_tokens SET used_at = ? WHERE token_hash = ?'),
     dropTokens: db.prepare('DELETE FROM email_tokens WHERE user_id = ? AND purpose = ? AND used_at IS NULL'),
     pruneTokens: db.prepare('DELETE FROM email_tokens WHERE expires_at < ?'),
@@ -69,6 +73,23 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
     return token;
   }
 
+  /** 6-digit reset code; stored as "salt:hash" so the same code for two people never collides. */
+  function newResetCode(userId, email) {
+    q.pruneTokens.run(Date.now());
+    q.dropTokens.run(userId, 'reset');
+    const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
+    const salt = crypto.randomBytes(16).toString('hex');
+    q.insertToken.run(`${salt}:${sha256(`${salt}:${code}`)}`, userId, 'reset', email, Date.now() + RESET_MS);
+    return code;
+  }
+  function codeMatches(row, code) {
+    const [salt, hash] = row.token_hash.split(':');
+    if (!salt || !hash) return false;
+    const a = Buffer.from(sha256(`${salt}:${code}`), 'hex');
+    const b = Buffer.from(hash, 'hex');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
+
   function useToken(token, purpose) {
     if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new HttpError(400, 'Dieser Link ist ungültig.');
     const t = q.token.get(sha256(token), purpose);
@@ -85,12 +106,16 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
   function sendVerify(user, email) {
     if (!enabled || !email) return false;
     const token = newToken(user.id, 'verify', email, VERIFY_MS);
-    const { text, html } = mailBody({
-      greeting: `Hallo ${user.display_name},`,
-      lines: ['bitte bestätige, dass diese E-Mail-Adresse zu deinem StayOnTrack-Konto gehört. Damit kannst du dich auch mit ihr anmelden und ein vergessenes Passwort zurücksetzen.'],
-      button: 'E-Mail-Adresse bestätigen',
-      link: `${base}/#/verify/${token}`,
-      footer: 'Der Link ist 7 Tage gültig. Du hast das nicht veranlasst? Dann ignoriere diese Mail einfach.',
+    const { text, html } = renderMail({
+      appUrl: base,
+      preheader: 'Ein Klick, dann kannst du dich auch mit dieser Adresse anmelden.',
+      title: 'Bestätige deine E-Mail-Adresse',
+      paragraphs: [
+        `Hallo ${user.display_name},`,
+        'bitte bestätige, dass diese Adresse zu deinem StayOnTrack-Konto gehört. Danach kannst du dich auch mit ihr anmelden und ein vergessenes Passwort selbst zurücksetzen.',
+      ],
+      button: { label: 'E-Mail-Adresse bestätigen', link: `${base}/#/verify/${token}` },
+      note: 'Der Link ist 7 Tage gültig. Du hast das nicht veranlasst? Dann ignoriere diese Mail einfach – es passiert nichts.',
     });
     deliver({ to: email, subject: 'Bitte bestätige deine E-Mail-Adresse', text, html });
     return true;
@@ -129,31 +154,52 @@ function emailAuth({ db, HttpError, readBody, requireUser, mailer, appUrl, clien
       if (limited(`ip:${clientIp(ctx.req)}`, 5, 15 * 60 * 1000)) throw new HttpError(429, 'Zu viele Anfragen. Bitte in 15 Minuten erneut versuchen.');
       const u = findForLogin(key);
       if (u && u.email && u.email_verified && !limited(`acct:${u.id}`, 3, 60 * 60 * 1000)) {
-        const token = newToken(u.id, 'reset', u.email, RESET_MS);
-        const { text, html } = mailBody({
-          greeting: `Hallo ${u.display_name},`,
-          lines: ['jemand – hoffentlich du – möchte das Passwort für dein StayOnTrack-Konto zurücksetzen.', `Dein Benutzername: ${u.username}`],
-          button: 'Neues Passwort festlegen',
-          link: `${base}/#/reset/${token}`,
-          footer: 'Der Link ist 60 Minuten gültig und funktioniert nur einmal. Du warst das nicht? Dann ignoriere diese Mail – dein Passwort bleibt unverändert.',
+        const code = newResetCode(u.id, u.email);
+        const { text, html } = renderMail({
+          appUrl: base,
+          preheader: `Dein Code: ${code} – 15 Minuten gültig.`,
+          title: 'Dein Code zum Zurücksetzen',
+          paragraphs: [
+            `Hallo ${u.display_name},`,
+            'du möchtest ein neues Passwort für StayOnTrack festlegen. Gib diesen Code in der App ein:',
+          ],
+          code,
+          codeHint: `15 Minuten gültig · Benutzername: ${u.username}`,
+          note: 'Gib den Code niemandem weiter – auch nicht deinem Coach. Du hast das nicht angefordert? Dann ignoriere diese Mail, dein Passwort bleibt, wie es ist.',
         });
-        deliver({ to: u.email, subject: 'Passwort zurücksetzen', text, html });
+        deliver({ to: u.email, subject: `${code} ist dein StayOnTrack-Code`, text, html });
       }
       return { ok: true };
     }],
 
+    // code from the mail + new password → password changed, logged out everywhere else, logged in here
     ['POST', /^\/api\/password\/reset$/, async (ctx) => {
-      const { token, password } = await readBody(ctx.req);
-      if (limited(`reset-ip:${clientIp(ctx.req)}`, 20, 15 * 60 * 1000)) throw new HttpError(429, 'Zu viele Versuche. Bitte später erneut versuchen.');
-      const t = useToken(token, 'reset');
+      const { login, code, password } = await readBody(ctx.req);
+      if (limited(`reset-ip:${clientIp(ctx.req)}`, 20, 15 * 60 * 1000)) throw new HttpError(429, 'Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.');
+      const wrong = 'Der Code ist falsch oder abgelaufen.';
+      const key = typeof login === 'string' ? login.trim().slice(0, 254) : '';
+      const c = typeof code === 'string' ? code.replace(/\D/g, '') : '';
+      if (!key || c.length !== 6) throw new HttpError(400, 'Bitte den 6-stelligen Code aus der Mail eingeben.');
       const pw = validatePassword(password);
-      const u = q.byId.get(t.user_id);
-      if (!u || !u.email || u.email.toLowerCase() !== t.email.toLowerCase()) throw new HttpError(400, 'Dieser Link ist nicht mehr gültig.');
+      const u = findForLogin(key);
+      const t = u && q.resetOf.get(u.id);
+      if (!t || t.expires_at < Date.now() || !u.email || u.email.toLowerCase() !== t.email.toLowerCase()) throw new HttpError(400, wrong);
+      if (t.attempts >= RESET_TRIES) throw new HttpError(400, 'Zu viele Fehlversuche – fordere einen neuen Code an.');
+      if (!codeMatches(t, c)) {
+        q.failTry.run(t.token_hash);
+        const left = RESET_TRIES - t.attempts - 1;
+        if (left <= 0) {
+          q.useToken.run(Date.now(), t.token_hash);
+          throw new HttpError(400, 'Zu viele Fehlversuche – fordere einen neuen Code an.');
+        }
+        throw new HttpError(400, `${wrong} Noch ${left} ${left === 1 ? 'Versuch' : 'Versuche'}.`);
+      }
       q.setPassword.run(hashPassword(pw), u.id);
-      q.useToken.run(Date.now(), sha256(token));
+      q.useToken.run(Date.now(), t.token_hash);
       q.dropTokens.run(u.id, 'reset');
-      q.dropSessions.run(u.id); // log out everywhere
-      return { ok: true, username: u.username };
+      q.dropSessions.run(u.id); // log out everywhere …
+      const user = startSession ? startSession(ctx, q.byId.get(u.id)) : null; // … and in here
+      return { ok: true, username: u.username, user };
     }],
 
     ['POST', /^\/api\/email\/verify$/, async (ctx) => {
