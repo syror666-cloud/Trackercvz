@@ -18,6 +18,7 @@ const { foodlogRoutes } = require('./foodlog');
 const { emailAuth } = require('./email-auth');
 const { createMailer } = require('./mail');
 const { h2hRoutes } = require('./h2h');
+const { reportRoutes } = require('./reports');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -239,7 +240,7 @@ function describeProposal(previous, proposal) {
 }
 
 const avatarUrl = (u) => (u.avatar ? `/api/avatar/${u.id}?v=${encodeURIComponent(u.avatar_updated || '1')}` : null);
-const PREF_DEFAULTS = { lang: 'de', theme: 'system', glass: false };
+const PREF_DEFAULTS = { lang: 'de', theme: 'system', glass: false, mailReports: true };
 const LANGS = ['de', 'en', 'es', 'it'];
 function prefsOf(u) {
   let p = {};
@@ -248,6 +249,7 @@ function prefsOf(u) {
     lang: LANGS.includes(p.lang) ? p.lang : PREF_DEFAULTS.lang,
     theme: ['system', 'light', 'dark'].includes(p.theme) ? p.theme : PREF_DEFAULTS.theme,
     glass: typeof p.glass === 'boolean' ? p.glass : PREF_DEFAULTS.glass,
+    mailReports: typeof p.mailReports === 'boolean' ? p.mailReports : PREF_DEFAULTS.mailReports,
   };
 }
 const publicUser = (u) => ({
@@ -614,9 +616,11 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     return publicUser(u);
   }
 
+  mailer = mailer || createMailer({});
+  let reports; // created further down, once nutrition exists
   const mail = emailAuth({
     db, HttpError, readBody, requireUser, requireCoach, clientIp, validatePassword, startSession,
-    mailer: mailer || createMailer({}), appUrl,
+    mailer, appUrl,
   });
 
   const routes = [
@@ -665,6 +669,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       if (body.glass !== undefined) {
         if (typeof body.glass !== 'boolean') throw new HttpError(400, 'Liquid Glass: ja oder nein');
         next.glass = body.glass;
+      }
+      if (body.mailReports !== undefined) {
+        if (typeof body.mailReports !== 'boolean') throw new HttpError(400, 'Berichte per E-Mail: ja oder nein');
+        next.mailReports = body.mailReports;
       }
       q.setPrefs.run(JSON.stringify(next), u.id);
       return { prefs: next };
@@ -928,8 +936,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           url: '/#/',
         })
         .catch((err) => console.error(err));
+      // the check-in also goes out by e-mail, with the PDF report (confirmed address, not switched off)
+      const mailStatus = reports ? reports.autoCheckinMail(id) : 'disabled';
       ctx.res.statusCode = 201;
-      return { checkin: checkinRow(q.checkin.get(id)) };
+      return { checkin: checkinRow(q.checkin.get(id)), mail: mailStatus };
     }],
 
     ['POST', /^\/api\/checkins\/(\d+)\/accept$/, async (ctx, [, id]) => {
@@ -1291,6 +1301,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   const deps = {
     db, notifier, reminders, HttpError, readBody, textField, numberField, requireUser, requireCoach, targetClient, clientById,
     isValidDate, maxAllowedDate, localDate, aiClient,
+    onPlanApplied: (clientId) => reports && reports.autoPlanMail(clientId),
   };
   metrics = metricsModule(deps);
   if (!health) {
@@ -1298,8 +1309,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   }
   const achievements = achievementsModule(deps);
   const ai = aiRoutes(deps);
+  const nutrition = nutritionRoutes(deps);
+  reports = reportRoutes({ ...deps, mailer, appUrl, planOf: nutrition.planOf, describeProposal, goalsRow, prefsOf });
   shop = shopRoutes({ ...deps, achievements });
-  routes.push(...mail.routes, ...h2hRoutes({ ...deps, publicUser }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

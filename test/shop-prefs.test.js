@@ -88,10 +88,10 @@ test('shop: medals are worth tokens (bronze 1, silver 2, gold 3), cans go into t
 test('prefs: language, theme and Liquid Glass are saved per person', async (t) => {
   const { server, max } = await withClient();
   t.after(() => server.close());
-  assert.deepEqual((await max('GET', '/api/me')).data.user.prefs, { lang: 'de', theme: 'system', glass: false });
-  assert.deepEqual((await max('PATCH', '/api/me/prefs', { lang: 'it', glass: true })).data.prefs, { lang: 'it', theme: 'system', glass: true });
+  assert.deepEqual((await max('GET', '/api/me')).data.user.prefs, { lang: 'de', theme: 'system', glass: false, mailReports: true });
+  assert.deepEqual((await max('PATCH', '/api/me/prefs', { lang: 'it', glass: true })).data.prefs, { lang: 'it', theme: 'system', glass: true, mailReports: true });
   await max('PATCH', '/api/me/prefs', { theme: 'dark' });
-  assert.deepEqual((await max('GET', '/api/me')).data.user.prefs, { lang: 'it', theme: 'dark', glass: true });
+  assert.deepEqual((await max('GET', '/api/me')).data.user.prefs, { lang: 'it', theme: 'dark', glass: true, mailReports: true });
   assert.equal((await max('PATCH', '/api/me/prefs', { lang: 'fr' })).status, 400);
   assert.equal((await max('PATCH', '/api/me/prefs', { theme: 'blue' })).status, 400);
   assert.equal((await max('PATCH', '/api/me/prefs', { glass: 'yes' })).status, 400);

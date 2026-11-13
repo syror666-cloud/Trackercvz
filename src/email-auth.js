@@ -120,10 +120,11 @@ function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer,
     const { text, html } = renderMail({
       appUrl: base,
       preheader: 'Ein Klick, dann kannst du dich auch mit dieser Adresse anmelden.',
+      eyebrow: 'E-Mail-Adresse',
       title: 'Bestätige deine E-Mail-Adresse',
       paragraphs: [
-        `Hallo ${user.display_name},`,
-        'bitte bestätige, dass diese Adresse zu deinem StayOnTrack-Konto gehört. Danach kannst du dich auch mit ihr anmelden und ein vergessenes Passwort selbst zurücksetzen.',
+        `Hallo ${String(user.display_name).split(' ')[0]},`,
+        'ein Tipp, und diese Adresse gehört zu deinem StayOnTrack-Konto. Danach kannst du dich auch mit ihr anmelden und ein vergessenes Passwort selbst zurücksetzen.',
       ],
       button: { label: 'E-Mail-Adresse bestätigen', link: `${base}/#/verify/${token}` },
       note: 'Der Link ist 7 Tage gültig. Du hast das nicht veranlasst? Dann ignoriere diese Mail einfach – es passiert nichts.',
@@ -172,13 +173,14 @@ function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer,
         const { text, html } = renderMail({
           appUrl: base,
           preheader: `Dein Code: ${code} – 15 Minuten gültig.`,
-          title: 'Dein Code zum Zurücksetzen',
+          eyebrow: 'Passwort zurücksetzen',
+          title: 'Dein Code',
           paragraphs: [
-            `Hallo ${u.display_name},`,
-            'du möchtest ein neues Passwort für StayOnTrack festlegen. Gib diesen Code in der App ein:',
+            `Hallo ${String(u.display_name).split(' ')[0]},`,
+            'gib diesen Code in der App ein, um ein neues Passwort festzulegen.',
           ],
           code,
-          codeHint: `15 Minuten gültig · Benutzername: ${u.username}`,
+          codeHint: `Gültig für 15 Minuten · Benutzername ${u.username}`,
           note: 'Gib den Code niemandem weiter – auch nicht deinem Coach. Du hast das nicht angefordert? Dann ignoriere diese Mail, dein Passwort bleibt, wie es ist.',
         });
         deliver({ to: u.email, subject: `${code} ist dein StayOnTrack-Code`, text, html });

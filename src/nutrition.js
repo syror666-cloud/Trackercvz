@@ -157,7 +157,7 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
     return { protein: g ? g.protein : null, carbs: g ? g.carbs : null, fat: g ? g.fat : null };
   }
 
-  return [
+  const routes = [
     // ---- Macro targets (coach sets them, the client sees them) ----
     ['GET', /^\/api\/macro-goals$/, async (ctx) => ({ macroGoals: macroGoalsOf(targetClient(ctx).id) })],
     ['PUT', /^\/api\/macro-goals$/, async (ctx) => {
@@ -354,6 +354,8 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
       return planOf(r.client_id);
     }],
   ];
+  routes.planOf = planOf; // for the PDF report
+  return routes;
 }
 
 module.exports = { nutritionRoutes, sameKcalAmount };

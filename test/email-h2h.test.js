@@ -88,7 +88,7 @@ test('e-mail: confirm, log in with it, reset a forgotten password', async (t) =>
   const code = outbox[1].text.match(/Dein Code: (\d{6})/)[1];
   assert.equal(outbox[1].subject, `${code} ist dein StayOnTrack-Code`);
   assert.doesNotMatch(outbox[1].text + outbox[1].html, /#\/reset\//);
-  assert.match(outbox[1].html, new RegExp(code.split('').map((d) => `>${d}<`).join('[\\s\\S]*')));
+  assert.ok(outbox[1].html.includes(`>${code}</div>`), 'the code is one selectable line in the mail');
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM email_tokens WHERE purpose = 'reset' AND token_hash LIKE ?").get(`%${code}%`).n, 0, 'only a hash is stored');
   const wrongCode = code === '000000' ? '111111' : '000000';
   assert.equal((await anon('POST', '/api/password/reset', { login: 'max@example.com', code, password: 'kurz' })).status, 400);

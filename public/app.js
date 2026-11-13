@@ -194,6 +194,16 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-pdf-reports', date: 'November 2026',
+      client: [
+        ['📄', 'Berichte als PDF', 'Deinen Ernährungsplan und jeden Wochen-Check-in gibt es jetzt als schön gestaltetes PDF – zum Herunterladen in der App und automatisch per E-Mail. Abbestellen kannst du die Mails unter Einstellungen.'],
+        ['✉️', 'Neues E-Mail-Design', 'Mails von StayOnTrack sehen jetzt ruhiger und moderner aus – auch im Dunkelmodus.'],
+      ],
+      coach: [
+        ['📄', 'PDF-Berichte & automatische Mails', 'Jeder Check-in geht automatisch per E-Mail an den Klienten – mit Kennzahlen im Vergleich zur Vorwoche und dem PDF-Bericht (Kommentar, Diagramme, alle Tage). Den Ernährungsplan kannst du im Ernährungs-Tab als PDF laden oder per Mail schicken; nach einem KI-Entwurf geht er automatisch raus. Nur an bestätigte Adressen.'],
+      ],
+    },
+    {
       id: '2026-11-mail-check', date: 'November 2026',
       client: [],
       coach: [
@@ -1517,6 +1527,7 @@
         <div class="row" style="margin-top:12px">
           ${hasChanges && ci.status === 'open' ? '<button type="button" class="btn-primary" data-accept>✓ Anpassungen annehmen</button>' : ''}
           <button type="button" class="btn-secondary" data-reply>${ci.repliedAt ? 'Nochmal antworten' : 'Antworten'}</button>
+          <a class="btn btn-ghost" href="/api/checkins/${ci.id}/pdf" download>Als PDF</a>
         </div>
         <form class="reply-form" hidden>
           <textarea name="body" maxlength="2000" placeholder="Deine Antwort an den Coach…"></textarea>
@@ -2699,8 +2710,8 @@
       btn.disabled = true;
       try {
         if (!form.message.value.trim()) throw new Error('Bitte eine Nachricht schreiben.');
-        await api('POST', `/api/checkins?userId=${selected.id}`, { message: form.message.value, proposal: readProposal() });
-        toast(`Check-in an ${rv.client.displayName} gesendet ✓`);
+        const sent = await api('POST', `/api/checkins?userId=${selected.id}`, { message: form.message.value, proposal: readProposal() });
+        toast(`Check-in an ${rv.client.displayName} gesendet ✓${sent.mail === 'ok' ? ' – auch per E-Mail mit PDF' : ''}`);
         location.hash = nextOpen ? `#/checkin/${nextOpen.id}` : '#/checkin/done';
       } catch (err) {
         errEl.textContent = err.message;
@@ -3160,6 +3171,7 @@
       <div class="page-head"><div>${eyebrow('Von deinem Coach')}<h1>Ernährung</h1>
         <p class="muted">${plan.meals.length ? 'Du kannst einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – dein Coach entscheidet.' : 'Dein Coach stellt dir einen Plan zusammen, der zu dir passt.'}</p></div></div>
       ${nutritionTabs('plan')}
+      ${plan.meals.length ? '<p class="pdf-row"><a class="btn btn-secondary btn-sm" href="/api/nutrition/pdf" download>Plan als PDF</a></p>' : ''}
       ${plan.meals.length ? `
       <div class="nutrition-grid">
         <div class="stack">${planSummary(plan, goals)}${meals}</div>
@@ -3852,6 +3864,10 @@
           </section>` : ''}
           ${plan.meals.length ? '' : '<section class="card ai-card" id="ai-draft" aria-live="polite"></section>'}
           ${planSummary(plan, goals)}
+          ${plan.meals.length ? `<div class="row pdf-row coach-pdf">
+            <a class="btn btn-secondary btn-sm" href="/api/nutrition/pdf?userId=${client.id}" download>PDF herunterladen</a>
+            <button type="button" class="btn-secondary btn-sm" data-plan-mail>Per E-Mail an ${esc(client.displayName.split(' ')[0])}</button>
+            <span class="muted small" data-mail-hint></span></div>` : ''}
           ${mealsHtml || '<div class="card empty-state">Noch kein Ernährungsplan. Leg unten die erste Mahlzeit an – oder lass oben einen KI-Entwurf erstellen.</div>'}
           <form class="card add-meal" id="add-meal">
             <h3>Mahlzeit hinzufügen</h3>
@@ -3878,6 +3894,28 @@
           ${history.length ? `<section class="card"><h3 style="margin-bottom:8px">Erledigte Tauschwünsche</h3>${history.map(requestLine).join('')}<p class="small muted" style="margin:8px 0 0">Verschwinden nach einem Tag.</p></section>` : ''}
         </aside>
       </div>`;
+
+    // Plan as PDF by e-mail
+    const pm = root.querySelector('[data-plan-mail]');
+    if (pm) {
+      const hint = root.querySelector('[data-mail-hint]');
+      api('GET', `/api/reports/status?userId=${client.id}`).then((st) => {
+        if (st.status !== 'ok') {
+          pm.disabled = true;
+          hint.textContent = st.text;
+        }
+      }).catch(() => {});
+      pm.addEventListener('click', async () => {
+        pm.disabled = true;
+        try {
+          const r = await api('POST', `/api/nutrition/pdf/mail?userId=${client.id}`);
+          savedHud('Plan gesendet', r.to);
+        } catch (err) {
+          toast(err.message, true);
+        }
+        pm.disabled = false;
+      });
+    }
 
     // Macro targets
     const mg = root.querySelector('#macro-goals');
@@ -5250,7 +5288,12 @@
         <div><span class="pref-label">Liquid Glass</span>
           <p class="muted small">Gläserne, durchscheinende Leisten und Menüs – angelehnt an das aktuelle iOS-Design.</p></div>
         <label class="switch"><input type="checkbox" data-pref="glass" ${p.glass ? 'checked' : ''}><span></span><b>${p.glass ? 'An' : 'Aus'}</b></label>
-      </div>`;
+      </div>
+      ${me.role === 'client' ? `<div class="pref-row pref-glass">
+        <div><span class="pref-label">Berichte per E-Mail</span>
+          <p class="muted small">Wochen-Check-in und Ernährungsplan als PDF an deine bestätigte E-Mail-Adresse.${me.email ? '' : ' Hinterlege dafür unter Konto deine E-Mail-Adresse.'}</p></div>
+        <label class="switch"><input type="checkbox" data-pref="mailReports" ${p.mailReports !== false ? 'checked' : ''}><span></span><b>${p.mailReports !== false ? 'An' : 'Aus'}</b></label>
+      </div>` : ''}`;
     async function save(patch) {
       const prev = me.prefs;
       me.prefs = { ...prev, ...patch };
@@ -5269,6 +5312,8 @@
     }
     root.querySelectorAll('button[data-pref]').forEach((b) => b.addEventListener('click', () => save({ [b.dataset.pref]: b.dataset.val })));
     root.querySelector('input[data-pref="glass"]').addEventListener('change', (e) => save({ glass: e.target.checked }));
+    const mr = root.querySelector('input[data-pref="mailReports"]');
+    if (mr) mr.addEventListener('change', (e) => save({ mailReports: e.target.checked }));
   }
 
   // ---------- Hall of Fame: sub menu, fridge (3D glide into a pixel-art fridge) and medal shop ----------

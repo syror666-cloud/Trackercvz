@@ -15,6 +15,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
-    "nodemailer": "10.2.1"
+    "nodemailer": "10.2.1",
+    "pdfkit": "0.20.2"
   }
 }

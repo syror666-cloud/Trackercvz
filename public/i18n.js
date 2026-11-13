@@ -572,6 +572,12 @@ Links auf|Links to|Enlaces a|Link a
 prüfen|check|revisar|controllare
 aktiv|active|activo|attivo
 Wird gesendet…|Sending…|Enviando…|Invio…
+Berichte per E-Mail|Reports by email|Informes por correo|Report via e-mail
+Als PDF|As PDF|En PDF|Come PDF
+Plan als PDF|Plan as PDF|Plan en PDF|Piano in PDF
+PDF herunterladen|Download PDF|Descargar PDF|Scarica PDF
+Plan gesendet|Plan sent|Plan enviado|Piano inviato
+Wochen-Check-in und Ernährungsplan als PDF an deine bestätigte E-Mail-Adresse.|Weekly check-in and nutrition plan as PDF to your confirmed email address.|Check-in semanal y plan de nutrición en PDF a tu correo confirmado.|Check-in settimanale e piano alimentare in PDF al tuo indirizzo confermato.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -639,6 +645,7 @@ noch nie|never|nunca|mai
     [/^(.+) · (\d) Wochen?$/, null],
     [/^(\d+) Head2Head-Siege?$/, W(0, (m) => `${m[1]} Head2Head win${m[1] === '1' ? '' : 's'}`, (m) => `${m[1]} victoria${m[1] === '1' ? '' : 's'} Head2Head`, (m) => `${m[1]} vittori${m[1] === '1' ? 'a' : 'e'} Head2Head`)],
     [/^Der Code ist falsch oder abgelaufen\. Noch (\d) Versuche?\.$/, W(0, (m) => `The code is wrong or expired. ${m[1]} tries left.`, (m) => `Código incorrecto o caducado. Quedan ${m[1]} intentos.`, (m) => `Codice errato o scaduto. Ancora ${m[1]} tentativi.`)],
+    [/^Per E-Mail an (.+)$/, W(0, (m) => `Email to ${m[1]}`, (m) => `Enviar a ${m[1]}`, (m) => `Invia a ${m[1]}`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

@@ -2285,3 +2285,5 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .mail-warning { padding: 10px 12px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); margin: 8px 0; }
 .mail-test { gap: 8px; flex-wrap: nowrap; }
 .mail-test input { flex: 1; min-width: 0; }
+.pdf-row { margin: -8px 0 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.coach-pdf { margin: 0; }

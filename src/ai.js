@@ -72,7 +72,7 @@ const DRAFT_SCHEMA = {
   },
 };
 
-function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClient, localDate, aiClient }) {
+function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClient, localDate, aiClient, onPlanApplied }) {
   // aiClient: an Anthropic client injected by tests; otherwise one is created from ANTHROPIC_API_KEY
   const enabled = () => Boolean(aiClient || process.env.ANTHROPIC_API_KEY);
   const model = () => process.env.AI_MODEL || DEFAULT_MODEL;
@@ -330,7 +330,8 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
         throw err;
       }
       notifier.sendToUsers([c.id], { title: '🍽 Dein Ernährungsplan ist da', body: 'Dein Coach hat dir deinen Plan erstellt.', url: '/#/nutrition' }).catch(() => {});
-      return { ok: true, meals: draft.meals.length };
+      const mail = onPlanApplied ? onPlanApplied(c.id) : null; // plan as PDF by e-mail
+      return { ok: true, meals: draft.meals.length, mail };
     }],
   ];
 
