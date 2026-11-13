@@ -90,7 +90,7 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
     ),
     lastCheckin: db.prepare('SELECT message, status, created_at, proposal FROM checkins WHERE client_id = ? ORDER BY id DESC LIMIT 1'),
     request: db.prepare('SELECT * FROM nutrition_requests WHERE client_id = ?'),
-    foods: db.prepare('SELECT id, name, kcal, unit, category FROM foods ORDER BY category, name'),
+    foods: db.prepare('SELECT id, name, kcal, unit, category, protein, carbs, fat FROM foods ORDER BY category, name'),
     food: db.prepare('SELECT * FROM foods WHERE id = ?'),
     hasPlan: db.prepare('SELECT 1 FROM meals WHERE client_id = ? LIMIT 1'),
     getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
@@ -106,7 +106,7 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
     drop: db.prepare('DELETE FROM ai_results WHERE client_id = ? AND kind = ?'),
     maxMealPos: db.prepare('SELECT COALESCE(MAX(position), -1) AS p FROM meals WHERE client_id = ?'),
     insertMeal: db.prepare('INSERT INTO meals (client_id, name, position) VALUES (?, ?, ?)'),
-    insertItem: db.prepare('INSERT INTO meal_items (meal_id, food_id, name, kcal, unit, amount, position) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+    insertItem: db.prepare('INSERT INTO meal_items (meal_id, food_id, name, kcal, unit, amount, position, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
     requestDone: db.prepare("UPDATE nutrition_requests SET status = 'done' WHERE client_id = ?"),
   };
 
@@ -183,7 +183,7 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
         const f = q.food.get(Number(it.foodId));
         const amount = Math.round(Number(it.amount));
         if (!f || !(amount > 0) || amount > 2000) continue; // unknown foods or odd amounts are dropped
-        items.push({ foodId: f.id, name: f.name, unit: f.unit, kcal: f.kcal, amount, kcalTotal: Math.round((amount * f.kcal) / 100) });
+        items.push({ foodId: f.id, name: f.name, unit: f.unit, kcal: f.kcal, amount, kcalTotal: Math.round((amount * f.kcal) / 100), protein: f.protein ?? null, carbs: f.carbs ?? null, fat: f.fat ?? null });
       }
       const name = String(m.name || '').trim().slice(0, 60) || `Mahlzeit ${meals.length + 1}`;
       if (items.length) meals.push({ type: MEAL_TYPES.includes(m.type) ? m.type : null, name, items, kcalTotal: items.reduce((a, i) => a + i.kcalTotal, 0) });
@@ -205,7 +205,7 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
     const target = g.calories_min && g.calories_max
       ? `${g.calories_min}–${g.calories_max} kcal pro Tag (Ziel: Mitte der Range)`
       : 'keine Vorgabe – plane für ein moderates Kaloriendefizit eines durchschnittlichen Erwachsenen (ca. 2000 kcal)';
-    const foods = q.foods.all().map((f) => `${f.id}|${f.name}|${f.kcal} kcal/100${f.unit}|${f.category}`).join('\n');
+    const foods = q.foods.all().map((f) => `${f.id}|${f.name}|${f.kcal} kcal|E ${f.protein ?? '?'} K ${f.carbs ?? '?'} F ${f.fat ?? '?'} pro 100${f.unit}|${f.category}`).join('\n');
     const system =
       'Du hilfst einem Fitness- und Ernährungscoach, einen Tages-Ernährungsplan für einen Klienten zu entwerfen. ' +
       'Der Coach prüft und ändert den Entwurf, bevor der Klient ihn sieht. Verwende ausschließlich Lebensmittel aus der ' +
@@ -214,9 +214,13 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
       'Körpergewicht, falls bekannt), alltagstaugliche Mahlzeiten mit deutschen Namen und die gewünschte Mahlzeitenzahl. ' +
       'Jede Mahlzeit muss zu ihrer Tageszeit passen: Wähle für jede Mahlzeit zuerst den Typ und dann nur Lebensmittel, ' +
       'die man zu dieser Mahlzeit typischerweise isst.\n\nVorgaben des Coaches (unbedingt einhalten, sie haben Vorrang):\n' + guidelines();
-    const user = `Kalorienziel: ${target}\nKategorie: ${(q.user.get(clientId) || {}).category || 'keine'}\n\nVorlieben des Klienten:\n${prefs}` +
+    const mg = db.prepare('SELECT protein, carbs, fat FROM macro_goals WHERE user_id = ?').get(clientId);
+    const macroTarget = mg && (mg.protein || mg.carbs || mg.fat)
+      ? `\nMakroziele pro Tag (±10 %): ${[['Eiweiß', mg.protein], ['Kohlenhydrate', mg.carbs], ['Fett', mg.fat]].filter(([, v]) => v).map(([n, v]) => `${n} ${v} g`).join(', ')}`
+      : '';
+    const user = `Kalorienziel: ${target}${macroTarget}\nKategorie: ${(q.user.get(clientId) || {}).category || 'keine'}\n\nVorlieben des Klienten:\n${prefs}` +
       (hint ? `\n\nZusätzlicher Hinweis des Coaches für diesen Entwurf: ${hint}` : '') +
-      `\n\nLebensmittel-Datenbank (id|Name|kcal|Kategorie):\n${foods}`;
+      `\n\nLebensmittel-Datenbank (id|Name|kcal|Eiweiß/Kohlenhydrate/Fett in g|Kategorie):\n${foods}`;
     const { data, model: used } = await ask(system, user, DRAFT_SCHEMA, 8000);
     const draft = resolveDraft(data);
     if (!draft.meals.length) throw new HttpError(502, 'Die KI hat keinen brauchbaren Entwurf geliefert – bitte nochmal versuchen');
@@ -316,7 +320,7 @@ function aiRoutes({ db, notifier, HttpError, readBody, requireCoach, targetClien
       try {
         draft.meals.forEach((m) => {
           const mealId = Number(q.insertMeal.run(c.id, m.name, q.maxMealPos.get(c.id).p + 1).lastInsertRowid);
-          m.items.forEach((it, ii) => q.insertItem.run(mealId, it.foodId, it.name, it.kcal, it.unit, it.amount, ii));
+          m.items.forEach((it, ii) => q.insertItem.run(mealId, it.foodId, it.name, it.kcal, it.unit, it.amount, ii, it.protein ?? null, it.carbs ?? null, it.fat ?? null));
         });
         q.requestDone.run(c.id);
         q.drop.run(c.id, 'nutrition');

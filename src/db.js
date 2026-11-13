@@ -278,6 +278,49 @@ CREATE TABLE IF NOT EXISTS ai_results (
   PRIMARY KEY (client_id, kind)
 );
 
+-- Food diary: what a client ate, with nutrients per 100 g/ml captured at logging time.
+CREATE TABLE IF NOT EXISTS food_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date        TEXT NOT NULL,
+  meal        TEXT NOT NULL CHECK (meal IN ('fruehstueck', 'mittag', 'abend', 'snack')),
+  name        TEXT NOT NULL,
+  brand       TEXT,
+  barcode     TEXT,
+  food_id     INTEGER REFERENCES foods(id) ON DELETE SET NULL,
+  amount      REAL NOT NULL,
+  unit        TEXT NOT NULL DEFAULT 'g',
+  kcal        REAL NOT NULL,
+  protein     REAL,
+  carbs       REAL,
+  fat         REAL,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS food_log_day ON food_log (client_id, date);
+
+-- Products looked up by barcode (Open Food Facts), cached so a code is only fetched once.
+CREATE TABLE IF NOT EXISTS barcode_products (
+  barcode     TEXT PRIMARY KEY,
+  found       INTEGER NOT NULL,
+  name        TEXT,
+  brand       TEXT,
+  kcal        REAL,
+  protein     REAL,
+  carbs       REAL,
+  fat         REAL,
+  unit        TEXT,
+  serving     REAL,
+  fetched_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Daily macro targets in grams, set by the coach (calorie targets stay in goals).
+CREATE TABLE IF NOT EXISTS macro_goals (
+  user_id  INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  protein  REAL,
+  carbs    REAL,
+  fat      REAL
+);
+
 -- A client without a nutrition plan asks the coach for one, with food preferences.
 CREATE TABLE IF NOT EXISTS nutrition_requests (
   client_id   INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -328,11 +371,27 @@ function migrate(db) {
   }
 
   // Starter food database (only once, so foods the coach deleted don't come back).
-  const seeded = db.prepare("SELECT 1 FROM settings WHERE key = 'foods_seeded'").get();
-  if (!seeded) {
-    const insert = db.prepare('INSERT OR IGNORE INTO foods (name, kcal, unit, category) VALUES (?, ?, ?, ?)');
-    for (const [name, kcal, unit, category] of require('./foods-seed')) insert.run(name, kcal, unit, category);
-    db.exec("INSERT INTO settings (key, value) VALUES ('foods_seeded', 'done')");
+  // Macros per 100 g/ml for foods and for the foods copied into nutrition plans.
+  addColumns(db, 'foods', [['protein', 'REAL'], ['carbs', 'REAL'], ['fat', 'REAL']]);
+  addColumns(db, 'meal_items', [['protein', 'REAL'], ['carbs', 'REAL'], ['fat', 'REAL']]);
+
+  // Food database v2 (about 470 foods with macros): add what is missing, fill macros of the standard foods.
+  // Foods the coach created or edited keep their values.
+  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'foods_seeded_v2'").get()) {
+    const insert = db.prepare('INSERT OR IGNORE INTO foods (name, kcal, unit, category, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const fill = db.prepare('UPDATE foods SET protein = ?, carbs = ?, fat = ? WHERE name = ? AND is_custom = 0 AND protein IS NULL');
+    const fillItems = db.prepare(
+      'UPDATE meal_items SET protein = ?, carbs = ?, fat = ? WHERE food_id = (SELECT id FROM foods WHERE name = ?) AND protein IS NULL'
+    );
+    db.exec('BEGIN');
+    for (const [name, kcal, unit, category, protein, carbs, fat] of require('./foods-seed')) {
+      insert.run(name, kcal, unit, category, protein, carbs, fat);
+      fill.run(protein, carbs, fat, name);
+      fillItems.run(protein, carbs, fat, name);
+    }
+    db.exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('foods_seeded_v2', 'done')");
+    db.exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('foods_seeded', 'done')");
+    db.exec('COMMIT');
   }
 
   // Check-ins no longer post into the chat: remove the automatic messages older versions created.

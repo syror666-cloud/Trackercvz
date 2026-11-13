@@ -194,6 +194,19 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-food-diary', date: 'November 2026',
+      client: [
+        ['📷', 'Ernährungstagebuch mit Barcode-Scanner', 'Unter Ernährung → Tagebuch trägst du ein, was du isst – Packung scannen, aus der Datenbank wählen oder selbst eintragen. Kalorien und Makros werden mitgezählt, die Tageskalorien landen automatisch im Tracker.'],
+        ['🥩', 'Makros im Ernährungsplan', 'Zu jedem Lebensmittel, jeder Mahlzeit und dem ganzen Tag siehst du jetzt Eiweiß, Kohlenhydrate und Fett.'],
+        ['🥦', 'Fast 5× so viele Lebensmittel', 'Die Datenbank hat jetzt rund 470 Lebensmittel, alle mit Makros.'],
+      ],
+      coach: [
+        ['📷', 'Ernährungstagebuch', 'Klienten führen jetzt ein Tagebuch mit Barcode-Scanner (Daten: Open Food Facts). Du siehst es im Ernährungs-Tab des Klienten – nur lesend.'],
+        ['🥩', 'Makros & Makroziele', 'Pläne zeigen Eiweiß, Kohlenhydrate und Fett pro Lebensmittel, Mahlzeit und Tag. Im Ernährungs-Tab legst du Makroziele fest; der KI-Entwurf berücksichtigt sie.'],
+        ['🥦', 'Lebensmittel-Datenbank ×5', 'Rund 470 Lebensmittel mit Makros statt 99. Eigene Lebensmittel kannst du um Makros ergänzen.'],
+      ],
+    },
+    {
       id: '2026-11-motion-soldout', date: 'November 2026',
       client: [
         ['🏷️', 'Sold out', 'Jedes Getränk gibt es einmal: Nach dem Kauf ist es im Shop ausverkauft.'],
@@ -442,6 +455,7 @@
     if (location.hash === '#/chat') return renderClientChat();
     if (location.hash === '#/settings') return renderClientSettings();
     if (location.hash === '#/nutrition') return renderClientNutrition();
+    if (location.hash === '#/nutrition/diary') return renderFoodDiary();
     if (location.hash === '#/training' || location.hash === '#/training/history') return renderClientTraining(location.hash === '#/training/history');
     return renderClientHome();
   }
@@ -454,7 +468,7 @@
     let current =
       me.role === 'coach'
         ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash.startsWith('#/messages') ? '#/messages' : location.hash === '#/admin' ? '#/admin' : '#/'
-        : location.hash.startsWith('#/training') ? '#/training' : ['#/chat', '#/settings', '#/nutrition'].includes(location.hash) ? location.hash : '#/';
+        : location.hash.startsWith('#/training') ? '#/training' : location.hash.startsWith('#/nutrition') ? '#/nutrition' : ['#/chat', '#/settings'].includes(location.hash) ? location.hash : '#/';
     if (location.hash.startsWith('#/account')) current = null; // the account page lives in the profile menu
     nav.innerHTML = links
       .map(
@@ -2283,6 +2297,12 @@
     let busy = false;
     let hint = '';
     const kcalOf = (i) => Math.round((i.amount * i.kcal) / 100);
+    const macrosOf = (items) => {
+      const t = { protein: 0, carbs: 0, fat: 0 };
+      for (const i of items) for (const [k] of MACROS) t[k] += ((i[k] || 0) * i.amount) / 100;
+      for (const [k] of MACROS) t[k] = Math.round(t[k]);
+      return t;
+    };
     const draw = () => {
       const d = state.draft;
       let body;
@@ -2337,7 +2357,8 @@
             iEl.querySelector('[data-kcal]').textContent = `${num(kcalOf(m.items[Number(iEl.dataset.item)]))} kcal`;
           });
         });
-        root.querySelector('[data-total]').textContent = `${num(all)} kcal`;
+        const mt = macrosOf(d.meals.flatMap((m) => m.items));
+        root.querySelector('[data-total]').textContent = `${num(all)} kcal · E ${num(mt.protein)} g · K ${num(mt.carbs)} g · F ${num(mt.fat)} g`;
       };
       root.querySelectorAll('[data-meal]').forEach((mEl) => {
         const mi = Number(mEl.dataset.meal);
@@ -2425,7 +2446,7 @@
         .sort((a, b) => (term ? Number(!a.name.toLowerCase().startsWith(term)) - Number(!b.name.toLowerCase().startsWith(term)) : 0))
         .slice(0, 40);
       list.innerHTML =
-        hits.map((f) => `<li role="option" data-id="${f.id}"><span>${esc(f.name)}</span><span class="muted small">${num(f.kcal)} kcal/100 ${f.unit}</span></li>`).join('') +
+        hits.map((f) => `<li role="option" data-id="${f.id}"><span>${esc(f.name)}</span><span class="muted small">${num(f.kcal)} kcal/100 ${f.unit}${hasMacros(f) ? ` · E ${gram(f.protein)} K ${gram(f.carbs)} F ${gram(f.fat)}` : ''}</span></li>`).join('') +
         (allowCreate && term ? `<li data-create class="create">+ „${esc(input.value.trim())}“ neu anlegen</li>` : '') +
         (!hits.length && !allowCreate ? '<li class="muted small" data-none>Nicht in der Liste – schreib deinen Wunsch einfach unten rein.</li>' : '');
       list.hidden = false;
@@ -2474,6 +2495,11 @@
           <div class="field"><label for="nf-unit">Einheit</label><select id="nf-unit" name="unit">
             <option value="g"${existing && existing.unit === 'ml' ? '' : ' selected'}>g</option><option value="ml"${existing && existing.unit === 'ml' ? ' selected' : ''}>ml</option></select></div>
         </div>
+        <div class="field-row three">
+          <div class="field"><label for="nf-p">Eiweiß</label><input id="nf-p" name="protein" inputmode="decimal" placeholder="g/100" value="${existing && existing.protein !== null && existing.protein !== undefined ? String(existing.protein).replace('.', ',') : ''}"></div>
+          <div class="field"><label for="nf-c">Kohlenh.</label><input id="nf-c" name="carbs" inputmode="decimal" placeholder="g/100" value="${existing && existing.carbs !== null && existing.carbs !== undefined ? String(existing.carbs).replace('.', ',') : ''}"></div>
+          <div class="field"><label for="nf-f">Fett</label><input id="nf-f" name="fat" inputmode="decimal" placeholder="g/100" value="${existing && existing.fat !== null && existing.fat !== undefined ? String(existing.fat).replace('.', ',') : ''}"></div>
+        </div>
         <div class="field"><label for="nf-cat">Kategorie</label><input id="nf-cat" name="category" maxlength="40" value="${esc(existing ? existing.category || '' : 'Eigene')}"></div>
         <p class="error" hidden></p>
         <div class="dialog-actions"><button type="button" class="btn-secondary" data-cancel>Abbrechen</button><button type="submit" class="btn-primary">Speichern</button></div>
@@ -2492,7 +2518,12 @@
         try {
           const kcal = parseNum(f.kcal.value);
           if (kcal === null || Number.isNaN(kcal)) throw new Error('Bitte kcal pro 100 g angeben.');
-          const body = { name: f.name.value, kcal, unit: f.unit.value, category: f.category.value };
+          const mac = (k) => {
+            const x = parseNum(f[k].value);
+            if (Number.isNaN(x)) throw new Error('Makros bitte als Zahl in Gramm pro 100 angeben.');
+            return x;
+          };
+          const body = { name: f.name.value, kcal, unit: f.unit.value, category: f.category.value, protein: mac('protein'), carbs: mac('carbs'), fat: mac('fat') };
           const { food } = existing ? await api('PATCH', `/api/foods/${existing.id}`, body) : await api('POST', '/api/foods', body);
           await loadFoods(true);
           toast(existing ? 'Lebensmittel gespeichert' : `„${food.name}“ angelegt`);
@@ -2517,6 +2548,7 @@
     return `<div class="card plan-summary">
       <div><div class="stat-label">Tagesplan</div><div class="stat-value ${cls}">${num(plan.totalKcal)} <small>kcal</small></div></div>
       <div class="muted small">${target ? `Zielkalorien: <strong>${esc(target)}</strong>` : 'Noch keine Zielkalorien festgelegt'}</div>
+      ${plan.macros && plan.totalKcal ? `<div class="plan-macros">${macroBars(plan.macros, plan.macroGoals)}${plan.macros.complete ? '' : '<p class="muted small" style="margin:6px 0 0">Nicht für alle Lebensmittel sind Makros hinterlegt.</p>'}</div>` : ''}
     </div>`;
   }
 
@@ -2633,12 +2665,13 @@
         const mealReq = openFor((r) => r.type === 'meal' && r.mealId === m.id);
         return `<section class="card meal">
           <div class="row-between meal-head"><h2>${esc(m.name)}</h2><span class="muted small">${num(m.kcalTotal)} kcal</span></div>
+          ${hasMacros(m.macros) && m.items.length ? `<p class="meal-macros">${macroInline(m.macros)}</p>` : ''}
           <ul class="meal-items">${m.items
             .map((i) => {
               const req = openFor((r) => r.itemId === i.id);
               return `<li>
                 <div class="item-main"><span class="item-name">${esc(i.name)}</span>
-                  <span class="muted small">${esc(fmtAmount(i.amount, i.unit))} · ${num(i.kcalTotal)} kcal</span></div>
+                  <span class="muted small">${esc(fmtAmount(i.amount, i.unit))} · ${num(i.kcalTotal)} kcal ${macroInline(i)}</span></div>
                 ${req ? '<span class="badge warn">Tausch angefragt</span>' : `<button type="button" class="btn-ghost btn-sm" data-swap-item="${i.id}">⇄ Tauschen</button>`}
               </li>`;
             })
@@ -2653,8 +2686,9 @@
     const doneReqs = plan.requests.filter(isRecentDecision);
 
     setView(`
-      <div class="page-head"><div>${eyebrow('Von deinem Coach')}<h1>Ernährungsplan</h1>
+      <div class="page-head"><div>${eyebrow('Von deinem Coach')}<h1>Ernährung</h1>
         <p class="muted">${plan.meals.length ? 'Du kannst einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – dein Coach entscheidet.' : 'Dein Coach stellt dir einen Plan zusammen, der zu dir passt.'}</p></div></div>
+      ${nutritionTabs('plan')}
       ${plan.meals.length ? `
       <div class="nutrition-grid">
         <div class="stack">${planSummary(plan, goals)}${meals}</div>
@@ -2736,6 +2770,457 @@
     });
   }
 
+
+  // ---------- macros (protein, carbs, fat) ----------
+  const MACROS = [['protein', 'Eiweiß', 'E'], ['carbs', 'Kohlenhydrate', 'K'], ['fat', 'Fett', 'F']];
+  const gram = (v) => (v === null || v === undefined ? '–' : num(v, v > 0 && v < 10 && v % 1 ? 1 : 0));
+  const hasMacros = (m) => m && MACROS.some(([k]) => m[k] !== null && m[k] !== undefined);
+  /** "E 24 g · K 60 g · F 9 g" as small coloured chips. */
+  function macroInline(m) {
+    if (!hasMacros(m)) return '';
+    return `<span class="macro-inline">${MACROS.map(([k, label, s]) => `<span class="mi mi-${k}" title="${label}"><b aria-hidden="true">${s}</b><span class="sr-only">${label}</span> ${gram(m[k])} g</span>`).join('')}</span>`;
+  }
+  /** Three bars (eaten/planned vs. target). Without a target the bar shows the share of energy. */
+  function macroBars(totals, targets) {
+    const energy = MACROS.reduce((a, [k]) => a + (totals[k] || 0) * (k === 'fat' ? 9 : 4), 0);
+    return `<div class="macro-bars">${MACROS.map(([k, label]) => {
+      const v = totals[k] || 0;
+      const t = targets && targets[k];
+      const pct = t ? Math.min(100, (v / t) * 100) : energy ? ((v * (k === 'fat' ? 9 : 4)) / energy) * 100 : 0;
+      const over = t && v > t * 1.1;
+      return `<div class="macro-bar mb-${k}">
+        <div class="row-between"><span>${label}</span><span class="small"><strong>${gram(v)}</strong>${t ? ` / ${gram(t)}` : ''} g${t ? '' : ` <span class="muted">· ${num(pct)} %</span>`}</span></div>
+        <div class="mb-track ${over ? 'over' : ''}"><i style="width:${pct.toFixed(1)}%"></i></div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  // ---------- barcode scanner ----------
+  let zxingLoad = null;
+  function loadZxing() {
+    if (window.ZXing) return Promise.resolve(window.ZXing);
+    zxingLoad = zxingLoad || new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/vendor/zxing.min.js';
+      s.onload = () => resolve(window.ZXing);
+      s.onerror = () => {
+        zxingLoad = null;
+        reject(new Error('Scanner konnte nicht geladen werden.'));
+      };
+      document.head.appendChild(s);
+    });
+    return zxingLoad;
+  }
+
+  /**
+   * Full-screen camera view that resolves with an EAN/UPC code, or null when closed.
+   * Uses the built-in BarcodeDetector where there is one (Chrome on Android), otherwise ZXing.
+   * Typing the number below the barcode always works as a fallback.
+   */
+  function scanBarcode() {
+    return new Promise((resolve) => {
+      const ov = document.createElement('div');
+      ov.className = 'scanner';
+      ov.setAttribute('role', 'dialog');
+      ov.setAttribute('aria-modal', 'true');
+      ov.setAttribute('aria-label', 'Barcode scannen');
+      ov.innerHTML = `
+        <video playsinline muted aria-hidden="true"></video>
+        <div class="scan-frame" aria-hidden="true"><i></i></div>
+        <div class="scan-top"><button type="button" class="scan-close" aria-label="Scanner schließen">✕</button></div>
+        <div class="scan-bottom">
+          <p class="scan-status" role="status">Kamera wird gestartet…</p>
+          <form class="scan-manual" novalidate>
+            <input name="code" inputmode="numeric" autocomplete="off" pattern="[0-9]*" maxlength="14" placeholder="oder Nummer unter dem Barcode eintippen" aria-label="Barcode-Nummer">
+            <button type="submit" class="btn-primary">OK</button>
+          </form>
+        </div>`;
+      document.body.appendChild(ov);
+      document.body.classList.add('fx-open');
+      const video = ov.querySelector('video');
+      const status = ov.querySelector('.scan-status');
+      let stream = null;
+      let timer = null;
+      let done = false;
+      const finish = (code) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+        document.removeEventListener('keydown', onKey);
+        ov.classList.add('out');
+        setTimeout(() => {
+          ov.remove();
+          document.body.classList.remove('fx-open');
+        }, 220);
+        if (code && navigator.vibrate) navigator.vibrate(40);
+        resolve(code || null);
+      };
+      const onKey = (e) => e.key === 'Escape' && finish(null);
+      document.addEventListener('keydown', onKey);
+      ov.querySelector('.scan-close').addEventListener('click', () => finish(null));
+      ov.querySelector('.scan-manual').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const code = e.target.code.value.replace(/\D/g, '');
+        if (!/^\d{8,14}$/.test(code)) {
+          status.textContent = 'Ein Barcode hat 8 bis 14 Ziffern.';
+          return;
+        }
+        finish(code);
+      });
+      const valid = (c) => /^\d{8,14}$/.test(c || '');
+
+      (async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          status.textContent = 'Keine Kamera verfügbar – tipp die Nummer unter dem Barcode ein.';
+          ov.querySelector('input').focus();
+          return;
+        }
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+        } catch {
+          status.textContent = 'Kein Kamerazugriff. Erlaube die Kamera in den Browser-Einstellungen oder tipp die Nummer ein.';
+          ov.querySelector('input').focus();
+          return;
+        }
+        if (done) return stream.getTracks().forEach((t) => t.stop());
+        video.srcObject = stream;
+        await video.play().catch(() => {});
+        ov.classList.add('live');
+        status.textContent = 'Barcode in den Rahmen halten';
+        let detect;
+        const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+        if ('BarcodeDetector' in window && (await BarcodeDetector.getSupportedFormats().catch(() => [])).includes('ean_13')) {
+          const det = new BarcodeDetector({ formats });
+          detect = async () => {
+            const hits = await det.detect(video).catch(() => []);
+            return hits.map((h) => h.rawValue).find(valid);
+          };
+        } else {
+          const Z = await loadZxing().catch(() => null);
+          if (!Z) {
+            status.textContent = 'Scanner konnte nicht geladen werden – tipp die Nummer ein.';
+            return;
+          }
+          const hints = new Map([[Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]], [Z.DecodeHintType.TRY_HARDER, true]]);
+          const reader = new Z.MultiFormatReader();
+          reader.setHints(hints);
+          const canvas = document.createElement('canvas');
+          const g = canvas.getContext('2d', { willReadFrequently: true });
+          detect = async () => {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            if (!w || !h) return null;
+            // only the middle band, where the frame is: faster and less noise
+            const cw = Math.round(w * 0.8);
+            const ch = Math.round(h * 0.45);
+            canvas.width = cw;
+            canvas.height = ch;
+            g.drawImage(video, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, cw, ch);
+            try {
+              const bmp = new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(canvas)));
+              return reader.decodeWithState(bmp).getText();
+            } catch {
+              return null;
+            } finally {
+              reader.reset();
+            }
+          };
+        }
+        // the same code twice in a row, so a half-read barcode isn't taken
+        let last = null;
+        const tick = async () => {
+          if (done) return;
+          const code = await detect();
+          if (code && valid(code)) {
+            if (code === last) return finish(code);
+            last = code;
+          }
+          timer = setTimeout(tick, 120);
+        };
+        tick();
+      })();
+    });
+  }
+
+  // ---------- food diary ----------
+  const DIARY_MEALS = [['fruehstueck', 'Frühstück'], ['mittag', 'Mittagessen'], ['abend', 'Abendessen'], ['snack', 'Snacks']];
+  const AMOUNT_CHIPS = [50, 100, 150, 200, 250];
+
+  function nutritionTabs(active) {
+    return `<nav class="tabs" aria-label="Ernährung">
+      <a href="#/nutrition" ${active === 'plan' ? 'aria-current="page"' : ''}>Plan</a>
+      <a href="#/nutrition/diary" ${active === 'diary' ? 'aria-current="page"' : ''}>Tagebuch</a>
+    </nav>`;
+  }
+
+  async function renderFoodDiary() {
+    setView(LOADING);
+    const saved = sessionStorage.getItem('diaryDate');
+    const date = saved && saved <= todayStr() ? saved : todayStr();
+    setView(`
+      <div class="page-head"><div>${eyebrow('Was du isst')}<h1>Ernährung</h1></div></div>
+      ${nutritionTabs('diary')}
+      <div id="diary"></div>`);
+    mountDiary(document.getElementById('diary'), { date, readOnly: false });
+  }
+
+  /** Diary of one day. readOnly + clientId for the coach. */
+  async function mountDiary(root, { date, readOnly, clientId }) {
+    const q = clientId ? `&userId=${clientId}` : '';
+    let day;
+    const load = async (d) => {
+      date = d;
+      if (!readOnly) try { sessionStorage.setItem('diaryDate', d); } catch { /* private mode */ }
+      root.setAttribute('aria-busy', 'true');
+      try {
+        day = await api('GET', `/api/foodlog?date=${d}${q}`);
+      } catch (err) {
+        root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+        return;
+      }
+      root.removeAttribute('aria-busy');
+      draw();
+    };
+    const afterChange = (r) => {
+      day = r.day;
+      if (r.revoked && r.revoked.length) toast(`${r.revoked.length} Dose(n) zurückgegeben – die Medaillen dafür gibt es nicht mehr.`, true);
+      draw();
+    };
+
+    function draw() {
+      const t = day.totals;
+      const tg = day.targets;
+      const kcalTarget = tg.kcal || (tg.kcalMin && tg.kcalMax ? Math.round((tg.kcalMin + tg.kcalMax) / 2) : null);
+      const left = kcalTarget ? kcalTarget - t.kcal : null;
+      const ringPct = kcalTarget ? Math.min(1, t.kcal / kcalTarget) : 0;
+      const over = tg.kcalMax ? t.kcal > tg.kcalMax : kcalTarget ? t.kcal > kcalTarget * 1.1 : false;
+      const R = 52;
+      const C = 2 * Math.PI * R;
+      const isToday = date === todayStr();
+      const label = isToday ? 'Heute' : date === addDays(todayStr(), -1) ? 'Gestern' : fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' });
+      const meals = DIARY_MEALS.map(([key, name]) => {
+        const items = day.items.filter((i) => i.meal === key);
+        const kcal = items.reduce((a, i) => a + i.kcal, 0);
+        return `<section class="card diary-meal" data-meal="${key}">
+          <div class="row-between meal-head"><h2>${name}</h2><span class="muted small">${items.length ? `${num(kcal)} kcal` : ''}</span></div>
+          ${items.length ? `<ul class="diary-items">${items.map((i) => `<li>
+            <${readOnly ? 'div' : 'button type="button"'} class="diary-item" data-item="${i.id}">
+              <span class="di-main"><span class="item-name">${esc(i.name)}</span>
+                <span class="muted small di-sub">${i.brand ? `${esc(i.brand)} · ` : ''}${esc(fmtAmount(i.amount, i.unit))} ${macroInline(i)}</span></span>
+              <span class="di-kcal">${num(i.kcal)}<small> kcal</small></span>
+            </${readOnly ? 'div' : 'button'}></li>`).join('')}</ul>` : `<p class="muted small diary-empty">${readOnly ? 'Nichts eingetragen.' : 'Noch nichts eingetragen.'}</p>`}
+          ${readOnly ? '' : `<div class="row diary-add"><button type="button" class="btn-secondary btn-sm" data-add="${key}">+ Lebensmittel</button>
+            <button type="button" class="btn-ghost btn-sm" data-scan="${key}"><span aria-hidden="true">▥</span> Scannen</button></div>`}
+        </section>`;
+      }).join('');
+      root.innerHTML = `
+        <div class="diary-date">
+          <button type="button" class="icon-btn" data-day="-1" aria-label="Vorheriger Tag">‹</button>
+          <strong>${esc(label)}</strong>
+          <button type="button" class="icon-btn" data-day="1" aria-label="Nächster Tag" ${isToday ? 'disabled' : ''}>›</button>
+        </div>
+        <div class="diary-grid">
+          <section class="card diary-summary">
+            <div class="kcal-ring ${over ? 'over' : ''}" role="img" aria-label="${num(t.kcal)} kcal gegessen${kcalTarget ? ` von ${num(kcalTarget)}` : ''}">
+              <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="${R}" class="kr-track"/>
+                <circle cx="60" cy="60" r="${R}" class="kr-fill" stroke-dasharray="${(C * ringPct).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/></svg>
+              <div class="kr-text"><strong>${num(t.kcal)}</strong><span>kcal</span></div>
+            </div>
+            <div class="diary-sum-side">
+              <p class="kcal-left ${over ? 'bad' : ''}">${kcalTarget ? (left >= 0 ? `Noch <strong>${num(left)}</strong> kcal` : `<strong>${num(-left)}</strong> kcal drüber`) : 'Noch kein Kalorienziel'}</p>
+              ${tg.kcalMin && tg.kcalMax ? `<p class="muted small">Ziel ${esc(fmtKcal(tg.kcalMin, tg.kcalMax))}</p>` : ''}
+              ${macroBars(t, tg)}
+            </div>
+          </section>
+          <div class="stack diary-meals">${meals}</div>
+        </div>
+        ${readOnly ? '' : '<p class="muted small diary-note">Die Kalorien des Tages landen automatisch im Tracker. Produktdaten beim Scannen: Open Food Facts.</p>'}`;
+      root.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => load(addDays(date, Number(b.dataset.day)))));
+      if (readOnly) return;
+      root.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => openAddFood(b.dataset.add)));
+      root.querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => scanAndAdd(b.dataset.scan)));
+      root.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => openEditItem(day.items.find((i) => i.id === Number(b.dataset.item)))));
+    }
+
+    async function scanAndAdd(meal) {
+      const code = await scanBarcode();
+      if (!code) return;
+      let product;
+      try {
+        product = (await api('GET', `/api/barcode/${code}`)).product;
+      } catch (err) {
+        toast(err.message, true);
+        return openManual(meal, { barcode: code });
+      }
+      if (!product.found) {
+        toast('Produkt nicht gefunden – trag die Werte von der Packung ein.');
+        return openManual(meal, { barcode: code });
+      }
+      openAmount(meal, { ...product, source: 'barcode' });
+    }
+
+    /** Step 1: search the database, recent foods, scan or type in. */
+    async function openAddFood(meal) {
+      const mealName = DIARY_MEALS.find(([k]) => k === meal)[1];
+      openDialog(`
+        <h2>${esc(mealName)}</h2>
+        <div class="add-food-top">
+          <input type="search" name="q" autocomplete="off" placeholder="Lebensmittel suchen…" aria-label="Lebensmittel suchen">
+          <button type="button" class="btn-secondary" data-scan-here><span aria-hidden="true">▥</span> Scannen</button>
+        </div>
+        <ul class="food-results add-food-list" role="listbox" aria-label="Treffer"></ul>
+        <p class="small"><button type="button" class="link-btn" data-manual>Nicht dabei? Selbst eintragen</button></p>
+        <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Schließen</button></div>`, async () => false);
+      const input = dialog.querySelector('input[name=q]');
+      const list = dialog.querySelector('.add-food-list');
+      let recent = [];
+      const [foods] = await Promise.all([loadFoods(), api('GET', '/api/foodlog/recent').then((r) => { recent = r.recent; }).catch(() => {})]);
+      let shown = [];
+      const show = () => {
+        const term = input.value.trim().toLowerCase();
+        if (!term) {
+          shown = recent.map((r) => ({ ...r, recent: true }));
+          if (!shown.length) shown = foods.slice(0, 0);
+        } else {
+          shown = foods
+            .filter((f) => f.name.toLowerCase().includes(term) || (f.category || '').toLowerCase().includes(term))
+            .sort((a, b) => Number(!a.name.toLowerCase().startsWith(term)) - Number(!b.name.toLowerCase().startsWith(term)) || a.name.length - b.name.length)
+            .slice(0, 40);
+        }
+        list.innerHTML = (!term && shown.length ? '<li class="list-label muted small" aria-hidden="true">Zuletzt gegessen</li>' : '') +
+          (shown.map((f, i) => `<li role="option" tabindex="0" data-i="${i}"><span><span class="item-name">${esc(f.name)}</span>${f.brand ? ` <span class="muted small">${esc(f.brand)}</span>` : ''}
+            <span class="muted small di-sub">${num(f.kcal)} kcal/100 ${f.unit} ${macroInline(f)}</span></span>${f.recent ? `<span class="muted small">${esc(fmtAmount(f.amount, f.unit))}</span>` : ''}</li>`).join('') ||
+          `<li class="muted small" data-none>${term ? 'Nichts gefunden. Scann die Packung oder trag es selbst ein.' : 'Tipp los, z. B. „Skyr“ – oder scann einen Barcode.'}</li>`);
+      };
+      input.addEventListener('input', show);
+      const choose = (li) => {
+        if (!li || li.dataset.i === undefined) return;
+        const f = shown[Number(li.dataset.i)];
+        openAmount(meal, f.recent
+          ? { ...f, source: f.foodId ? 'db' : 'custom', id: f.foodId, suggested: f.amount }
+          : { ...f, source: 'db' });
+      };
+      list.addEventListener('click', (e) => choose(e.target.closest('li')));
+      list.addEventListener('keydown', (e) => e.key === 'Enter' && choose(e.target.closest('li')));
+      dialog.querySelector('[data-scan-here]').addEventListener('click', () => {
+        dialog.close();
+        scanAndAdd(meal);
+      });
+      dialog.querySelector('[data-manual]').addEventListener('click', () => openManual(meal, { name: input.value.trim() }));
+      show();
+      input.focus();
+    }
+
+    /** Step 2: how much? Live preview of kcal and macros. */
+    function openAmount(meal, f) {
+      if (dialog.open) dialog.close();
+      const mealName = DIARY_MEALS.find(([k]) => k === meal)[1];
+      const serving = f.serving && /(\d+(?:[.,]\d+)?)\s*(g|ml)\b/i.exec(f.serving);
+      const servingRaw = serving ? Number(serving[1].replace(',', '.')) : null;
+      const servingAmount = servingRaw ? (servingRaw >= 10 ? Math.round(servingRaw) : Math.round(servingRaw * 10) / 10) : null;
+      const start = f.suggested || servingAmount || 100;
+      openDialog(`
+        <h2>${esc(f.name)}</h2>
+        <p class="muted small" style="margin-top:-6px">${f.brand ? `${esc(f.brand)} · ` : ''}${num(f.kcal)} kcal/100 ${esc(f.unit)} ${macroInline(f)}</p>
+        <div class="field"><label for="fa-amount">Menge</label>
+          <div class="input-unit"><input id="fa-amount" name="amount" inputmode="decimal" value="${String(start).replace('.', ',')}" required><span>${esc(f.unit)}</span></div>
+          <div class="row chip-row">${[...(servingAmount ? [servingAmount] : []), ...AMOUNT_CHIPS.filter((a) => a !== servingAmount)].map((a, i) =>
+            `<button type="button" class="btn-ghost btn-sm chip" data-chip="${a}">${i === 0 && servingAmount ? `1 Portion (${esc(fmtAmount(a, f.unit))})` : esc(fmtAmount(a, f.unit))}</button>`).join('')}</div></div>
+        <div class="field"><label for="fa-meal">Mahlzeit</label><select id="fa-meal" name="meal">${DIARY_MEALS.map(([k, n]) => `<option value="${k}" ${k === meal ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        <div class="amount-preview" aria-live="polite"></div>
+        <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Zu ${esc(mealName)} hinzufügen</button></div>`,
+      async (form) => {
+        const amount = parseNum(form.amount.value);
+        if (!amount || Number.isNaN(amount) || amount <= 0) throw new Error('Bitte eine Menge angeben.');
+        const body = { date, meal: form.meal.value, amount };
+        if (f.source === 'db') body.foodId = f.id;
+        else Object.assign(body, { name: f.name, brand: f.brand, barcode: f.barcode, unit: f.unit, kcal: f.kcal, protein: f.protein, carbs: f.carbs, fat: f.fat });
+        afterChange(await api('POST', '/api/foodlog', body));
+        savedHud('Eingetragen', `${fmtAmount(amount, f.unit)} ${f.name}`);
+      });
+      const form = dialog.querySelector('form');
+      const preview = form.querySelector('.amount-preview');
+      const mealSel = form.meal;
+      const submit = form.querySelector('[type=submit]');
+      const upd = () => {
+        const a = parseNum(form.amount.value) || 0;
+        const m = (k) => (f[k] === null || f[k] === undefined ? null : Math.round(((a * f[k]) / 100) * 10) / 10);
+        preview.innerHTML = `<strong>${num(itemKcal(a, f.kcal))} kcal</strong> ${macroInline({ protein: m('protein'), carbs: m('carbs'), fat: m('fat') })}`;
+        submit.textContent = `Zu ${DIARY_MEALS.find(([k]) => k === mealSel.value)[1]} hinzufügen`;
+      };
+      form.amount.addEventListener('input', upd);
+      mealSel.addEventListener('change', upd);
+      form.querySelectorAll('[data-chip]').forEach((b) => b.addEventListener('click', () => {
+        form.amount.value = String(b.dataset.chip).replace('.', ',');
+        upd();
+      }));
+      upd();
+      form.amount.select();
+    }
+
+    /** Typed in from the packaging (also when a scanned product is unknown). */
+    function openManual(meal, pre) {
+      if (dialog.open) dialog.close();
+      const v = (k) => (pre[k] === null || pre[k] === undefined ? '' : String(pre[k]).replace('.', ','));
+      openDialog(`
+        <h2>Selbst eintragen</h2>
+        <p class="muted small" style="margin-top:-6px">Die Werte pro 100 g stehen auf der Packung (Nährwerttabelle).${pre.barcode ? ` Barcode ${esc(pre.barcode)}.` : ''}</p>
+        <div class="field"><label for="fm-name">Name</label><input id="fm-name" name="name" maxlength="80" value="${esc(pre.name || '')}" required></div>
+        <div class="field"><label for="fm-brand">Marke <span class="muted">(optional)</span></label><input id="fm-brand" name="brand" maxlength="60" value="${esc(pre.brand || '')}"></div>
+        <div class="field-row">
+          <div class="field"><label for="fm-kcal">kcal pro 100</label><input id="fm-kcal" name="kcal" inputmode="decimal" value="${v('kcal')}" required></div>
+          <div class="field"><label for="fm-unit">Einheit</label><select id="fm-unit" name="unit"><option value="g">g</option><option value="ml" ${pre.unit === 'ml' ? 'selected' : ''}>ml</option></select></div>
+        </div>
+        <div class="field-row three">
+          <div class="field"><label for="fm-p">Eiweiß</label><input id="fm-p" name="protein" inputmode="decimal" value="${v('protein')}" placeholder="g"></div>
+          <div class="field"><label for="fm-c">Kohlenh.</label><input id="fm-c" name="carbs" inputmode="decimal" value="${v('carbs')}" placeholder="g"></div>
+          <div class="field"><label for="fm-f">Fett</label><input id="fm-f" name="fat" inputmode="decimal" value="${v('fat')}" placeholder="g"></div>
+        </div>
+        <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Weiter</button></div>`,
+      async (form) => {
+        const kcal = parseNum(form.kcal.value);
+        if (!form.name.value.trim()) throw new Error('Bitte einen Namen angeben.');
+        if (kcal === null || Number.isNaN(kcal)) throw new Error('Bitte die kcal pro 100 angeben.');
+        const mac = (n) => {
+          const x = parseNum(form[n].value);
+          if (Number.isNaN(x)) throw new Error('Makros bitte als Zahl in Gramm.');
+          return x;
+        };
+        const f = { source: 'custom', name: form.name.value.trim(), brand: form.brand.value.trim() || null, barcode: pre.barcode || null, unit: form.unit.value, kcal, protein: mac('protein'), carbs: mac('carbs'), fat: mac('fat') };
+        setTimeout(() => openAmount(meal, f), 0);
+      });
+    }
+
+    function openEditItem(i) {
+      openDialog(`
+        <h2>${esc(i.name)}</h2>
+        <p class="muted small" style="margin-top:-6px">${num(i.per100.kcal)} kcal/100 ${esc(i.unit)} ${macroInline(i.per100)}</p>
+        <div class="field-row">
+          <div class="field"><label for="fe-amount">Menge</label><div class="input-unit"><input id="fe-amount" name="amount" inputmode="decimal" value="${String(i.amount).replace('.', ',')}"><span>${esc(i.unit)}</span></div></div>
+          <div class="field"><label for="fe-meal">Mahlzeit</label><select id="fe-meal" name="meal">${DIARY_MEALS.map(([k, n]) => `<option value="${k}" ${k === i.meal ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        </div>
+        <div class="dialog-actions"><button type="button" class="btn-ghost danger-text" data-del style="margin-right:auto">Löschen</button>
+          <button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Speichern</button></div>`,
+      async (form) => {
+        const amount = parseNum(form.amount.value);
+        if (!amount || Number.isNaN(amount)) throw new Error('Bitte eine Menge angeben.');
+        afterChange(await api('PATCH', `/api/foodlog/${i.id}`, { amount, meal: form.meal.value }));
+      });
+      dialog.querySelector('[data-del]').addEventListener('click', async () => {
+        try {
+          afterChange(await api('DELETE', `/api/foodlog/${i.id}`));
+          dialog.close();
+          toast(`${i.name} entfernt`);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+
+    await load(date);
+  }
+
   // ---------- coach: nutrition plan editor ----------
   async function mountCoachNutrition(root, client, goals) {
     const [plan, , pr] = await Promise.all([api('GET', `/api/nutrition?userId=${client.id}`), loadFoods(), api('GET', `/api/nutrition/request?userId=${client.id}`)]);
@@ -2788,7 +3273,7 @@
           <div class="row-between meal-head">
             <h2>${esc(m.name)} ${mealReq ? '<span class="badge warn">Tauschwunsch</span>' : ''}</h2>
             <div class="row" style="gap:2px">
-              <span class="muted small" style="margin-right:8px">${num(m.kcalTotal)} kcal</span>
+              <span class="muted small" style="margin-right:8px">${num(m.kcalTotal)} kcal${hasMacros(m.macros) && m.items.length ? ` · E ${gram(m.macros.protein)} · K ${gram(m.macros.carbs)} · F ${gram(m.macros.fat)} g` : ''}</span>
               <button type="button" class="btn-ghost btn-sm" data-move="${m.id}" data-dir="-1" ${mi === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
               <button type="button" class="btn-ghost btn-sm" data-move="${m.id}" data-dir="1" ${mi === plan.meals.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
               <button type="button" class="btn-ghost btn-sm" data-rename="${m.id}">Umbenennen</button>
@@ -2796,16 +3281,17 @@
             </div>
           </div>
           <div class="table-wrap"><table class="plan-table">
-            <thead><tr><th>Lebensmittel</th><th class="num">Menge</th><th class="num">kcal/100</th><th class="num">kcal</th><th></th></tr></thead>
+            <thead><tr><th>Lebensmittel</th><th class="num">Menge</th><th class="num">kcal/100</th><th class="num">kcal</th><th class="num macro-col">E · K · F (g)</th><th></th></tr></thead>
             <tbody>${m.items
               .map((i) => `<tr class="${reqItemIds.has(i.id) ? 'has-request' : ''}">
                 <td>${esc(i.name)} ${reqItemIds.has(i.id) ? '<span class="badge warn">Tauschwunsch</span>' : ''}</td>
                 <td class="num"><input class="amount-input" data-amount="${i.id}" inputmode="decimal" value="${String(i.amount).replace('.', ',')}" aria-label="Menge"> ${esc(i.unit)}</td>
                 <td class="num muted">${num(i.kcal)}</td>
                 <td class="num"><strong>${num(i.kcalTotal)}</strong></td>
+                <td class="num muted macro-col">${hasMacros(i) ? `${gram(i.protein)} · ${gram(i.carbs)} · ${gram(i.fat)}` : '–'}</td>
                 <td class="actions"><button type="button" class="btn-ghost btn-sm" data-replace="${i.id}">Ersetzen</button><button type="button" class="btn-ghost btn-sm danger-text" data-del-item="${i.id}" aria-label="Entfernen">✕</button></td>
               </tr>`)
-              .join('') || '<tr><td colspan="5" class="muted small">Noch keine Lebensmittel.</td></tr>'}</tbody>
+              .join('') || '<tr><td colspan="6" class="muted small">Noch keine Lebensmittel.</td></tr>'}</tbody>
           </table></div>
           <form class="add-item" data-add="${m.id}">
             <div data-picker></div>
@@ -2840,6 +3326,15 @@
           </form>
         </div>
         <aside class="stack">
+          <form class="card macro-goals" id="macro-goals">
+            <h3 style="margin-bottom:4px">Makroziele pro Tag</h3>
+            <p class="muted small" style="margin-top:0">${esc(client.displayName)} sieht sie im Plan und im Tagebuch. Leer lassen = kein Ziel.</p>
+            <div class="field-row three">${MACROS.map(([k, label]) => `<div class="field"><label for="mg-${k}">${label}</label>
+              <div class="input-unit"><input id="mg-${k}" name="${k}" inputmode="numeric" value="${plan.macroGoals && plan.macroGoals[k] !== null ? plan.macroGoals[k] : ''}"><span>g</span></div></div>`).join('')}</div>
+            ${hasKcal(goals) ? `<p class="small muted" data-mg-kcal></p>` : ''}
+            <button type="submit" class="btn-secondary btn-sm">Makroziele speichern</button>
+          </form>
+          <section class="card coach-diary"><h3 style="margin-bottom:8px">Ernährungstagebuch</h3><div id="coach-diary"></div></section>
           <section class="card"><h3 style="margin-bottom:8px">So funktioniert's</h3>
             <p class="small muted">Du legst Mahlzeiten und Mengen fest. ${esc(client.displayName)} sieht den Plan unter „Ernährung“ und kann einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – du bekommst dann eine Push-Nachricht. Ändern kannst nur du.</p>
             <p class="small muted">Lebensmittel fehlt? Einfach den Namen eintippen und „neu anlegen“ – oder im <a href="#/admin">Admin-Tool</a> pflegen.</p>
@@ -2847,6 +3342,36 @@
           ${history.length ? `<section class="card"><h3 style="margin-bottom:8px">Erledigte Tauschwünsche</h3>${history.map(requestLine).join('')}<p class="small muted" style="margin:8px 0 0">Verschwinden nach einem Tag.</p></section>` : ''}
         </aside>
       </div>`;
+
+    // Macro targets
+    const mg = root.querySelector('#macro-goals');
+    const mgKcal = mg.querySelector('[data-mg-kcal]');
+    const mgUpd = () => {
+      if (!mgKcal) return;
+      const v = (k) => parseNum(mg[k].value) || 0;
+      const kcal = v('protein') * 4 + v('carbs') * 4 + v('fat') * 9;
+      mgKcal.textContent = kcal ? `Ergibt ${num(kcal)} kcal – Zielkalorien ${fmtKcal(goals.caloriesMin, goals.caloriesMax)}.` : '';
+    };
+    mg.addEventListener('input', mgUpd);
+    mgUpd();
+    mg.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {};
+      for (const [k] of MACROS) {
+        const x = parseNum(mg[k].value);
+        if (Number.isNaN(x)) return toast('Makroziele bitte als ganze Gramm angeben.', true);
+        body[k] = x === null ? null : Math.round(x);
+      }
+      try {
+        const r = await api('PUT', `/api/macro-goals?userId=${client.id}`, body);
+        plan.macroGoals = r.macroGoals;
+        savedHud('Makroziele gespeichert', client.displayName);
+        redraw(plan);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    mountDiary(root.querySelector('#coach-diary'), { date: todayStr(), readOnly: true, clientId: client.id });
 
     // Add items
     root.querySelectorAll('[data-add]').forEach((form) => {
@@ -3289,16 +3814,17 @@
     root.innerHTML = `
       <div class="row-between" style="margin-bottom:8px"><h2>Lebensmittel-Datenbank</h2>
         <button type="button" class="btn-primary btn-sm" data-new-food>+ Lebensmittel anlegen</button></div>
-      <p class="small muted" style="margin:0 0 10px">${foodCache.length} Lebensmittel, kcal pro 100 g bzw. 100 ml. Die mitgelieferten Werte sind Richtwerte – du kannst alles anpassen.</p>
+      <p class="small muted" style="margin:0 0 10px">${foodCache.length} Lebensmittel, kcal und Makros (Eiweiß · Kohlenhydrate · Fett) pro 100 g bzw. 100 ml. Die mitgelieferten Werte sind Richtwerte – du kannst alles anpassen.</p>
       <input type="search" data-food-search placeholder="Suchen, z. B. Reis oder Obst" value="${esc(term)}" style="margin-bottom:10px">
       <div class="table-wrap food-table-wrap"><table>
-        <thead><tr><th>Lebensmittel</th><th class="num">kcal / 100</th><th>Kategorie</th><th></th></tr></thead>
+        <thead><tr><th>Lebensmittel</th><th class="num">kcal / 100</th><th class="num macro-col">E · K · F (g)</th><th>Kategorie</th><th></th></tr></thead>
         <tbody>${list
           .map((f) => `<tr><td>${esc(f.name)} ${f.custom ? '<span class="badge">eigenes</span>' : ''}</td>
             <td class="num">${num(f.kcal)} <span class="muted small">/ 100 ${f.unit}</span></td>
+            <td class="num muted small macro-col">${hasMacros(f) ? `${gram(f.protein)} · ${gram(f.carbs)} · ${gram(f.fat)}` : '–'}</td>
             <td class="muted small">${esc(f.category || '')}</td>
             <td class="actions"><button type="button" class="btn-ghost btn-sm" data-edit-food="${f.id}">Bearbeiten</button><button type="button" class="btn-ghost btn-sm danger-text" data-del-food="${f.id}" aria-label="Löschen">✕</button></td></tr>`)
-          .join('') || '<tr><td colspan="4" class="muted">Nichts gefunden.</td></tr>'}</tbody>
+          .join('') || '<tr><td colspan="5" class="muted">Nichts gefunden.</td></tr>'}</tbody>
       </table></div>`;
     const search = root.querySelector('[data-food-search]');
     search.addEventListener('input', () => {

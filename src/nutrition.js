@@ -16,8 +16,8 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
     allFoods: db.prepare('SELECT * FROM foods ORDER BY category, name COLLATE NOCASE'),
     food: db.prepare('SELECT * FROM foods WHERE id = ?'),
     foodByName: db.prepare('SELECT * FROM foods WHERE name = ?'),
-    insertFood: db.prepare('INSERT INTO foods (name, kcal, unit, category, is_custom) VALUES (?, ?, ?, ?, 1)'),
-    updateFood: db.prepare('UPDATE foods SET name = ?, kcal = ?, unit = ?, category = ? WHERE id = ?'),
+    insertFood: db.prepare('INSERT INTO foods (name, kcal, unit, category, protein, carbs, fat, is_custom) VALUES (?, ?, ?, ?, ?, ?, ?, 1)'),
+    updateFood: db.prepare('UPDATE foods SET name = ?, kcal = ?, unit = ?, category = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?'),
     deleteFood: db.prepare('DELETE FROM foods WHERE id = ?'),
 
     meals: db.prepare('SELECT * FROM meals WHERE client_id = ? ORDER BY position, id'),
@@ -33,9 +33,9 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
     ),
     maxItemPos: db.prepare('SELECT COALESCE(MAX(position), -1) AS p FROM meal_items WHERE meal_id = ?'),
     insertItem: db.prepare(
-      'INSERT INTO meal_items (meal_id, food_id, name, kcal, unit, amount, position) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO meal_items (meal_id, food_id, name, kcal, unit, amount, position, protein, carbs, fat) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ),
-    updateItem: db.prepare('UPDATE meal_items SET food_id = ?, name = ?, kcal = ?, unit = ?, amount = ? WHERE id = ?'),
+    updateItem: db.prepare('UPDATE meal_items SET food_id = ?, name = ?, kcal = ?, unit = ?, amount = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?'),
     deleteItem: db.prepare('DELETE FROM meal_items WHERE id = ?'),
 
     requestsOf: db.prepare(
@@ -54,9 +54,17 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
     ),
     deleteRequest: db.prepare('DELETE FROM swap_requests WHERE id = ?'),
     clientName: db.prepare('SELECT display_name FROM users WHERE id = ?'),
+    macroGoals: db.prepare('SELECT * FROM macro_goals WHERE user_id = ?'),
+    setMacroGoals: db.prepare(
+      'INSERT INTO macro_goals (user_id, protein, carbs, fat) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET protein = excluded.protein, carbs = excluded.carbs, fat = excluded.fat'
+    ),
   };
 
-  const foodRow = (f) => ({ id: f.id, name: f.name, kcal: f.kcal, unit: f.unit, category: f.category, custom: Boolean(f.is_custom) });
+  const foodRow = (f) => ({
+    id: f.id, name: f.name, kcal: f.kcal, unit: f.unit, category: f.category, custom: Boolean(f.is_custom),
+    protein: f.protein ?? null, carbs: f.carbs ?? null, fat: f.fat ?? null,
+  });
+  const macroSpec = (name) => ({ name: `${name} pro 100`, min: 0, max: 100 });
 
   function parseFood(body, existing = {}) {
     const name = textField(body.name, { name: 'Name', max: 80 }) ?? existing.name;
@@ -66,15 +74,36 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
     const unit = body.unit === undefined ? existing.unit || 'g' : body.unit;
     if (!['g', 'ml'].includes(unit)) throw new HttpError(400, 'Einheit: g oder ml');
     const category = textField(body.category, { name: 'Kategorie', max: 40 }) ?? existing.category ?? 'Eigene';
-    return { name, kcal, unit, category };
+    const macro = (key, label) => {
+      const v = numberField(body[key], macroSpec(label));
+      return v === undefined ? existing[key] ?? null : v;
+    };
+    return { name, kcal, unit, category, protein: macro('protein', 'Eiweiß'), carbs: macro('carbs', 'Kohlenhydrate'), fat: macro('fat', 'Fett') };
   }
+
+  /** Grams of a macro in an item (null when the food has no macro values). */
+  const macroOf = (i, key) => (i[key] === null || i[key] === undefined ? null : Math.round(((i.amount * i[key]) / 100) * 10) / 10);
+  const sumMacros = (list) => {
+    const t = { protein: 0, carbs: 0, fat: 0, complete: true };
+    for (const x of list) {
+      for (const k of ['protein', 'carbs', 'fat']) {
+        if (x[k] === null || x[k] === undefined) t.complete = false;
+        else t[k] += x[k];
+      }
+      if (x.complete === false) t.complete = false;
+    }
+    for (const k of ['protein', 'carbs', 'fat']) t[k] = Math.round(t[k]);
+    return t;
+  };
 
   function planOf(clientId) {
     const meals = q.meals.all(clientId).map((m) => {
       const items = q.items.all(m.id).map((i) => ({
         id: i.id, foodId: i.food_id, name: i.name, kcal: i.kcal, unit: i.unit, amount: i.amount, kcalTotal: kcalOf(i),
+        protein: macroOf(i, 'protein'), carbs: macroOf(i, 'carbs'), fat: macroOf(i, 'fat'),
+        per100: { protein: i.protein ?? null, carbs: i.carbs ?? null, fat: i.fat ?? null },
       }));
-      return { id: m.id, name: m.name, items, kcalTotal: items.reduce((a, i) => a + i.kcalTotal, 0) };
+      return { id: m.id, name: m.name, items, kcalTotal: items.reduce((a, i) => a + i.kcalTotal, 0), macros: sumMacros(items) };
     });
     const requests = q.requestsOf.all(clientId).map((r) => ({
       id: r.id,
@@ -89,7 +118,11 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
       createdAt: r.created_at,
       resolvedAt: r.resolved_at,
     }));
-    return { meals, totalKcal: meals.reduce((a, m) => a + m.kcalTotal, 0), requests };
+    return {
+      meals, totalKcal: meals.reduce((a, m) => a + m.kcalTotal, 0), requests,
+      macros: sumMacros(meals.map((m) => m.macros)),
+      macroGoals: macroGoalsOf(clientId),
+    };
   }
 
   function ownMeal(ctx, id) {
@@ -110,7 +143,7 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
     if (body.foodId !== undefined && body.foodId !== null) {
       const f = q.food.get(Number(body.foodId));
       if (!f) throw new HttpError(404, 'Lebensmittel nicht in der Datenbank');
-      return { foodId: f.id, name: f.name, kcal: f.kcal, unit: f.unit };
+      return { foodId: f.id, name: f.name, kcal: f.kcal, unit: f.unit, protein: f.protein, carbs: f.carbs, fat: f.fat };
     }
     const f = parseFood(body);
     return { foodId: null, ...f };
@@ -118,7 +151,24 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
 
   const amountSpec = { name: 'Menge', min: 1, max: 5000 };
 
+  /** Daily macro targets in grams (null = no target). */
+  function macroGoalsOf(clientId) {
+    const g = q.macroGoals.get(clientId);
+    return { protein: g ? g.protein : null, carbs: g ? g.carbs : null, fat: g ? g.fat : null };
+  }
+
   return [
+    // ---- Macro targets (coach sets them, the client sees them) ----
+    ['GET', /^\/api\/macro-goals$/, async (ctx) => ({ macroGoals: macroGoalsOf(targetClient(ctx).id) })],
+    ['PUT', /^\/api\/macro-goals$/, async (ctx) => {
+      requireCoach(ctx);
+      const c = targetClient(ctx);
+      const b = await readBody(ctx.req);
+      const g = (k, label) => numberField(b[k], { name: label, min: 0, max: 1000 }) ?? null;
+      q.setMacroGoals.run(c.id, g('protein', 'Eiweiß'), g('carbs', 'Kohlenhydrate'), g('fat', 'Fett'));
+      return { macroGoals: macroGoalsOf(c.id) };
+    }],
+
     // ---- Food database ----
     ['GET', /^\/api\/foods$/, async (ctx) => {
       requireUser(ctx);
@@ -132,7 +182,7 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
       requireCoach(ctx);
       const f = parseFood(await readBody(ctx.req));
       if (q.foodByName.get(f.name)) throw new HttpError(409, 'Dieses Lebensmittel gibt es schon');
-      const id = Number(q.insertFood.run(f.name, f.kcal, f.unit, f.category).lastInsertRowid);
+      const id = Number(q.insertFood.run(f.name, f.kcal, f.unit, f.category, f.protein, f.carbs, f.fat).lastInsertRowid);
       ctx.res.statusCode = 201;
       return { food: foodRow(q.food.get(id)) };
     }],
@@ -144,7 +194,7 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
       const f = parseFood(await readBody(ctx.req), existing);
       const clash = q.foodByName.get(f.name);
       if (clash && clash.id !== existing.id) throw new HttpError(409, 'Dieses Lebensmittel gibt es schon');
-      q.updateFood.run(f.name, f.kcal, f.unit, f.category, existing.id);
+      q.updateFood.run(f.name, f.kcal, f.unit, f.category, f.protein, f.carbs, f.fat, existing.id);
       return { food: foodRow(q.food.get(existing.id)) };
     }],
 
@@ -202,7 +252,7 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
       const f = resolveFood(body);
       const amount = numberField(body.amount, amountSpec);
       if (!amount) throw new HttpError(400, 'Bitte eine Menge angeben');
-      q.insertItem.run(m.id, f.foodId, f.name, f.kcal, f.unit, amount, q.maxItemPos.get(m.id).p + 1);
+      q.insertItem.run(m.id, f.foodId, f.name, f.kcal, f.unit, amount, q.maxItemPos.get(m.id).p + 1, f.protein ?? null, f.carbs ?? null, f.fat ?? null);
       ctx.res.statusCode = 201;
       return planOf(m.client_id);
     }],
@@ -210,10 +260,10 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
     ['PATCH', /^\/api\/nutrition\/items\/(\d+)$/, async (ctx, [, id]) => {
       const i = ownItem(ctx, id);
       const body = await readBody(ctx.req);
-      let f = { foodId: i.food_id, name: i.name, kcal: i.kcal, unit: i.unit };
+      let f = { foodId: i.food_id, name: i.name, kcal: i.kcal, unit: i.unit, protein: i.protein, carbs: i.carbs, fat: i.fat };
       if (body.foodId !== undefined || body.name !== undefined) f = resolveFood(body);
       const amount = numberField(body.amount, amountSpec) ?? i.amount;
-      q.updateItem.run(f.foodId, f.name, f.kcal, f.unit, amount, i.id);
+      q.updateItem.run(f.foodId, f.name, f.kcal, f.unit, amount, f.protein ?? null, f.carbs ?? null, f.fat ?? null, i.id);
       return planOf(i.client_id);
     }],
 
@@ -291,7 +341,7 @@ function nutritionRoutes({ db, notifier, HttpError, readBody, textField, numberF
         const i = r.item_id ? q.item.get(r.item_id) : null;
         const f = r.wanted_food_id ? q.food.get(r.wanted_food_id) : null;
         if (!i || !f) throw new HttpError(400, 'Automatischer Tausch nicht möglich – bitte den Plan von Hand anpassen');
-        q.updateItem.run(f.id, f.name, f.kcal, f.unit, sameKcalAmount(kcalOf(i), f.kcal), i.id);
+        q.updateItem.run(f.id, f.name, f.kcal, f.unit, sameKcalAmount(kcalOf(i), f.kcal), f.protein ?? null, f.carbs ?? null, f.fat ?? null, i.id);
       }
       q.resolveRequest.run(body.status, note ?? null, r.id);
       notifier

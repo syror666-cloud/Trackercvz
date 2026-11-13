@@ -419,6 +419,56 @@ Sanftere Übergänge|Smoother transitions|Transiciones más suaves|Transizioni p
 Seiten, Fenster und Fortschrittsanzeigen gleiten jetzt ruhig ins Bild.|Pages, windows and progress indicators now glide in calmly.|Páginas, ventanas e indicadores de progreso aparecen ahora con suavidad.|Pagine, finestre e indicatori di avanzamento ora entrano con calma.
 Sold out im Shop|Sold out in the shop|Agotado en la tienda|Esaurito nel negozio
 Jedes Getränk kann ein Klient nur einmal kaufen – im Test-Kühlschrank kannst du es durch Leeren zurückholen.|Clients can buy each drink only once – in your test fridge, emptying it brings drinks back.|Cada cliente puede comprar cada bebida una sola vez – en tu nevera de prueba, al vaciarla vuelven.|Ogni cliente può comprare ogni bevanda una sola volta – nel frigo di prova svuotandolo tornano disponibili.
+Tagebuch|Diary|Diario|Diario
+Plan|Plan|Plan|Piano
+Was du isst|What you eat|Lo que comes|Cosa mangi
+Ernährungstagebuch|Food diary|Diario de comidas|Diario alimentare
+Frühstück|Breakfast|Desayuno|Colazione
+Mittagessen|Lunch|Almuerzo|Pranzo
+Abendessen|Dinner|Cena|Cena
+Snacks|Snacks|Snacks|Spuntini
++ Lebensmittel|+ Food|+ Alimento|+ Alimento
+Scannen|Scan|Escanear|Scansiona
+Gestern|Yesterday|Ayer|Ieri
+Vorheriger Tag|Previous day|Día anterior|Giorno precedente
+Nächster Tag|Next day|Día siguiente|Giorno successivo
+Noch nichts eingetragen.|Nothing logged yet.|Aún no hay nada.|Ancora niente.
+Nichts eingetragen.|Nothing logged.|Nada registrado.|Niente registrato.
+Noch kein Kalorienziel|No calorie target yet|Aún sin objetivo de calorías|Ancora nessun obiettivo calorico
+Eiweiß|Protein|Proteína|Proteine
+Kohlenhydrate|Carbs|Carbohidratos|Carboidrati
+Kohlenh.|Carbs|Carbohidr.|Carboidr.
+Fett|Fat|Grasa|Grassi
+Makroziele pro Tag|Daily macro targets|Objetivos de macros diarios|Obiettivi macro giornalieri
+Makroziele speichern|Save macro targets|Guardar objetivos de macros|Salva obiettivi macro
+Makroziele gespeichert|Macro targets saved|Objetivos de macros guardados|Obiettivi macro salvati
+E · K · F (g)|P · C · F (g)|P · C · G (g)|P · C · G (g)
+Lebensmittel suchen…|Search foods…|Buscar alimentos…|Cerca alimenti…
+Zuletzt gegessen|Recently eaten|Comido recientemente|Mangiato di recente
+Nicht dabei? Selbst eintragen|Not listed? Enter it yourself|¿No está? Introdúcelo tú|Non c'è? Inseriscilo tu
+Selbst eintragen|Enter manually|Introducir a mano|Inserisci a mano
+Menge|Amount|Cantidad|Quantità
+Mahlzeit|Meal|Comida|Pasto
+Marke|Brand|Marca|Marca
+Weiter|Continue|Continuar|Continua
+Eingetragen|Logged|Registrado|Registrato
+Barcode scannen|Scan barcode|Escanear código de barras|Scansiona codice a barre
+Scanner schließen|Close scanner|Cerrar escáner|Chiudi scanner
+Kamera wird gestartet…|Starting camera…|Iniciando cámara…|Avvio fotocamera…
+Barcode in den Rahmen halten|Hold the barcode inside the frame|Coloca el código dentro del marco|Tieni il codice nel riquadro
+oder Nummer unter dem Barcode eintippen|or type the number below the barcode|o escribe el número bajo el código|o digita il numero sotto il codice
+Barcode-Nummer|Barcode number|Número del código|Numero del codice
+Ein Barcode hat 8 bis 14 Ziffern.|A barcode has 8 to 14 digits.|Un código tiene de 8 a 14 dígitos.|Un codice ha da 8 a 14 cifre.
+Keine Kamera verfügbar – tipp die Nummer unter dem Barcode ein.|No camera available – type the number below the barcode.|No hay cámara – escribe el número bajo el código.|Nessuna fotocamera – digita il numero sotto il codice.
+Kein Kamerazugriff. Erlaube die Kamera in den Browser-Einstellungen oder tipp die Nummer ein.|No camera access. Allow the camera in your browser settings or type the number.|Sin acceso a la cámara. Permítela en el navegador o escribe el número.|Nessun accesso alla fotocamera. Consentila nel browser o digita il numero.
+Scanner konnte nicht geladen werden – tipp die Nummer ein.|The scanner could not be loaded – type the number.|No se pudo cargar el escáner – escribe el número.|Impossibile caricare lo scanner – digita il numero.
+Produkt nicht gefunden – trag die Werte von der Packung ein.|Product not found – enter the values from the package.|Producto no encontrado – introduce los valores del envase.|Prodotto non trovato – inserisci i valori della confezione.
+Die Kalorien des Tages landen automatisch im Tracker. Produktdaten beim Scannen: Open Food Facts.|The day's calories go into the tracker automatically. Product data when scanning: Open Food Facts.|Las calorías del día pasan solas al tracker. Datos de productos al escanear: Open Food Facts.|Le calorie del giorno finiscono da sole nel tracker. Dati prodotto alla scansione: Open Food Facts.
+Die Werte pro 100 g stehen auf der Packung (Nährwerttabelle).|The values per 100 g are on the package (nutrition table).|Los valores por 100 g están en el envase (tabla nutricional).|I valori per 100 g sono sulla confezione (tabella nutrizionale).
+Nicht für alle Lebensmittel sind Makros hinterlegt.|Not all foods have macros.|No todos los alimentos tienen macros.|Non tutti gli alimenti hanno i macro.
+Bitte eine Menge angeben.|Please enter an amount.|Introduce una cantidad.|Inserisci una quantità.
+Tipp los, z. B. „Skyr“ – oder scann einen Barcode.|Start typing, e.g. "skyr" – or scan a barcode.|Empieza a escribir, p. ej. «skyr» – o escanea un código.|Inizia a scrivere, ad es. «skyr» – o scansiona un codice.
+Nichts gefunden. Scann die Packung oder trag es selbst ein.|Nothing found. Scan the package or enter it yourself.|Nada encontrado. Escanea el envase o introdúcelo tú.|Niente trovato. Scansiona la confezione o inseriscilo tu.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -476,6 +526,10 @@ noch nie|never|nunca|mai
     [/^(\d+) Getränke? · Testmodus: alles gratis$/, W(0, (m) => `${m[1]} drink${m[1] === '1' ? '' : 's'} · test mode: everything free`, (m) => `${m[1]} bebida${m[1] === '1' ? '' : 's'} · modo de prueba: todo gratis`, (m) => `${m[1]} bevand${m[1] === '1' ? 'a' : 'e'} · modalità prova: tutto gratis`)],
     [/^(\d+) Getränke? im Test-Kühlschrank$/, W(0, (m) => `${m[1]} drink${m[1] === '1' ? '' : 's'} in the test fridge`, (m) => `${m[1]} bebida${m[1] === '1' ? '' : 's'} en la nevera de prueba`, (m) => `${m[1]} bevand${m[1] === '1' ? 'a' : 'e'} nel frigo di prova`)],
     [/^(.+) ist ausverkauft – steht schon in deinem Kühlschrank\.$/, W(0, (m) => `${m[1]} is sold out – it is already in your fridge.`, (m) => `${m[1]} está agotado – ya está en tu nevera.`, (m) => `${m[1]} è esaurito – è già nel tuo frigo.`)],
+    [/^Noch ([\d.,]+) kcal$/, W(0, (m) => `${m[1]} kcal left`, (m) => `Quedan ${m[1]} kcal`, (m) => `Ancora ${m[1]} kcal`)],
+    [/^([\d.,]+) kcal drüber$/, W(0, (m) => `${m[1]} kcal over`, (m) => `${m[1]} kcal de más`, (m) => `${m[1]} kcal in più`)],
+    [/^Zu (Frühstück|Mittagessen|Abendessen|Snacks) hinzufügen$/, W(0, (m, l) => `Add to ${word(l, m[1]).toLowerCase()}`, (m, l) => `Añadir a ${word(l, m[1]).toLowerCase()}`, (m, l) => `Aggiungi a ${word(l, m[1]).toLowerCase()}`)],
+    [/^Ergibt ([\d.,]+) kcal – Zielkalorien (.+)\.$/, W(0, (m) => `Adds up to ${m[1]} kcal – calorie target ${m[2]}.`, (m) => `Suma ${m[1]} kcal – objetivo ${m[2]}.`, (m) => `Fa ${m[1]} kcal – obiettivo ${m[2]}.`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],
