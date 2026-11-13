@@ -17,14 +17,36 @@ function createMailer(env = process.env, { fetchImpl = fetch, log = console } = 
     return {
       enabled: true,
       via: 'resend',
-      async send({ to, subject, text, html }) {
-        const res = await fetchImpl('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from, to: [to], subject, text, html }),
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!res.ok) throw new Error(`Resend antwortet mit ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+      /**
+       * One idempotency key per mail, so a retry never sends it twice. Retries with backoff on network errors,
+       * 5xx and 429 (honouring retry-after); other 4xx errors are final. Returns the Resend email id.
+       */
+      async send({ to, subject, text, html }, { retries = 3, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+        const idempotencyKey = require('node:crypto').randomUUID();
+        for (let attempt = 0; ; attempt++) {
+          let res = null;
+          try {
+            res = await fetchImpl('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+              body: JSON.stringify({ from, to: [to], subject, text, html }),
+              signal: AbortSignal.timeout(10000),
+            });
+          } catch (err) {
+            if (attempt >= retries) throw err;
+          }
+          if (res && res.ok) {
+            const data = await res.json().catch(() => ({}));
+            log.log(`E-Mail gesendet (Resend ${data.id || '?'})`);
+            return data.id || null;
+          }
+          if (res && res.status < 500 && res.status !== 429) {
+            throw new Error(`Resend antwortet mit ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+          }
+          if (attempt >= retries) throw new Error(`Resend antwortet mit ${res ? res.status : 'keiner Verbindung'}`);
+          const after = res && Number(res.headers.get('retry-after'));
+          await sleep(after > 0 ? Math.min(after, 30) * 1000 : 500 * 2 ** attempt);
+        }
       },
     };
   }
