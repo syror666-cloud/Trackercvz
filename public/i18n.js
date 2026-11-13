@@ -476,6 +476,83 @@ Lebensmittel oder Marke suchen|Search foods or brands|Buscar alimentos o marcas|
 Tipp los, z. B. „Skyr“ oder „Barebells“ – oder scann einen Barcode.|Start typing, e.g. "skyr" or "Barebells" – or scan a barcode.|Empieza a escribir, p. ej. «skyr» o «Barebells» – o escanea un código.|Inizia a scrivere, ad es. «skyr» o «Barebells» – o scansiona un codice.
 Die Produktdatenbank ist gerade nicht erreichbar – trag die Werte von der Packung ein.|The product database can't be reached right now – enter the values from the package.|La base de datos de productos no está disponible – introduce los valores del envase.|Il database prodotti non è raggiungibile – inserisci i valori della confezione.
 Fitness & Sporternährung|Fitness & sports nutrition|Fitness y nutrición deportiva|Fitness e nutrizione sportiva
+Benutzername oder E-Mail|Username or email|Usuario o correo|Nome utente o e-mail
+Passwort vergessen?|Forgot password?|¿Olvidaste la contraseña?|Password dimenticata?
+E-Mail oder Benutzername|Email or username|Correo o usuario|E-mail o nome utente
+Link senden|Send link|Enviar enlace|Invia link
+Schau in dein Postfach|Check your inbox|Revisa tu bandeja de entrada|Controlla la tua casella
+Neues Passwort festlegen|Set a new password|Establecer nueva contraseña|Imposta una nuova password
+Wiederholen|Repeat|Repetir|Ripeti
+Passwort speichern|Save password|Guardar contraseña|Salva password
+Zur Anmeldung|Back to login|Ir al inicio de sesión|Vai all'accesso
+Zur App|Go to the app|Ir a la app|Vai all'app
+E-Mail-Adresse bestätigt|Email address confirmed|Correo confirmado|Indirizzo e-mail confermato
+Das hat nicht geklappt|That didn't work|No ha funcionado|Non ha funzionato
+E-Mail-Adresse|Email address|Correo electrónico|Indirizzo e-mail
+bestätigt|confirmed|confirmado|confermato
+nicht bestätigt|not confirmed|no confirmado|non confermato
+Noch keine hinterlegt.|None added yet.|Aún no hay ninguno.|Ancora nessuno.
+E-Mail hinzufügen|Add email|Añadir correo|Aggiungi e-mail
+Ändern|Change|Cambiar|Modifica
+Bestätigung erneut senden|Resend confirmation|Reenviar confirmación|Invia di nuovo la conferma
+E-Mail-Adresse ändern|Change email address|Cambiar correo|Modifica indirizzo e-mail
+E-Mail-Adresse hinzufügen|Add email address|Añadir correo|Aggiungi indirizzo e-mail
+Dein Passwort|Your password|Tu contraseña|La tua password
+E-Mail-Adresse entfernt|Email address removed|Correo eliminado|Indirizzo e-mail rimosso
+E-Mail ändern|Change email|Cambiar correo|Modifica e-mail
+E-Mail hinterlegen|Add email|Añadir correo|Aggiungi e-mail
+Head2Head|Head2Head|Head2Head|Head2Head
+Head2Head einschalten|Turn on Head2Head|Activar Head2Head|Attiva Head2Head
+Head2Head ausschalten|Turn off Head2Head|Desactivar Head2Head|Disattiva Head2Head
+Head2Head ausgeschaltet|Head2Head turned off|Head2Head desactivado|Head2Head disattivato
+Herausfordern|Challenge|Desafiar|Sfida
+⚔️ Herausfordern|⚔️ Challenge|⚔️ Desafiar|⚔️ Sfida
+Herausforderung senden|Send challenge|Enviar desafío|Invia sfida
+Herausforderung gesendet|Challenge sent|Desafío enviado|Sfida inviata
+Gegner|Opponent|Rival|Avversario
+Disziplin|Discipline|Disciplina|Disciplina
+Dauer|Duration|Duración|Durata
+1 Woche|1 week|1 semana|1 settimana
+2 Wochen|2 weeks|2 semanas|2 settimane
+4 Wochen|4 weeks|4 semanas|4 settimane
+Für dich|For you|Para ti|Per te
+Laufend|Running|En curso|In corso
+Beendet|Finished|Terminados|Concluse
+Wer macht mit|Who's playing|Quién participa|Chi partecipa
+Annehmen|Accept|Aceptar|Accetta
+Ablehnen|Decline|Rechazar|Rifiuta
+Angenommen|Accepted|Aceptado|Accettata
+Abgelehnt|Declined|Rechazado|Rifiutata
+Zurückgezogen|Withdrawn|Retirado|Ritirata
+Verlauf ansehen|View progress|Ver evolución|Vedi andamento
+← Alle Duelle|← All duels|← Todos los duelos|← Tutti i duelli
+Alle Duelle →|All duels →|Todos los duelos →|Tutti i duelli →
+Du|You|Tú|Tu
+Du führst|You're ahead|Vas ganando|Sei in vantaggio
+Gleichstand|Tied|Empate|Parità
+🏆 Gewonnen|🏆 Won|🏆 Ganado|🏆 Vinto
+Verloren|Lost|Perdido|Perso
+Unentschieden|Draw|Empate|Pareggio
+Siege|wins|victorias|vittorie
+Niederlagen|losses|derrotas|sconfitte
+Offen|Open|Abierto|Aperta
+Trainingstage|Training days|Días de entrenamiento|Giorni di allenamento
+Bewegtes Gewicht|Weight moved|Peso movido|Peso sollevato
+Dranbleiben|Consistency|Constancia|Costanza
+Gewicht verlieren|Lose weight|Perder peso|Perdere peso
+Schlafziel|Sleep goal|Objetivo de sueño|Obiettivo sonno
+Kalorienziel|Calorie target|Objetivo de calorías|Obiettivo calorico
+Wer geht mehr Schritte?|Who walks more steps?|¿Quién camina más pasos?|Chi fa più passi?
+Wer trainiert an mehr Tagen?|Who trains on more days?|¿Quién entrena más días?|Chi si allena più giorni?
+Gewicht × Wiederholungen aus dem Trainingsplan|Weight × reps from the training plan|Peso × repeticiones del plan|Peso × ripetizioni dal piano
+Wer trägt an mehr Tagen etwas ein?|Who logs something on more days?|¿Quién registra más días?|Chi registra più giorni?
+Prozent vom Startgewicht – Kilos sieht niemand|Percent of starting weight – nobody sees kilos|Porcentaje del peso inicial – nadie ve los kilos|Percentuale del peso iniziale – nessuno vede i chili
+Nächte, in denen du dein Schlafziel erreichst|Nights you reach your sleep goal|Noches en que alcanzas tu objetivo de sueño|Notti in cui raggiungi l'obiettivo di sonno
+Tage, an denen du im Kalorienziel bleibst|Days you stay within your calorie target|Días dentro de tu objetivo de calorías|Giorni entro l'obiettivo calorico
+Kampfansage|Trash talk|Provocación|Provocazione
+Startet, sobald die Herausforderung angenommen wird. Unbeantwortet verfällt sie nach 7 Tagen.|Starts as soon as the challenge is accepted. Unanswered, it expires after 7 days.|Empieza en cuanto se acepta. Sin respuesta caduca a los 7 días.|Inizia appena viene accettata. Senza risposta scade dopo 7 giorni.
+Nicht beantwortet – abgelaufen|Not answered – expired|Sin respuesta – caducado|Senza risposta – scaduta
+Sehen dein Coach und – weil Head2Head an ist – andere Head2Head-Spieler.|Seen by your coach and – since Head2Head is on – other Head2Head players.|Lo ven tu coach y – al tener Head2Head activo – otros jugadores.|Lo vedono il coach e – con Head2Head attivo – gli altri giocatori.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -537,6 +614,10 @@ noch nie|never|nunca|mai
     [/^([\d.,]+) kcal drüber$/, W(0, (m) => `${m[1]} kcal over`, (m) => `${m[1]} kcal de más`, (m) => `${m[1]} kcal in più`)],
     [/^Zu (Frühstück|Mittagessen|Abendessen|Snacks) hinzufügen$/, W(0, (m, l) => `Add to ${word(l, m[1]).toLowerCase()}`, (m, l) => `Añadir a ${word(l, m[1]).toLowerCase()}`, (m, l) => `Aggiungi a ${word(l, m[1]).toLowerCase()}`)],
     [/^Ergibt ([\d.,]+) kcal – Zielkalorien (.+)\.$/, W(0, (m) => `Adds up to ${m[1]} kcal – calorie target ${m[2]}.`, (m) => `Suma ${m[1]} kcal – objetivo ${m[2]}.`, (m) => `Fa ${m[1]} kcal – obiettivo ${m[2]}.`)],
+    [/^Tag (\d+) von (\d+) · noch (\d+) Tage?$/, W(0, (m) => `Day ${m[1]} of ${m[2]} · ${m[3]} left`, (m) => `Día ${m[1]} de ${m[2]} · quedan ${m[3]}`, (m) => `Giorno ${m[1]} di ${m[2]} · ne mancano ${m[3]}`)],
+    [/^Tag (\d+) von (\d+) · letzter Tag$/, W(0, (m) => `Day ${m[1]} of ${m[2]} · last day`, (m) => `Día ${m[1]} de ${m[2]} · último día`, (m) => `Giorno ${m[1]} di ${m[2]} · ultimo giorno`)],
+    [/^(.+) führt$/, W(0, (m) => `${m[1]} is ahead`, (m) => `${m[1]} va ganando`, (m) => `${m[1]} è in vantaggio`)],
+    [/^(.+) · (\d) Wochen?$/, null],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

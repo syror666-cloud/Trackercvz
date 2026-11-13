@@ -8,6 +8,7 @@ const { createApp } = require('./src/app');
 const { createNotifier } = require('./src/notify');
 const { createReminders } = require('./src/admin');
 const { openCatalog } = require('./src/catalog');
+const { createMailer } = require('./src/mail');
 
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
@@ -60,9 +61,18 @@ try {
   console.error('Produktdatenbank konnte nicht geladen werden – Barcodes werden nur online gesucht:', err.message);
 }
 
+// E-mail for password reset and address confirmation (RESEND_API_KEY or SMTP_HOST, plus MAIL_FROM).
+const mailer = createMailer(process.env);
+// Address of the app for links in e-mails. Render sets RENDER_EXTERNAL_URL itself; never taken from the request.
+const appUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || null;
+if (mailer.enabled && !appUrl) console.warn('E-Mail ist eingerichtet, aber APP_URL fehlt – Passwort-Zurücksetzen bleibt aus.');
+else if (mailer.enabled) console.log(`E-Mail aktiv (${mailer.via}), Links auf ${appUrl}`);
+
 const app = createApp({
   db,
   catalog,
+  mailer,
+  appUrl,
   notifier,
   reminders,
   publicDir: path.join(__dirname, 'public'),

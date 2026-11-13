@@ -321,6 +321,35 @@ CREATE TABLE IF NOT EXISTS macro_goals (
   fat      REAL
 );
 
+-- One-time links sent by e-mail: password reset and e-mail confirmation (only the hash is stored).
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose    TEXT NOT NULL CHECK (purpose IN ('reset', 'verify')),
+  email      TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS email_tokens_user ON email_tokens (user_id, purpose);
+
+-- Head2Head: two clients challenge each other in one discipline for a fixed time.
+CREATE TABLE IF NOT EXISTS h2h_challenges (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  challenger_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  opponent_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  metric        TEXT NOT NULL,
+  days          INTEGER NOT NULL,
+  message       TEXT,
+  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'declined', 'cancelled')),
+  start_date    TEXT,
+  end_date      TEXT,
+  ended_notified INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  responded_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS h2h_challenger ON h2h_challenges (challenger_id);
+CREATE INDEX IF NOT EXISTS h2h_opponent ON h2h_challenges (opponent_id);
+
 -- A client without a nutrition plan asks the coach for one, with food preferences.
 CREATE TABLE IF NOT EXISTS nutrition_requests (
   client_id   INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -361,6 +390,8 @@ function migrate(db) {
 
   addColumns(db, 'checkins', [['highlights', "TEXT NOT NULL DEFAULT '[]'"]]);
   addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT'], ['seen_release', 'TEXT'], ['prefs', 'TEXT']]);
+  addColumns(db, 'users', [['email', 'TEXT'], ['email_verified', 'INTEGER NOT NULL DEFAULT 0'], ['h2h_visible', 'INTEGER NOT NULL DEFAULT 0']]);
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email COLLATE NOCASE) WHERE email IS NOT NULL');
 
   // Starter extra measurements: belly circumference for diets, gym PRs for building muscle.
   if (!db.prepare("SELECT 1 FROM settings WHERE key = 'metrics_seeded'").get()) {

@@ -194,6 +194,17 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-email-h2h', date: 'November 2026',
+      client: [
+        ['⚔️', 'Head2Head', 'Fordere andere heraus: Schritte, Trainingstage, Schlaf, Kalorienziel oder Gewicht verlieren (in %), 1–4 Wochen. Unter Konto → Head2Head einschalten – nur wer mitmacht, ist sichtbar, und verglichen wird nur die Disziplin des Duells.'],
+        ['✉️', 'Anmelden mit E-Mail', 'Hinterlege unter Konto deine E-Mail-Adresse. Dann kannst du dich damit anmelden und ein vergessenes Passwort selbst zurücksetzen.'],
+      ],
+      coach: [
+        ['✉️', 'E-Mail-Login & Passwort zurücksetzen', 'Beim Anlegen oder unter „Zugang verwalten“ kannst du die E-Mail-Adresse eines Klienten hinterlegen. Nach Bestätigung per Link kann er sich damit anmelden und sein Passwort selbst zurücksetzen. Dafür braucht der Server einen E-Mail-Versand (siehe README).'],
+        ['⚔️', 'Head2Head für Klienten', 'Klienten können sich gegenseitig herausfordern und ihre Fortschritte vergleichen – freiwillig, nur mit der Disziplin des Duells, Gewicht nur in Prozent.'],
+      ],
+    },
+    {
       id: '2026-11-barcode-db', date: 'November 2026',
       client: [
         ['📦', 'Scanner kennt jetzt über 320.000 Produkte', 'Fast alles aus deutschen, österreichischen und Schweizer Supermärkten wird beim Scannen sofort erkannt – mit Kalorien und Makros. Was fehlt, trägst du einmal ein; danach erkennt der Scanner es.'],
@@ -433,6 +444,11 @@
   }
 
   function route() {
+    // links from e-mails work with or without being logged in
+    const reset = location.hash.match(/^#\/reset\/([a-f0-9]{64})$/);
+    if (reset) return renderResetPassword(reset[1]);
+    const verify = location.hash.match(/^#\/verify\/([a-f0-9]{64})$/);
+    if (verify) return renderVerifyEmail(verify[1]);
     if (!me) {
       topbar.hidden = true;
       clearInterval(unreadTimer);
@@ -446,6 +462,8 @@
       renderNav();
       if (!unreadTimer) unreadTimer = setInterval(refreshUnread, 30000);
       refreshUnread();
+      const duel = location.hash.match(/^#\/account\/h2h(?:\/(\d+))?$/);
+      if (duel && me.role === 'client') return renderAccount(null, { h2h: duel[1] ? Number(duel[1]) : true });
       const fame = location.hash.match(/^#\/account\/fame(?:\/(fridge|shop))?$/);
       // coaches have no medals: their "Hall of Fame" is just the free test fridge
       return renderAccount(fame ? fame[1] || (me.role === 'coach' ? 'fridge' : 'medals') : null);
@@ -581,14 +599,20 @@
   }
 
   // ---------- account: profile picture, name, username, password ----------
-  function renderAccount(fameSub) {
+  function renderAccount(fameSub, { h2h } = {}) {
     const tabs = `<nav class="tabs" aria-label="Konto">
-          <a href="#/account"${fameSub ? '' : ' aria-current="page"'}>Profil</a>
+          <a href="#/account"${fameSub || h2h ? '' : ' aria-current="page"'}>Profil</a>
           ${me.role === 'client'
-            ? `<a href="#/account/fame"${fameSub ? ' aria-current="page"' : ''}>Hall of Fame</a>`
+            ? `<a href="#/account/fame"${fameSub ? ' aria-current="page"' : ''}>Hall of Fame</a>
+               <a href="#/account/h2h"${h2h ? ' aria-current="page"' : ''}>Head2Head</a>`
             : `<a href="#/account/fame/fridge"${fameSub ? ' aria-current="page"' : ''}>Test-Kühlschrank</a>`}
         </nav>`;
     const head = `<div class="page-head"><div>${eyebrow(me.role === 'coach' ? 'Coach' : 'Dein Profil')}<h1>Konto</h1></div></div>${tabs}`;
+    if (h2h) {
+      setView(`${head}<div id="h2h">${LOADING}</div>`);
+      mountH2H(document.getElementById('h2h'), h2h === true ? null : h2h);
+      return;
+    }
     if (fameSub) {
       setView(`${head}<div id="fame">${LOADING}</div>`);
       mountHallOfFame(document.getElementById('fame'), { base: '#/account/fame', sub: fameSub, coachTest: me.role === 'coach' });
@@ -601,7 +625,7 @@
           <div class="avatar avatar-xl ${me.avatar ? 'has-img' : ''}" data-avatar-preview>${avatarHtml(me)}</div>
           <div>
             <h2>Profilbild</h2>
-            <p class="muted small">Quadratisch zugeschnitten. ${me.role === 'client' ? 'Sieht nur dein Coach.' : 'Sehen deine Klienten nicht.'}</p>
+            <p class="muted small">Quadratisch zugeschnitten. ${me.role === 'client' ? (me.h2hVisible ? 'Sehen dein Coach und – weil Head2Head an ist – andere Head2Head-Spieler.' : 'Sieht nur dein Coach.') : 'Sehen deine Klienten nicht.'}</p>
             <div class="row" style="gap:8px">
               <label class="btn btn-secondary file-btn">Bild wählen<input type="file" accept="image/*" data-avatar-file hidden></label>
               ${me.avatar ? '<button type="button" class="btn-ghost danger-text" data-avatar-remove>Entfernen</button>' : ''}
@@ -616,6 +640,7 @@
           <button type="submit" class="btn-primary">Speichern</button>
           <p class="error" hidden></p>
         </form>
+        <section class="card" id="email-card"></section>
         <section class="card">
           <h2 style="margin-bottom:8px">Passwort</h2>
           <p class="muted small">Ändere dein Passwort regelmäßig und nutze es nirgendwo sonst.</p>
@@ -624,6 +649,7 @@
         ${me.role === 'coach' ? '<section class="card" id="prefs-card"></section>' : ''}
       </div>`);
     if (me.role === 'coach') mountPrefsCard(document.getElementById('prefs-card'));
+    mountEmailCard(document.getElementById('email-card'));
 
     const fileInput = app.querySelector('[data-avatar-file]');
     fileInput.addEventListener('change', async () => {
@@ -690,7 +716,7 @@
   }
 
   // ---------- login ----------
-  function renderLogin() {
+  function renderLogin(prefillUser) {
     setView(`
       <div class="login-wrap">
         <div class="login-intro">
@@ -701,16 +727,23 @@
         </div>
         <form class="card login-card" id="login-form">
           <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
-          <div class="field"><label for="u">Benutzername</label>
-            <input id="u" name="username" autocomplete="username" autocapitalize="none" required></div>
+          <div class="field"><label for="u">Benutzername oder E-Mail</label>
+            <input id="u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(prefillUser || '')}" required></div>
           <div class="field"><label for="p">Passwort</label>
             <input id="p" name="password" type="password" autocomplete="current-password" required></div>
           <button class="btn-primary btn-block" type="submit">Anmelden</button>
           <p class="error" hidden></p>
+          <p class="small login-forgot" hidden><button type="button" class="link-btn" data-forgot>Passwort vergessen?</button></p>
         </form>
       </div>`);
     const form = document.getElementById('login-form');
-    form.username.focus();
+    (prefillUser ? form.password : form.username).focus();
+    loadAuthConfig().then((cfg) => {
+      const f = form.querySelector('.login-forgot');
+      if (!cfg.passwordReset || !f) return;
+      f.hidden = false;
+      f.querySelector('[data-forgot]').addEventListener('click', () => openForgotDialog(form.username.value.trim()));
+    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = form.querySelector('.error');
@@ -726,6 +759,405 @@
         errEl.hidden = false;
       }
     });
+  }
+
+
+  // ---------- e-mail: confirm, reset password ----------
+  let authConfig = null;
+  async function loadAuthConfig() {
+    if (!authConfig) authConfig = await api('GET', '/api/auth/config').catch(() => ({ passwordReset: false }));
+    return authConfig;
+  }
+
+  function openForgotDialog(prefill) {
+    openDialog(`
+      <h2>Passwort vergessen?</h2>
+      <p class="muted small" style="margin-top:-6px">Gib deine E-Mail-Adresse oder deinen Benutzernamen ein. Ist bei deinem Konto eine bestätigte E-Mail-Adresse hinterlegt, bekommst du einen Link zum Zurücksetzen.</p>
+      <div class="field"><label for="fg-login">E-Mail oder Benutzername</label>
+        <input id="fg-login" name="login" autocomplete="username" autocapitalize="none" value="${esc(prefill || '')}" required></div>
+      <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Link senden</button></div>`,
+    async (f) => {
+      if (!f.login.value.trim()) throw new Error('Bitte E-Mail-Adresse oder Benutzernamen angeben.');
+      await api('POST', '/api/password/forgot', { login: f.login.value.trim() });
+      openDialog(`
+        <h2>Schau in dein Postfach</h2>
+        <p>Falls ein Konto mit bestätigter E-Mail-Adresse dazu passt, ist der Link unterwegs. Er ist 60 Minuten gültig.</p>
+        <p class="muted small">Nichts angekommen? Schau auch im Spam-Ordner nach. Ohne hinterlegte E-Mail-Adresse kann dir dein Coach ein neues Passwort geben.</p>
+        <div class="dialog-actions"><button type="button" class="btn-primary" data-close>Alles klar</button></div>`, async () => {});
+      return false;
+    });
+  }
+
+  function renderResetPassword(token) {
+    if (dialog.open) dialog.close();
+    topbar.hidden = true;
+    setView(`
+      <div class="login-wrap single">
+        <form class="card login-card" id="reset-form" novalidate>
+          <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
+          <h2>Neues Passwort festlegen</h2>
+          <div class="field"><label for="rp-1">Neues Passwort</label>
+            <input id="rp-1" name="pw" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mindestens 8 Zeichen</div></div>
+          <div class="field"><label for="rp-2">Wiederholen</label>
+            <input id="rp-2" name="pw2" type="password" autocomplete="new-password" minlength="8" required></div>
+          <button class="btn-primary btn-block" type="submit">Passwort speichern</button>
+          <p class="error" hidden></p>
+          <p class="small" style="text-align:center"><a href="#/">Zur Anmeldung</a></p>
+        </form>
+      </div>`);
+    const form = document.getElementById('reset-form');
+    form.pw.focus();
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = form.querySelector('.error');
+      err.hidden = true;
+      try {
+        if (form.pw.value.length < 8) throw new Error('Das Passwort braucht mindestens 8 Zeichen.');
+        if (form.pw.value !== form.pw2.value) throw new Error('Die beiden Passwörter stimmen nicht überein.');
+        const r = await api('POST', '/api/password/reset', { token, password: form.pw.value });
+        me = null;
+        history.replaceState(null, '', '#/');
+        savedHud('Passwort gespeichert', 'Melde dich jetzt an');
+        renderLogin(r.username);
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+      }
+    });
+  }
+
+  async function renderVerifyEmail(token) {
+    if (dialog.open) dialog.close();
+    if (!me) topbar.hidden = true;
+    setView(LOADING);
+    let ok = null;
+    let msg = '';
+    try {
+      ok = await api('POST', '/api/email/verify', { token });
+      if (me) me.emailVerified = true;
+    } catch (err) {
+      msg = err.message;
+    }
+    setView(`
+      <div class="login-wrap single">
+        <div class="card login-card verify-card">
+          <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
+          ${ok ? `<p class="verify-icon" aria-hidden="true">✓</p><h2>E-Mail-Adresse bestätigt</h2>
+            <p class="muted">${esc(ok.email)} gehört jetzt zu deinem Konto. Du kannst dich damit anmelden und ein vergessenes Passwort zurücksetzen.</p>`
+            : `<h2>Das hat nicht geklappt</h2><p class="muted">${esc(msg)}</p>`}
+          <a class="btn btn-primary btn-block" href="#/">${me ? 'Zur App' : 'Zur Anmeldung'}</a>
+        </div>
+      </div>`);
+  }
+
+  /** Account page: the own address, its status, change it (with password). */
+  async function mountEmailCard(root) {
+    const cfg = await loadAuthConfig();
+    const draw = () => {
+      const has = Boolean(me.email);
+      root.innerHTML = `
+        <h2 style="margin-bottom:8px">E-Mail-Adresse</h2>
+        ${has ? `<p class="email-line"><strong>${esc(me.email)}</strong>
+            <span class="badge ${me.emailVerified ? 'good' : 'warn'}">${me.emailVerified ? 'bestätigt' : 'nicht bestätigt'}</span></p>` : '<p class="muted small">Noch keine hinterlegt.</p>'}
+        <p class="muted small">Mit deiner E-Mail-Adresse kannst du dich statt mit dem Benutzernamen anmelden${cfg.passwordReset ? ' und ein vergessenes Passwort selbst zurücksetzen' : ''}.${me.role === 'client' ? ' Sieht nur dein Coach.' : ''}</p>
+        <div class="row" style="gap:8px">
+          <button type="button" class="btn-secondary" data-email-edit>${has ? 'Ändern' : 'E-Mail hinzufügen'}</button>
+          ${has && !me.emailVerified && cfg.passwordReset ? '<button type="button" class="btn-ghost" data-email-resend>Bestätigung erneut senden</button>' : ''}
+        </div>`;
+      root.querySelector('[data-email-edit]').addEventListener('click', () => openDialog(`
+        <h2>${has ? 'E-Mail-Adresse ändern' : 'E-Mail-Adresse hinzufügen'}</h2>
+        <div class="field"><label for="em-new">E-Mail-Adresse</label><input id="em-new" name="email" type="email" autocomplete="email" value="${esc(me.email || '')}" placeholder="name@beispiel.de"></div>
+        <div class="field"><label for="em-pw">Dein Passwort</label><input id="em-pw" name="password" type="password" autocomplete="current-password" required>
+          <div class="hint">Zur Sicherheit – damit niemand an einem offenen Gerät deine Adresse ändern kann.</div></div>
+        ${cfg.passwordReset ? '<p class="muted small">Du bekommst eine Mail mit einem Bestätigungslink.</p>' : ''}
+        <div class="dialog-actions">${has ? '<button type="button" class="btn-ghost danger-text" data-email-remove style="margin-right:auto">Entfernen</button>' : ''}
+          <button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Speichern</button></div>`,
+      async (f) => {
+        const email = f.email.value.trim();
+        if (!email) throw new Error('Bitte eine E-Mail-Adresse angeben.');
+        const r = await api('PUT', '/api/me/email', { email, password: f.password.value });
+        me = (await api('GET', '/api/me')).user;
+        savedHud('Gespeichert', r.verifySent ? 'Bestätigungslink ist unterwegs' : '');
+        draw();
+      }));
+      const resend = root.querySelector('[data-email-resend]');
+      if (resend) resend.addEventListener('click', async () => {
+        try {
+          await api('POST', '/api/me/email/verify');
+          toast('Bestätigungslink gesendet – schau in dein Postfach.');
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+      document.addEventListener('click', onRemove);
+    };
+    async function onRemove(e) {
+      if (!e.target.closest('[data-email-remove]')) return;
+      const f = e.target.closest('form');
+      try {
+        await api('PUT', '/api/me/email', { email: null, password: f.password.value });
+        dialog.close();
+        me = (await api('GET', '/api/me')).user;
+        toast('E-Mail-Adresse entfernt');
+        draw();
+      } catch (err) {
+        const el = f.querySelector('.error');
+        el.textContent = err.message === 'Passwort ist falsch' ? 'Bitte gib zum Entfernen dein Passwort ein.' : err.message;
+        el.hidden = false;
+      }
+    }
+    onCleanup(() => document.removeEventListener('click', onRemove));
+    draw();
+  }
+
+  // ---------- Head2Head ----------
+  const H2H_ICONS = { steps: '👟', training: '🏋️', volume: '⚖️', consistency: '📅', weight_loss: '📉', sleep: '🌙', calories: '🍽' };
+  const h2hWeeks = (days) => (days === 7 ? '1 Woche' : `${days / 7} Wochen`);
+  const h2hVal = (v, m) => (v === null || v === undefined ? '–' : `${num(v, m.decimals)}${m.unit === '%' ? ' %' : m.unit === 't' ? ' t' : ''}`);
+  const h2hAvatar = (p, cls = '') => `<span class="avatar h2h-av ${cls} ${p.avatar ? 'has-img' : ''}">${p.avatar ? `<img src="${esc(p.avatar)}" alt="">` : `<span class="h2h-initial">${esc((p.displayName || '?').trim()[0] || '?')}</span>`}</span>`;
+
+  /** "You 12 400 · 9 800 Jana" with a tug-of-war bar. */
+  function h2hScore(c, m) {
+    const a = Math.max(0, c.me.value || 0);
+    const b = Math.max(0, c.them.value || 0);
+    const share = a + b > 0 ? (a / (a + b)) * 100 : 50;
+    return `<div class="h2h-score">
+      <div class="h2h-side me ${c.leader === 'me' ? 'lead' : ''}"><span class="h2h-who">Du</span><strong>${esc(h2hVal(c.me.value, m))}</strong></div>
+      <div class="h2h-side them ${c.leader === 'them' ? 'lead' : ''}"><span class="h2h-who">${esc(c.them.displayName)}</span><strong>${esc(h2hVal(c.them.value, m))}</strong></div>
+      <div class="h2h-tug" role="img" aria-label="Du ${esc(h2hVal(c.me.value, m))}, ${esc(c.them.displayName)} ${esc(h2hVal(c.them.value, m))}"><i style="width:${share.toFixed(1)}%"></i></div>
+    </div>`;
+  }
+
+  function h2hCard(c, metrics, { actions: canAct = true, link = true } = {}) {
+    const m = metrics[c.metric];
+    const title = `${H2H_ICONS[c.metric] || '⚔️'} ${m.label} · ${h2hWeeks(c.days)}`;
+    const vs = `<div class="h2h-vs">${h2hAvatar(c.me)}<span class="h2h-vs-x" aria-hidden="true">VS</span>${h2hAvatar(c.them)}</div>`;
+    let body = '';
+    let actions = '';
+    if (c.status === 'pending') {
+      body = c.role === 'opponent'
+        ? `<p><strong>${esc(c.them.displayName)}</strong> fordert dich heraus.</p>${c.message ? `<p class="h2h-msg">„${esc(c.message)}“</p>` : ''}<p class="muted small">${esc(m.hint)}</p>`
+        : `<p>Warte auf <strong>${esc(c.them.displayName)}</strong>…</p>${c.message ? `<p class="h2h-msg">„${esc(c.message)}“</p>` : ''}`;
+      if (canAct) actions = c.role === 'opponent'
+        ? `<button type="button" class="btn-primary btn-sm" data-h2h-act="accept" data-id="${c.id}">Annehmen</button><button type="button" class="btn-ghost btn-sm" data-h2h-act="decline" data-id="${c.id}">Ablehnen</button>`
+        : `<button type="button" class="btn-ghost btn-sm" data-h2h-act="cancel" data-id="${c.id}">Zurückziehen</button>`;
+    } else if (c.status === 'running' || c.status === 'finished') {
+      const left = c.days - c.dayOf;
+      body = `${h2hScore(c, m)}<p class="muted small h2h-meta">${c.status === 'running'
+        ? `Tag ${c.dayOf} von ${c.days} · ${left ? `noch ${left} ${left === 1 ? 'Tag' : 'Tage'}` : 'letzter Tag'}`
+        : `Beendet am ${esc(fmtDate(c.endDate, { day: 'numeric', month: 'long' }))}`}</p>`;
+      if (link) actions = `<a class="btn btn-secondary btn-sm" href="#/account/h2h/${c.id}">Verlauf ansehen</a>`;
+    } else {
+      body = `<p class="muted small">${{ declined: 'Abgelehnt', cancelled: 'Zurückgezogen', expired: 'Nicht beantwortet – abgelaufen' }[c.status]}</p>`;
+    }
+    const badge = c.status === 'finished'
+      ? `<span class="badge ${c.result === 'won' ? 'good' : c.result === 'lost' ? '' : ''} h2h-result">${{ won: '🏆 Gewonnen', lost: 'Verloren', draw: 'Unentschieden' }[c.result]}</span>`
+      : c.status === 'running' ? `<span class="badge h2h-live">${c.leader === 'me' ? 'Du führst' : c.leader === 'them' ? `${esc(c.them.displayName)} führt` : 'Gleichstand'}</span>`
+        : c.status === 'pending' ? `<span class="badge warn">${c.role === 'opponent' ? 'Neu' : 'Offen'}</span>` : '';
+    return `<article class="card h2h-card s-${c.status}">
+      <div class="row-between h2h-card-head"><h3>${title}</h3>${badge}</div>
+      ${vs}${body}${actions ? `<div class="row h2h-actions">${actions}</div>` : ''}
+    </article>`;
+  }
+
+  /** Two lines, one per player, over the days of the duel; direct labels at the ends, hover tooltip. */
+  function h2hChart(root, c, m) {
+    const a = c.series.me;
+    const b = c.series.them;
+    const W = Math.max(root.clientWidth, 280);
+    const H = 220;
+    const pad = { l: 46, r: 64, t: 14, b: 26 };
+    const days = c.days;
+    const vals = [...a, ...b].map((p) => p.value).filter((v) => v !== null);
+    const hi = Math.max(...vals, m.unit === '%' ? 1 : 1);
+    const lo = Math.min(0, ...vals);
+    const x = (i) => pad.l + (i / Math.max(1, days - 1)) * (W - pad.l - pad.r);
+    const y = (v) => pad.t + (1 - (v - lo) / (hi - lo || 1)) * (H - pad.t - pad.b);
+    const path = (s) => s.map((p, i) => (p.value === null ? null : `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`)).filter(Boolean).join(' L');
+    const ticks = [lo, (lo + hi) / 2, hi];
+    const endLabel = (s, who, cls) => {
+      const p = [...s].reverse().find((q) => q.value !== null);
+      if (!p) return '';
+      const i = s.lastIndexOf(p);
+      return `<circle class="h2h-dot ${cls}" cx="${x(i)}" cy="${y(p.value)}" r="4"/><text class="h2h-endlabel" x="${x(i) + 8}" y="${y(p.value) + 4}">${esc(who)}</text>`;
+    };
+    root.innerHTML = `<svg class="h2h-chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Verlauf: Du gegen ${esc(c.them.displayName)}">
+      ${ticks.map((t) => `<line class="h2h-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y(t)}" y2="${y(t)}"/><text class="h2h-axis" x="${pad.l - 6}" y="${y(t) + 4}" text-anchor="end">${esc(num(t, m.decimals && hi < 10 ? 1 : 0))}</text>`).join('')}
+      <text class="h2h-axis" x="${pad.l}" y="${H - 6}">Tag 1</text><text class="h2h-axis" x="${W - pad.r}" y="${H - 6}" text-anchor="end">Tag ${days}</text>
+      ${b.length ? `<path class="h2h-line them" d="M${path(b)}"/>` : ''}${a.length ? `<path class="h2h-line me" d="M${path(a)}"/>` : ''}
+      ${endLabel(b, c.them.displayName.split(' ')[0], 'them')}${endLabel(a, 'Du', 'me')}
+      <line class="h2h-cross" y1="${pad.t}" y2="${H - pad.b}" hidden/>
+      <rect class="h2h-hit" x="${pad.l}" y="${pad.t}" width="${W - pad.l - pad.r}" height="${H - pad.t - pad.b}"/>
+    </svg><div class="h2h-tip" hidden></div>
+    <div class="h2h-legend"><span><i class="me"></i>Du</span><span><i class="them"></i>${esc(c.them.displayName)}</span></div>`;
+    const svg = root.querySelector('svg');
+    const tip = root.querySelector('.h2h-tip');
+    const cross = root.querySelector('.h2h-cross');
+    const move = (e) => {
+      const r = svg.getBoundingClientRect();
+      const px = ((e.clientX - r.left) / r.width) * W;
+      const i = Math.max(0, Math.min(Math.max(a.length, b.length) - 1, Math.round(((px - pad.l) / (W - pad.l - pad.r)) * (days - 1))));
+      if (i < 0 || (!a[i] && !b[i])) return;
+      cross.setAttribute('x1', x(i));
+      cross.setAttribute('x2', x(i));
+      cross.hidden = false;
+      const date = (a[i] || b[i]).date;
+      tip.innerHTML = `<strong>Tag ${i + 1}</strong> · ${esc(fmtDate(date, { day: 'numeric', month: 'short' }))}<br><i class="me"></i>Du: ${esc(h2hVal(a[i]?.value, m))}<br><i class="them"></i>${esc(c.them.displayName)}: ${esc(h2hVal(b[i]?.value, m))}`;
+      tip.hidden = false;
+      tip.style.left = `${Math.min(r.width - 150, Math.max(0, (x(i) / W) * r.width - 70))}px`;
+    };
+    svg.addEventListener('pointermove', move);
+    svg.addEventListener('pointerdown', move);
+    svg.addEventListener('pointerleave', () => {
+      tip.hidden = true;
+      cross.hidden = true;
+    });
+  }
+
+  async function mountH2H(root, detailId) {
+    let data;
+    try {
+      data = await api('GET', '/api/h2h');
+    } catch (err) {
+      root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+      return;
+    }
+    const redraw = () => mountH2H(root, detailId);
+    if (detailId) return drawDetail();
+    const M = data.metrics;
+    if (!data.visible) {
+      root.innerHTML = `<section class="card h2h-intro">
+        <p class="h2h-hero" aria-hidden="true">⚔️</p>
+        <h2>Head2Head</h2>
+        <p>Fordere andere Klienten heraus – Schritte, Trainingstage, Schlaf, Kalorienziel oder Gewicht verlieren – für 1, 2 oder 4 Wochen. Wer am Ende vorne liegt, gewinnt.</p>
+        <ul class="h2h-privacy small">
+          <li>Andere sehen nur deinen Namen <strong>${esc(me.displayName)}</strong> und dein Profilbild.</li>
+          <li>In einem Duell wird nur die gewählte Disziplin verglichen – und nur für dessen Dauer.</li>
+          <li>Gewicht zählt in Prozent vom Startgewicht. Deine Kilos sieht niemand.</li>
+          <li>Du kannst Head2Head jederzeit wieder ausschalten.</li>
+        </ul>
+        <button type="button" class="btn-primary" data-h2h-on>Head2Head einschalten</button>
+      </section>
+      ${data.challenges.length ? `<h3 class="h2h-section">Frühere Duelle</h3><div class="h2h-grid">${data.challenges.map((c) => h2hCard(c, M, { actions: false, link: false })).join('')}</div>` : ''}`;
+      root.querySelector('[data-h2h-on]').addEventListener('click', async () => {
+        await api('PUT', '/api/h2h/visible', { visible: true });
+        me.h2hVisible = true;
+        savedHud('Head2Head an', 'Fordere jemanden heraus');
+        redraw();
+      });
+      return;
+    }
+    const inbox = data.challenges.filter((c) => c.status === 'pending' && c.role === 'opponent');
+    const running = data.challenges.filter((c) => c.status === 'running' || (c.status === 'pending' && c.role === 'challenger'));
+    const past = data.challenges.filter((c) => c.status === 'finished');
+    const r = data.record;
+    root.innerHTML = `
+      <div class="h2h-top">
+        <div class="h2h-record" aria-label="Deine Bilanz"><span><strong>${r.won}</strong> Siege</span><span><strong>${r.draw}</strong> Unentschieden</span><span><strong>${r.lost}</strong> Niederlagen</span></div>
+        <button type="button" class="btn-primary" data-h2h-new ${data.players.length ? '' : 'disabled'}>⚔️ Herausfordern</button>
+      </div>
+      ${data.players.length ? '' : '<p class="card muted small">Noch hat niemand sonst Head2Head eingeschaltet. Sobald jemand mitmacht, kannst du ihn herausfordern.</p>'}
+      ${inbox.length ? `<h3 class="h2h-section">Für dich</h3><div class="h2h-grid">${inbox.map((c) => h2hCard(c, M)).join('')}</div>` : ''}
+      ${running.length ? `<h3 class="h2h-section">Laufend</h3><div class="h2h-grid">${running.map((c) => h2hCard(c, M)).join('')}</div>` : ''}
+      ${past.length ? `<h3 class="h2h-section">Beendet</h3><div class="h2h-grid">${past.map((c) => h2hCard(c, M)).join('')}</div>` : ''}
+      ${data.players.length ? `<h3 class="h2h-section">Wer macht mit</h3><ul class="card h2h-players">${data.players.map((p) => `<li>${h2hAvatar(p)}<span class="h2h-pname">${esc(p.displayName)}<span class="muted small">${p.record.won} Siege · ${p.record.lost} Niederlagen</span></span>
+        <button type="button" class="btn-secondary btn-sm" data-h2h-challenge="${p.id}">Herausfordern</button></li>`).join('')}</ul>` : ''}
+      <p class="small muted h2h-off"><button type="button" class="link-btn" data-h2h-off>Head2Head ausschalten</button> – offene Herausforderungen verfallen, laufende Duelle laufen zu Ende.</p>`;
+    root.querySelectorAll('[data-h2h-act]').forEach((b) => b.addEventListener('click', async () => {
+      try {
+        const res = await api('POST', `/api/h2h/${b.dataset.id}/${b.dataset.h2hAct}`);
+        if (b.dataset.h2hAct === 'accept') {
+          savedHud('Angenommen', "Los geht's – ab heute zählt's");
+          location.hash = `#/account/h2h/${res.challenge.id}`;
+          return;
+        }
+        toast(b.dataset.h2hAct === 'decline' ? 'Abgelehnt' : 'Zurückgezogen');
+        redraw();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }));
+    const openNew = (opponentId) => openChallengeDialog(data, opponentId, redraw);
+    const nb = root.querySelector('[data-h2h-new]');
+    if (nb) nb.addEventListener('click', () => openNew(null));
+    root.querySelectorAll('[data-h2h-challenge]').forEach((b) => b.addEventListener('click', () => openNew(Number(b.dataset.h2hChallenge))));
+    root.querySelector('[data-h2h-off]').addEventListener('click', async () => {
+      if (!confirm('Head2Head ausschalten? Andere sehen dich dann nicht mehr.')) return;
+      await api('PUT', '/api/h2h/visible', { visible: false });
+      me.h2hVisible = false;
+      toast('Head2Head ausgeschaltet');
+      redraw();
+    });
+
+    async function drawDetail() {
+      let c;
+      try {
+        c = (await api('GET', `/api/h2h/${detailId}`)).challenge;
+      } catch (err) {
+        root.innerHTML = `<div class="card empty-state">${esc(err.message)} <a href="#/account/h2h">Zurück</a></div>`;
+        return;
+      }
+      const m = data.metrics[c.metric];
+      root.innerHTML = `<p><a href="#/account/h2h" class="back-link">← Alle Duelle</a></p>
+        ${h2hCard(c, data.metrics, { actions: data.visible, link: false })}
+        ${c.series ? `<section class="card"><h3 style="margin-bottom:8px">Verlauf</h3><p class="muted small" style="margin-top:0">${esc(m.hint)}</p><div class="h2h-chart-wrap"></div></section>` : ''}`;
+      root.querySelectorAll('[data-h2h-act]').forEach((b) => b.addEventListener('click', async () => {
+        try {
+          await api('POST', `/api/h2h/${b.dataset.id}/${b.dataset.h2hAct}`);
+          redraw();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      }));
+      if (c.series) {
+        const wrap = root.querySelector('.h2h-chart-wrap');
+        h2hChart(wrap, c, m);
+        const ro = new ResizeObserver(() => h2hChart(wrap, c, m));
+        ro.observe(wrap);
+        onCleanup(() => ro.disconnect());
+      }
+    }
+  }
+
+  function openChallengeDialog(data, opponentId, done) {
+    const M = data.metrics;
+    openDialog(`
+      <h2>⚔️ Herausfordern</h2>
+      <div class="field"><label for="hc-opp">Gegner</label><select id="hc-opp" name="opponent">${data.players.map((p) => `<option value="${p.id}" ${p.id === opponentId ? 'selected' : ''}>${esc(p.displayName)}</option>`).join('')}</select></div>
+      <fieldset class="pr-q"><legend>Disziplin</legend><div class="h2h-metrics">${Object.entries(M).map(([k, m], i) => `<label class="h2h-metric"><input type="radio" name="metric" value="${k}" ${i === 0 ? 'checked' : ''}>
+        <span><b>${H2H_ICONS[k]} ${esc(m.label)}</b><small>${esc(m.hint)}</small></span></label>`).join('')}</div></fieldset>
+      <fieldset class="pr-q"><legend>Dauer</legend><div class="seg-wide">${data.durations.map((d, i) => `<label><input type="radio" name="days" value="${d}" ${i === 1 ? 'checked' : ''}><span>${h2hWeeks(d)}</span></label>`).join('')}</div></fieldset>
+      <div class="field"><label for="hc-msg">Kampfansage <span class="muted">(optional)</span></label><input id="hc-msg" name="message" maxlength="140" placeholder="z. B. Diesmal schlag ich dich!"></div>
+      <p class="muted small">Startet, sobald die Herausforderung angenommen wird. Unbeantwortet verfällt sie nach 7 Tagen.</p>
+      <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Herausforderung senden</button></div>`,
+    async (f) => {
+      await api('POST', '/api/h2h', {
+        opponentId: Number(f.opponent.value), metric: f.querySelector('input[name=metric]:checked').value,
+        days: Number(f.querySelector('input[name=days]:checked').value), message: f.message.value,
+      });
+      savedHud('Herausforderung gesendet', f.opponent.selectedOptions[0].textContent);
+      done();
+    });
+  }
+
+  /** Tracker home: new challenges and running duels at a glance. */
+  async function mountH2HHome(root) {
+    if (!root || !me.h2hVisible) return;
+    let data;
+    try {
+      data = await api('GET', '/api/h2h');
+    } catch {
+      return;
+    }
+    const inbox = data.challenges.filter((c) => c.status === 'pending' && c.role === 'opponent');
+    const running = data.challenges.filter((c) => c.status === 'running');
+    if (!inbox.length && !running.length) return;
+    root.innerHTML = `<section class="card h2h-home">
+      <div class="row-between"><h2>⚔️ Head2Head</h2><a href="#/account/h2h" class="small">Alle Duelle →</a></div>
+      ${inbox.map((c) => `<a class="h2h-home-row" href="#/account/h2h"><span class="badge warn">Neu</span> <strong>${esc(c.them.displayName)}</strong> fordert dich heraus: ${esc(data.metrics[c.metric].label)}</a>`).join('')}
+      ${running.map((c) => `<a class="h2h-home-row" href="#/account/h2h/${c.id}">${H2H_ICONS[c.metric]} ${esc(data.metrics[c.metric].label)} vs. <strong>${esc(c.them.displayName)}</strong>
+        <span class="h2h-home-score ${c.leader}">${esc(h2hVal(c.me.value, data.metrics[c.metric]))} : ${esc(h2hVal(c.them.value, data.metrics[c.metric]))}</span></a>`).join('')}
+    </section>`;
   }
 
   // ---------- client: daily entry ----------
@@ -745,6 +1177,7 @@
       </div>
       <div id="push-prompt"></div>
       <div id="checkin-card"></div>
+      <div id="h2h-home"></div>
       <section class="card today-card" id="today-card" aria-label="Heute"></section>
       <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
       <div class="grid-2">
@@ -1015,6 +1448,7 @@
     updateStreak();
     drawToday();
     maybeShowPushPrompt(document.getElementById('push-prompt'));
+    mountH2HHome(document.getElementById('h2h-home'));
     mountClientCheckin(document.getElementById('checkin-card'), async () => {
       const g = await api('GET', '/api/goals');
       state.goals = g.goals;
@@ -1995,6 +2429,8 @@
          <div class="field"><label for="c-name">Name</label><input id="c-name" name="displayName" required placeholder="Max Mustermann"></div>
          <div class="field"><label for="c-user">Benutzername</label><input id="c-user" name="username" autocapitalize="none" required placeholder="max">
            <div class="hint">3–32 Zeichen: Buchstaben, Ziffern, . _ -</div></div>
+         <div class="field"><label for="c-mail">E-Mail <span class="muted">(optional)</span></label><input id="c-mail" name="email" type="email" autocomplete="off" placeholder="max@beispiel.de">
+           <div class="hint">Zum Anmelden und um ein vergessenes Passwort selbst zurückzusetzen. Der Klient bekommt einen Bestätigungslink.</div></div>
          <div class="field"><label for="c-pw">Startpasswort</label><input id="c-pw" name="password" value="${pw}" required>
            <div class="hint">Der Klient kann es nach dem ersten Login selbst ändern.</div></div>
          <div class="dialog-actions">
@@ -2004,6 +2440,7 @@
         async (f) => {
           const { client } = await api('POST', '/api/clients', {
             displayName: f.displayName.value, username: f.username.value.trim(), password: f.password.value,
+            email: f.email.value.trim() || undefined,
           });
           showCredentials(client.displayName, client.username, f.password.value, () => {
             location.hash = `#/client/${client.id}`;
@@ -5313,6 +5750,8 @@
             <h2 style="margin-bottom:12px">Zugang verwalten</h2>
             <div class="stack">
               <button class="btn-secondary btn-block" type="button" id="btn-rename">Namen ändern</button>
+              <button class="btn-secondary btn-block" type="button" id="btn-email">${client.email ? 'E-Mail ändern' : 'E-Mail hinterlegen'}</button>
+              ${client.email ? `<p class="small muted" style="margin:0">${esc(client.email)} · ${client.emailVerified ? 'bestätigt ✓' : 'noch nicht bestätigt'}</p>` : ''}
               <button class="btn-secondary btn-block" type="button" id="btn-reset">Neues Passwort vergeben</button>
               <button class="btn-danger btn-block" type="button" id="btn-delete">Klient löschen</button>
             </div>
@@ -5391,6 +5830,21 @@
         async (f) => {
           await api('PATCH', `/api/clients/${id}`, { displayName: f.displayName.value });
           toast('Name geändert');
+          renderCoachClient(id);
+        }
+      );
+    });
+
+    document.getElementById('btn-email').addEventListener('click', () => {
+      openDialog(
+        `<h2>E-Mail-Adresse</h2>
+         <p class="muted small">${esc(client.displayName)} kann sich damit anmelden und – nach Bestätigung per Link – ein vergessenes Passwort selbst zurücksetzen.</p>
+         <div class="field"><label for="ce-mail">E-Mail</label><input id="ce-mail" name="email" type="email" value="${esc(client.email || '')}" placeholder="max@beispiel.de"></div>
+         <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button>
+           <button type="submit" class="btn-primary">Speichern</button></div>`,
+        async (f) => {
+          const r = await api('PATCH', `/api/clients/${id}`, { email: f.email.value.trim() || null });
+          savedHud('Gespeichert', r.verifySent ? 'Bestätigungslink ist unterwegs' : '');
           renderCoachClient(id);
         }
       );

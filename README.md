@@ -26,6 +26,8 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Check-in vom Coach** oben in der Übersicht: Feedback lesen, antworten oder vorgeschlagene Plananpassungen mit einem Klick annehmen. Check-in und Annahme laufen im Hintergrund; nur die Antwort des Klienten landet im Chat
 - **Kalorien:** Zielkalorien als Range (z. B. 2.200–2.300 kcal) mit Diagramm: Range als Band, Mittelwert als Linie, pro Tag eingehalten/nicht eingehalten
 - **Push-Benachrichtigungen** (nach Zustimmung; Chat-Nachrichten des Coaches erscheinen nur als „Du hast eine neue Nachricht von deinem Coach“, ohne Inhalt): Erinnerungen des Coaches und neue Chat-Nachrichten. Auf dem iPhone nur, wenn die Seite zum Home-Bildschirm hinzugefügt wurde (ab iOS 16.4)
+- **Head2Head:** Klienten fordern sich gegenseitig heraus (Schritte, Trainingstage, bewegtes Gewicht, Dranbleiben, Gewicht verlieren in %, Schlafziel, Kalorienziel; 1, 2 oder 4 Wochen) und vergleichen ihren Verlauf. Freiwillig: Sichtbar ist nur, wer Head2Head einschaltet, und verglichen wird nur die Disziplin des Duells
+- **Anmelden mit Benutzername oder E-Mail;** Passwort vergessen → Link per E-Mail (nur an bestätigte Adressen)
 - **Ernährungstagebuch** mit Barcode-Scanner: Packung scannen (Kamera, eingebauter `BarcodeDetector` oder mitgeliefertes ZXing unter `public/vendor/`, Apache-2.0) oder Nummer eintippen, aus der Datenbank wählen oder selbst eintragen. Kalorien und Makros pro Tag gegen die Ziele; die Tageskalorien landen automatisch im Tracker. Produktdaten: rund 320.000 Produkte aus DE/AT/CH von [Open Food Facts](https://world.openfoodfacts.org) (ODbL) sind mitgeliefert (`src/data/`, beim ersten Start wird daraus `products.db` im Datenordner gebaut, ca. 50 MB, 2 Sekunden); fehlende Produkte werden online bei Open Food Facts gesucht, notfalls direkt vom Handy aus, und von Klienten eingetragene Produkte für den nächsten Scan gemerkt. Markenprodukte sind auch per Name suchbar. Die Kamera braucht HTTPS
 - **Apple Health:** vorerst deaktiviert (der Code ist noch da; `createApp({ health: true })` schaltet die Import-Schnittstelle wieder ein)
 
@@ -90,6 +92,12 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `AI_EFFORT` | optional: `low`, `medium` (Standard) oder `high` – wie gründlich die KI nachdenkt |
 | `AI_AUTO_DRAFT` | `false` = bei einer Plan-Anfrage nicht automatisch einen KI-Entwurf erstellen |
 | `AI_AUTO_DRAFT_MINUTES` | höchstens ein automatischer KI-Entwurf pro Klient in diesem Zeitraum (Standard `30`); dein Knopf „Neu erstellen“ ist nicht begrenzt |
+| `MAIL_FROM` | Absender für E-Mails (Passwort zurücksetzen, Adresse bestätigen), z. B. `StayOnTrack <noreply@deine-domain.de>` |
+| `RESEND_API_KEY` | E-Mail über [Resend](https://resend.com) (HTTPS, funktioniert auch auf Renders Gratis-Plan, der SMTP-Ports sperrt) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | alternativ: eigener Mailserver (z. B. Brevo, IONOS, Strato, Gmail mit App-Passwort); Port 465 = TLS, 587 = STARTTLS |
+| `APP_URL` | Adresse der App für Links in E-Mails, z. B. `https://stayontrack.onrender.com` (auf Render automatisch über `RENDER_EXTERNAL_URL`) |
+
+**E-Mail einrichten (für „Passwort vergessen“):** Ohne E-Mail-Versand können sich Klienten trotzdem mit ihrer E-Mail-Adresse anmelden; nur das Zurücksetzen per Mail ist dann aus. Am einfachsten: bei Resend ein Konto anlegen, die eigene Domain bestätigen, einen API-Key erzeugen und `RESEND_API_KEY` sowie `MAIL_FROM` (Adresse dieser Domain) setzen. Zurücksetzen geht nur an **bestätigte** Adressen; Links sind 60 Minuten gültig und nur einmal nutzbar.
 
 **Mit Docker** (z. B. auf einem eigenen VPS, Railway, Fly.io oder Render mit Persistent Disk):
 

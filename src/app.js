@@ -15,6 +15,9 @@ const { shopRoutes } = require('./shop');
 const { nutritionRequestRoutes } = require('./nutrition-request');
 const { aiRoutes } = require('./ai');
 const { foodlogRoutes } = require('./foodlog');
+const { emailAuth } = require('./email-auth');
+const { createMailer } = require('./mail');
+const { h2hRoutes } = require('./h2h');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -247,7 +250,10 @@ function prefsOf(u) {
     glass: typeof p.glass === 'boolean' ? p.glass : PREF_DEFAULTS.glass,
   };
 }
-const publicUser = (u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, avatar: avatarUrl(u), prefs: prefsOf(u) });
+const publicUser = (u) => ({
+  id: u.id, username: u.username, displayName: u.display_name, role: u.role, avatar: avatarUrl(u), prefs: prefsOf(u),
+  email: u.email || null, emailVerified: Boolean(u.email_verified), h2hVisible: Boolean(u.h2h_visible),
+});
 
 /** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
 function parseAvatar(dataUrl) {
@@ -277,7 +283,7 @@ function parseSteps(value) {
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 // Apple Health import (Shortcuts) is switched off for now; `health: true` turns the routes back on.
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
@@ -303,7 +309,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     setCategory: db.prepare('UPDATE users SET category = ? WHERE id = ?'),
     deleteUser: db.prepare("DELETE FROM users WHERE id = ? AND role = 'client'"),
     clients: db.prepare(
-      `SELECT u.id, u.username, u.display_name, u.created_at, u.category, u.avatar IS NOT NULL AS has_avatar, u.avatar_updated,
+      `SELECT u.id, u.username, u.display_name, u.email, u.email_verified, u.created_at, u.category, u.avatar IS NOT NULL AS has_avatar, u.avatar_updated,
          (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date DESC LIMIT 1) AS last_weight,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date ASC LIMIT 1) AS first_weight,
@@ -598,18 +604,24 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     }
   }
 
+  const mail = emailAuth({
+    db, HttpError, readBody, requireUser, clientIp, validatePassword,
+    mailer: mailer || createMailer({}), appUrl,
+  });
+
   const routes = [
     ['POST', /^\/api\/login$/, async (ctx) => {
       const ip = clientIp(ctx.req);
       const { username, password } = await readBody(ctx.req);
-      const name = typeof username === 'string' ? username.trim().toLowerCase().slice(0, 64) : '';
+      const name = typeof username === 'string' ? username.trim().toLowerCase().slice(0, 254) : '';
       // Limited per address AND per account, so changing addresses does not allow unlimited guessing.
       const keys = [[`ip:${ip}`, LOGIN_MAX_ATTEMPTS], [`user:${name}`, LOGIN_MAX_PER_ACCOUNT]];
       checkLoginRate(keys);
-      const u = name ? q.userByName.get(username.trim()) : null;
+      // username or e-mail address
+      const u = name ? mail.findForLogin(username.trim()) : null;
       if (!u || typeof password !== 'string' || !verifyPassword(password, u.password_hash)) {
         recordLoginFailure(keys);
-        throw new HttpError(401, 'Benutzername oder Passwort falsch');
+        throw new HttpError(401, 'Benutzername/E-Mail oder Passwort falsch');
       }
       loginAttempts.delete(`ip:${ip}`);
       loginAttempts.delete(`user:${name}`);
@@ -695,8 +707,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     // Profile pictures: own picture, or any picture for the coach.
     ['GET', /^\/api\/avatar\/(\d+)$/, async (ctx, [, id]) => {
       const u = requireUser(ctx);
-      if (u.role !== 'coach' && u.id !== Number(id)) throw new HttpError(404, 'Nicht gefunden');
       const target = q.userById.get(Number(id));
+      // own picture, the coach sees all, Head2Head players see each other's
+      const peers = u.role === 'client' && u.h2h_visible && target && target.role === 'client' && target.h2h_visible;
+      if (u.role !== 'coach' && u.id !== Number(id) && !peers) throw new HttpError(404, 'Nicht gefunden');
       const m = target && target.avatar && target.avatar.match(/^data:(image\/[a-z]+);base64,(.+)$/);
       if (!m) throw new HttpError(404, 'Kein Profilbild');
       ctx.res.writeHead(200, { 'Content-Type': m[1], 'Cache-Control': 'private, max-age=604800' });
@@ -723,6 +737,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           id: r.id,
           username: r.username,
           displayName: r.display_name,
+          email: r.email || null,
+          emailVerified: Boolean(r.email_verified),
           category: r.category,
           createdAt: r.created_at,
           lastEntry: r.last_entry,
@@ -752,6 +768,14 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const displayName = textField(body.displayName, { name: 'Name', max: 80 }) || username;
       if (q.userByName.get(username)) throw new HttpError(409, 'Benutzername ist bereits vergeben');
       const id = createUser(db, { username, displayName, password, role: 'client' });
+      if (body.email) {
+        try {
+          mail.setEmail(id, body.email);
+        } catch (err) {
+          q.deleteUser.run(id);
+          throw err;
+        }
+      }
       ctx.res.statusCode = 201;
       return { client: publicUser(q.userById.get(id)) };
     }],
@@ -773,7 +797,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         q.setPassword.run(hashPassword(validatePassword(body.password)), c.id);
         q.deleteAllUserSessions.run(c.id);
       }
-      return { client: publicUser(q.userById.get(c.id)) };
+      let verifySent = false;
+      if (body.email !== undefined) verifySent = mail.setEmail(c.id, body.email).verifySent;
+      return { client: publicUser(q.userById.get(c.id)), verifySent };
     }],
 
     ['DELETE', /^\/api\/clients\/(\d+)$/, async (ctx, [, id]) => {
@@ -1262,7 +1288,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   const achievements = achievementsModule(deps);
   const ai = aiRoutes(deps);
   shop = shopRoutes({ ...deps, achievements });
-  routes.push(...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...mail.routes, ...h2hRoutes({ ...deps, publicUser }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutritionRoutes(deps), ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();
