@@ -55,12 +55,15 @@ test('shop: medals are worth tokens (bronze 1, silver 2, gold 3), cans go into t
   const { server, max, coach, id } = await withClient();
   t.after(() => server.close());
   let shop = (await max('GET', '/api/shop')).data;
-  assert.equal(shop.flavors.length, 14);
-  assert.ok(shop.flavors.every((f) => f.price >= 1 && f.price <= 5));
+  assert.equal(shop.flavors.length, 27);
+  assert.ok(shop.flavors.some((f) => f.key === 'more_matcha') && shop.flavors.filter((f) => f.name.startsWith('ESN')).length >= 5);
+  assert.equal(new Set(shop.flavors.map((f) => f.key)).size, shop.flavors.length);
+  assert.ok(shop.flavors.every((f) => f.price >= 1 && f.price <= 8));
   assert.equal(shop.flavors.find((f) => f.key === 'mcd_cup').rarity, 'legendary');
   assert.equal(shop.flavors.find((f) => f.key === 'testo_vial').rarity, 'mythic');
   assert.ok(shop.flavors.every((f) => shop.rarities.includes(f.rarity)));
-  assert.deepEqual(shop.rarities, ['common', 'rare', 'epic', 'legendary', 'mythic']);
+  assert.deepEqual(shop.rarities, ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'cosmic']);
+  assert.ok(shop.flavors.filter((f) => f.rarity === 'cosmic').every((f) => f.price >= 7));
   assert.deepEqual(shop.balance, { earned: 0, spent: 0, available: 0 });
   assert.equal((await max('POST', '/api/shop/buy', { flavor: 'white' })).status, 409);
   // 10 days in a row with 12 000 steps: streak, step total and step goal bronze = 3 medals

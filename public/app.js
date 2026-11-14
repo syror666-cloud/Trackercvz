@@ -5471,8 +5471,68 @@
     ], `can vial ${cls}`);
   }
 
-  /** Pixel art of a fridge item: can (default), cup or vial. */
-  const itemSvg = (f, cls = '') => (f.kind === 'cup' ? cupSvg(f, cls) : f.kind === 'vial' ? vialSvg(f, cls) : canSvg(f, cls));
+  /** Supplement tub with screw lid and label, 10×18. */
+  function tubSvg(f, cls = '') {
+    const [body, shade, band, accent] = f.colors;
+    return pixelSvg(10, 18, [
+      [1, 3, 8, 1, shade], [0, 4, 10, 2, shade], [1, 3, 8, 1, 'rgba(255,255,255,0.3)'], [0, 5, 10, 1, 'rgba(0,0,0,0.18)'], // lid
+      [0, 6, 10, 11, body], [8, 6, 2, 11, 'rgba(0,0,0,0.18)'], [1, 6, 1, 10, 'rgba(255,255,255,0.35)'], // body
+      [0, 9, 10, 5, band], [8, 9, 2, 5, 'rgba(0,0,0,0.12)'], [2, 10, 5, 1, accent], [2, 12, 3, 1, accent], [6, 12, 1, 1, accent], // label
+      [1, 17, 8, 1, shade],
+    ], `can tub ${cls}`);
+  }
+
+  /** Protein shaker: flip cap, see-through cup with the shake inside, 10×18. */
+  function shakerSvg(f, cls = '') {
+    const [frame, shade, liquid, accent] = f.colors;
+    return pixelSvg(10, 18, [
+      [4, 0, 2, 1, accent], [3, 1, 4, 1, frame], [2, 2, 6, 2, frame], [1, 4, 8, 1, shade], // cap
+      [1, 5, 8, 12, 'rgba(222,236,243,0.55)'], [0, 5, 1, 12, frame], [9, 5, 1, 12, frame], [1, 17, 8, 1, frame], // cup
+      [1, 9, 8, 8, liquid], [1, 9, 8, 1, 'rgba(255,255,255,0.55)'], [6, 10, 2, 7, 'rgba(0,0,0,0.12)'], // shake
+      [7, 6, 2, 1, shade], [7, 8, 2, 1, shade], [7, 12, 2, 1, shade], [7, 15, 2, 1, shade], // scale
+      [2, 12, 3, 1, accent], [2, 6, 1, 10, 'rgba(255,255,255,0.6)'],
+    ], `can shaker ${cls}`);
+  }
+
+  /** Protein bar standing up: crimped wrapper with a window, 10×18. */
+  function barSvg(f, cls = '') {
+    const [wrap, shade, choc, accent] = f.colors;
+    return pixelSvg(10, 18, [
+      [2, 0, 1, 1, shade], [4, 0, 1, 1, shade], [6, 0, 1, 1, shade], [2, 1, 6, 1, shade], // top crimp
+      [2, 2, 6, 14, wrap], [6, 2, 2, 14, 'rgba(0,0,0,0.2)'], [2, 2, 1, 14, 'rgba(255,255,255,0.22)'],
+      [3, 4, 3, 7, choc], [3, 4, 3, 1, 'rgba(255,255,255,0.35)'], [4, 6, 1, 1, 'rgba(0,0,0,0.25)'], [4, 9, 1, 1, 'rgba(0,0,0,0.25)'], // window
+      [2, 12, 6, 1, accent], [3, 14, 3, 1, accent],
+      [2, 16, 6, 1, shade], [3, 17, 1, 1, shade], [5, 17, 1, 1, shade], [7, 17, 1, 1, shade], // bottom crimp
+    ], `can bar ${cls}`);
+  }
+
+  /** Bottle with cap and label (syrup, ready-to-drink shake), 10×18. */
+  function bottleSvg(f, cls = '') {
+    const [body, shade, label, accent] = f.colors;
+    return pixelSvg(10, 18, [
+      [3, 0, 4, 2, accent], [3, 0, 4, 1, 'rgba(255,255,255,0.3)'], [4, 2, 2, 2, body], [3, 4, 4, 1, body], // cap, neck
+      [2, 5, 6, 12, body], [6, 5, 2, 12, shade], [3, 17, 4, 1, shade],
+      [2, 8, 6, 5, label], [6, 8, 2, 5, 'rgba(0,0,0,0.1)'], [3, 10, 3, 1, accent], [3, 11, 2, 1, accent],
+      [3, 5, 1, 11, 'rgba(255,255,255,0.5)'],
+    ], `can bottle ${cls}`);
+  }
+
+  /** Stand-up pouch with zip and window (powder), 10×18. */
+  function pouchSvg(f, cls = '') {
+    const [body, shade, label, accent] = f.colors;
+    return pixelSvg(10, 18, [
+      [1, 1, 8, 2, shade], [1, 1, 8, 1, 'rgba(255,255,255,0.25)'], [1, 3, 8, 1, 'rgba(0,0,0,0.2)'], // seal + zip
+      [1, 4, 8, 4, body], [0, 8, 10, 9, body], [8, 4, 1, 4, shade], [9, 8, 1, 9, shade], [1, 17, 8, 1, shade], // bag
+      [2, 7, 6, 6, label], [3, 9, 4, 1, accent], [3, 11, 2, 1, accent], [5, 14, 2, 2, accent], [6, 13, 1, 1, accent], // label with a leaf
+      [1, 4, 1, 12, 'rgba(255,255,255,0.3)'],
+    ], `can pouch ${cls}`);
+  }
+
+  /** Pixel art of a fridge item by its kind. */
+  const ITEM_ART = { cup: cupSvg, vial: vialSvg, tub: tubSvg, shaker: shakerSvg, bar: barSvg, bottle: bottleSvg, pouch: pouchSvg };
+  const itemSvg = (f, cls = '') => (ITEM_ART[f.kind] || canSvg)(f, cls);
+  /** Cold drinks get condensation; everything else a glint of light. */
+  const COLD_KINDS = new Set(['can', 'cup', 'bottle', 'shaker']);
 
   /** A 10×18 pixel can in the flavour's colours (generic design, no brand mark). */
   function canSvg(f, cls = '') {
@@ -5489,19 +5549,27 @@
   // Rarity of a can: name, colour and sort rank (rarest first in the fridge)
   const RARITY = {
     common: { name: 'Gewöhnlich', rank: 0 },
-    rare: { name: 'Selten', rank: 1 },
-    epic: { name: 'Episch', rank: 2 },
-    legendary: { name: 'Legendär', rank: 3 },
-    mythic: { name: 'Mythisch', rank: 4 },
+    uncommon: { name: 'Ungewöhnlich', rank: 1 },
+    rare: { name: 'Selten', rank: 2 },
+    epic: { name: 'Episch', rank: 3 },
+    legendary: { name: 'Legendär', rank: 4 },
+    mythic: { name: 'Mythisch', rank: 5 },
+    cosmic: { name: 'Kosmisch', rank: 6 },
   };
   /** Small faceted gem above a can; colour and animation per rarity (CSS .gem-*). */
   const gemSvg = (r) => `<svg class="gem gem-${r}" viewBox="0 0 16 14" aria-hidden="true">
       <path class="g-body" d="M4 1h8l3 4-7 8-7-8z"/><path class="g-top" d="M4 1h8l3 4H1z"/><path class="g-hi" d="M5.5 2.2h3L7 4.6H3.4z"/></svg>`;
   /** An item with its rarity gem; cold drinks get condensation drops, the vial a glint instead. */
-  const coldCan = (f, extra = '') => `<span class="cold-can r-${f.rarity} kind-${f.kind || 'can'}" ${extra}>
-      <span class="gem-wrap" title="${esc(RARITY[f.rarity].name)}">${gemSvg(f.rarity)}</span>
-      <span class="can-body">${itemSvg(f)}${f.kind === 'vial' ? '<span class="glint"></span>' : '<span class="frost"></span><i class="drop d1"></i><i class="drop d2"></i><i class="drop d3"></i>'}</span>
+  const coldCan = (f, extra = '') => {
+    const rank = (RARITY[f.rarity] || RARITY.common).rank;
+    const cold = COLD_KINDS.has(f.kind || 'can');
+    return `<span class="cold-can r-${f.rarity} kind-${f.kind || 'can'}" ${extra}>
+      <span class="gem-wrap" title="${esc((RARITY[f.rarity] || RARITY.common).name)}">${gemSvg(f.rarity)}</span>
+      <span class="can-body">${itemSvg(f)}${cold ? '<span class="frost"></span><i class="drop d1"></i><i class="drop d2"></i><i class="drop d3"></i>' : '<span class="glint"></span>'}${
+        f.rarity === 'cosmic' ? '<span class="cosmos" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>' : ''}${
+        rank >= 4 ? '<i class="sparkle s1" aria-hidden="true"></i><i class="sparkle s2" aria-hidden="true"></i>' : ''}</span>
     </span>`;
+  };
   const cobweb = (cls) => `<svg class="cobweb ${cls}" viewBox="0 0 100 100" aria-hidden="true">
       <path d="M0 0L100 0M0 0L96 30M0 0L80 62M0 0L54 86M0 0L28 98M0 0L0 100"/>
       <path d="M26 0Q22 6 25 8Q20 14 21 16Q14 20 14 21Q8 24 7 26Q2 26 0 26"/>
@@ -5672,10 +5740,13 @@
    */
   const BUY_FX = {
     common: { pre: 0, total: 2600, particles: 14, colors: ['#ffffff', '#c3ced5', '#8fa1ad'] },
+    uncommon: { pre: 0, total: 2800, particles: 20, colors: ['#c8f0d5', '#3fae5a', '#ffffff', '#9be3a8'] },
     rare: { pre: 0, total: 3000, particles: 26, colors: ['#bfe0ff', '#3a8ee8', '#ffffff'] },
     epic: { pre: 0, total: 3400, particles: 40, colors: ['#e6d6ff', '#a463e0', '#ffffff', '#ff8fd8'] },
     legendary: { pre: 0.9, total: 4600, particles: 60, colors: ['#fff1a8', '#f2c230', '#ffffff', '#ffb627'], coins: 22 },
-    mythic: { pre: 1.6, total: 5800, particles: 96, colors: ['#ff3d6e', '#a463e0', '#3a8ee8', '#7ed957', '#f2c230', '#ffffff'], coins: 0 },
+    mythic: { pre: 1.6, total: 5800, particles: 96, colors: ['#ff3d6e', '#a463e0', '#3a8ee8', '#7ed957', '#f2c230', '#ffffff'], coins: 0, stars: 40 },
+    // cosmic: the sky goes dark, a vortex pulls everything in, a supernova flash – then the item hangs among orbiting planets
+    cosmic: { pre: 2.4, total: 7400, particles: 130, colors: ['#7b6cff', '#5ef2ff', '#ff6ad5', '#ffffff', '#f2c230', '#9d8bff'], coins: 0, stars: 110 },
   };
   function playPurchaseFx(f) {
     const cfg = BUY_FX[f.rarity] || BUY_FX.common;
@@ -5684,12 +5755,14 @@
     const particles = reduce ? '' : Array.from({ length: cfg.particles }, (_, i) => {
       const angle = (360 / cfg.particles) * i + rnd(-8, 8);
       const color = cfg.colors[i % cfg.colors.length];
-      return `<i style="--a:${angle.toFixed(1)}deg;--d:${Math.round(rnd(140, f.rarity === 'mythic' ? 520 : 380))}px;--c:${color};--s:${rnd(5, f.rarity === 'common' ? 9 : 13).toFixed(1)}px;--t:${rnd(0, 0.25).toFixed(2)}s"></i>`;
+      const far = f.rarity === 'cosmic' ? 640 : f.rarity === 'mythic' ? 520 : 380;
+      return `<i style="--a:${angle.toFixed(1)}deg;--d:${Math.round(rnd(140, far))}px;--c:${color};--s:${rnd(5, f.rarity === 'common' ? 9 : 13).toFixed(1)}px;--t:${rnd(0, 0.25).toFixed(2)}s"></i>`;
     }).join('');
     const coins = reduce || !cfg.coins ? '' : Array.from({ length: cfg.coins }, () =>
       `<i class="fx-coin" style="left:${rnd(2, 98).toFixed(1)}%;--t:${rnd(0, 1.2).toFixed(2)}s;--r:${Math.round(rnd(-360, 360))}deg;--z:${rnd(0.7, 1.3).toFixed(2)}"></i>`).join('');
-    const stars = !reduce && f.rarity === 'mythic' ? Array.from({ length: 40 }, () =>
-      `<i style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(0, 100).toFixed(1)}%;--t:${rnd(0, 2).toFixed(2)}s"></i>`).join('') : '';
+    const stars = !reduce && cfg.stars ? Array.from({ length: cfg.stars }, () =>
+      `<i style="left:${rnd(0, 100).toFixed(1)}%;top:${rnd(0, 100).toFixed(1)}%;--t:${rnd(0, 2).toFixed(2)}s;--z:${rnd(0.6, 1.8).toFixed(2)}"></i>`).join('') : '';
+    const cosmic = f.rarity === 'cosmic' && !reduce;
     const fx = document.createElement('div');
     fx.className = `buy-fx r-${f.rarity} ${reduce ? 'calm' : ''}`;
     fx.style.setProperty('--pre', `${cfg.pre}s`);
@@ -5698,7 +5771,9 @@
     fx.innerHTML = `
       <div class="fx-backdrop"></div>
       ${stars ? `<div class="fx-stars" aria-hidden="true">${stars}</div>` : ''}
+      ${cosmic ? '<div class="fx-nebula" aria-hidden="true"><i></i><i></i><i></i></div>' : ''}
       <div class="fx-stage" aria-hidden="true">
+        ${cosmic ? '<div class="fx-vortex"></div><div class="fx-orbit o1"><i></i></div><div class="fx-orbit o2"><i></i></div><div class="fx-orbit o3"><i></i></div>' : ''}
         <div class="fx-rays"></div>
         <div class="fx-glow"></div>
         <div class="fx-rings"><i></i><i></i></div>
@@ -5716,7 +5791,7 @@
     document.body.appendChild(fx);
     document.body.classList.add('fx-open');
     if (!reduce && navigator.vibrate) {
-      const pattern = { legendary: [30, 50, 30, 50, 120], mythic: [20, 80, 20, 80, 20, 80, 200], epic: [40, 40, 60] }[f.rarity];
+      const pattern = { legendary: [30, 50, 30, 50, 120], mythic: [20, 80, 20, 80, 20, 80, 200], epic: [40, 40, 60], cosmic: [15, 60, 15, 60, 15, 60, 30, 40, 300] }[f.rarity];
       if (pattern) setTimeout(() => navigator.vibrate(pattern), cfg.pre * 1000);
     }
     return new Promise((resolve) => {
@@ -5745,6 +5820,39 @@
   function notifyRevoked(revoked) {
     const names = revoked.map((r) => r.name).join(', ');
     toast(`Aus deinem Kühlschrank genommen: ${names} – die Medaille dafür ist durch die Korrektur weggefallen.`, true);
+  }
+
+  /** Shop grouped by rarity, from common to cosmic. */
+  function shopSections(flavors, card) {
+    const groups = Object.keys(RARITY)
+      .map((r) => [r, flavors.filter((f) => f.rarity === r).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name))])
+      .filter(([, list]) => list.length);
+    return groups.map(([r, list]) => `<section class="shop-group r-${r}" aria-label="${esc(RARITY[r].name)}">
+        <h3 class="shop-group-head"><span class="gem-wrap">${gemSvg(r)}</span>${esc(RARITY[r].name)} <span class="muted small">${list.length}</span></h3>
+        <div class="shop-grid">${list.map(card).join('')}</div>
+      </section>`).join('');
+  }
+
+  /** Cards lean towards the pointer (desktop, not with reduced motion). */
+  function tiltCards(root) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !matchMedia('(hover: hover)').matches) return;
+    root.querySelectorAll('.shop-item:not(.sold-out)').forEach((card) => {
+      card.addEventListener('pointermove', (e) => {
+        const r = card.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width - 0.5;
+        const y = (e.clientY - r.top) / r.height - 0.5;
+        card.style.setProperty('--rx', `${(-y * 10).toFixed(2)}deg`);
+        card.style.setProperty('--ry', `${(x * 12).toFixed(2)}deg`);
+        card.style.setProperty('--mx', `${((x + 0.5) * 100).toFixed(1)}%`);
+        card.style.setProperty('--my', `${((y + 0.5) * 100).toFixed(1)}%`);
+        card.classList.add('tilting');
+      });
+      card.addEventListener('pointerleave', () => {
+        card.classList.remove('tilting');
+        card.style.removeProperty('--rx');
+        card.style.removeProperty('--ry');
+      });
+    });
   }
 
   async function mountShop(root, opts) {
@@ -5777,7 +5885,7 @@
           <p class="muted small">${b.earned} verdient · ${b.spent} ausgegeben</p>
           <a class="btn btn-secondary btn-sm" href="${opts.base}/fridge">Zum Kühlschrank →</a>
         </section>
-        <div class="shop-grid">${shop.flavors.map((f) => {
+        ${shopSections(shop.flavors, (f) => {
           if (owned.has(f.key)) return soldOutCard(f, `<p class="shop-price" aria-label="${f.price} Token">${'<i class="coin"></i>'.repeat(f.price)}<span>${f.price}</span></p>`);
           const can = b.available >= f.price;
           return `<section class="card shop-item" style="--can:${f.colors[0]}">
@@ -5787,7 +5895,8 @@
             <p class="shop-price" aria-label="${f.price} Token">${'<i class="coin"></i>'.repeat(f.price)}<span>${f.price}</span></p>
             <button type="button" class="${can ? 'btn-primary' : 'btn-secondary'} btn-sm btn-block" data-buy="${f.key}" ${can ? '' : 'disabled'}>${can ? 'Kaufen' : `Noch ${f.price - b.available} Token`}</button>
           </section>`;
-        }).join('')}</div>`;
+        })}`;
+      tiltCards(root);
       root.querySelectorAll('[data-buy]').forEach((btn) => btn.addEventListener('click', async () => {
         btn.disabled = true;
         const f = shop.flavors.find((x) => x.key === btn.dataset.buy);
@@ -5814,13 +5923,14 @@
             <a class="btn btn-secondary btn-sm" href="${opts.base}/fridge">Zum Kühlschrank →</a>
           </span>
         </section>
-        <div class="shop-grid">${shop.flavors.map((f) => (owned.has(f.key) ? soldOutCard(f, '<p class="shop-price"><span class="muted">Gratis</span></p>') : `<section class="card shop-item" style="--can:${f.colors[0]}">
+        ${shopSections(shop.flavors, (f) => (owned.has(f.key) ? soldOutCard(f, '<p class="shop-price"><span class="muted">Gratis</span></p>') : `<section class="card shop-item" style="--can:${f.colors[0]}">
             <div class="shop-can">${coldCan(f, 'data-wobble')}</div>
             <h3>${esc(f.name)}</h3>
             <span class="rarity-tag r-${f.rarity}">${esc(RARITY[f.rarity].name)}</span>
             <p class="shop-price"><span class="muted">Gratis</span> <s class="muted small">${f.price} Token</s></p>
             <button type="button" class="btn-primary btn-sm btn-block" data-buy="${f.key}">Gratis holen</button>
-          </section>`)).join('')}</div>`;
+          </section>`))}`;
+      tiltCards(root);
       root.querySelectorAll('[data-buy]').forEach((btn) => btn.addEventListener('click', async () => {
         btn.disabled = true;
         const f = shop.flavors.find((x) => x.key === btn.dataset.buy);

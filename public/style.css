@@ -2294,3 +2294,164 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .google-privacy summary { cursor: pointer; font-size: 0.9rem; color: var(--brass); }
 .login-legal { text-align: center; margin: 14px 0 0; color: var(--muted); }
 .login-legal a { color: var(--muted); }
+
+/* ==========================================================================
+   New rarities: Ungewöhnlich (green) and Kosmisch (galaxy)
+   ========================================================================== */
+.r-uncommon { --rar: #3fae5a; --rar-dark: #23773a; }
+.r-uncommon .gem { animation: gem-bob 2.2s ease-in-out infinite, gem-glow 2.4s ease-in-out infinite; }
+.r-cosmic { --rar: #7b6cff; --rar-dark: #3d2fb3; }
+.r-cosmic .gem { animation: gem-bob 2.2s ease-in-out infinite, gem-cosmic 4s linear infinite; }
+@keyframes gem-cosmic {
+  0% { filter: hue-rotate(0deg) drop-shadow(0 0 4px #7b6cff); }
+  33% { filter: hue-rotate(-110deg) drop-shadow(0 0 8px #5ef2ff); }
+  66% { filter: hue-rotate(60deg) drop-shadow(0 0 8px #ff6ad5); }
+  100% { filter: hue-rotate(0deg) drop-shadow(0 0 4px #7b6cff); }
+}
+.rarity-tag.r-cosmic {
+  color: #fff; box-shadow: 0 0 12px rgba(123, 108, 255, 0.45);
+  background:
+    radial-gradient(circle, #fff 0 0.8px, transparent 1.3px) 0 0 / 11px 9px,
+    radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 0.6px, transparent 1px) 5px 4px / 13px 11px,
+    linear-gradient(90deg, #160c45, #3d2fb3, #0b4f6c, #6b1d6e, #160c45) 0 0 / 300% 100%;
+  animation: cosmic-tag 7s linear infinite;
+}
+@keyframes cosmic-tag { to { background-position: 22px 0, -26px 4px, 300% 0; } }
+.shop-item:has(.r-cosmic) {
+  background: linear-gradient(180deg, color-mix(in srgb, #7b6cff 10%, var(--surface)), var(--surface));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, #7b6cff 65%, transparent), 0 0 24px rgba(123, 108, 255, 0.28);
+}
+.shop-item:has(.r-uncommon) { box-shadow: inset 0 0 0 1px color-mix(in srgb, #3fae5a 40%, transparent); }
+
+/* stars drifting over cosmic items */
+.cosmos { position: absolute; inset: 0; pointer-events: none; }
+.cosmos i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff; opacity: 0; box-shadow: 0 0 4px #9d8bff; animation: fx-twinkle 2.2s ease-in-out infinite; }
+.cosmos i:nth-child(1) { left: 22%; top: 18%; }
+.cosmos i:nth-child(2) { left: 70%; top: 30%; animation-delay: 0.5s; }
+.cosmos i:nth-child(3) { left: 40%; top: 52%; animation-delay: 1.1s; }
+.cosmos i:nth-child(4) { left: 62%; top: 72%; animation-delay: 1.6s; }
+.cosmos i:nth-child(5) { left: 30%; top: 84%; animation-delay: 0.8s; }
+.cosmos i:nth-child(6) { left: 78%; top: 58%; animation-delay: 1.9s; }
+.r-cosmic .can-body .can { animation: cosmic-shift 6s ease-in-out infinite; }
+@keyframes cosmic-shift { 50% { filter: hue-rotate(-35deg) saturate(1.25); } }
+
+/* four-pointed sparkle on legendary and rarer items */
+.sparkle {
+  position: absolute; width: 9px; height: 9px; pointer-events: none; opacity: 0; z-index: 2;
+  background: #fff; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  filter: drop-shadow(0 0 3px var(--rar));
+  animation: sparkle 3.6s ease-in-out infinite;
+}
+.sparkle.s1 { top: 14%; left: 64%; }
+.sparkle.s2 { top: 56%; left: 16%; width: 7px; height: 7px; animation-delay: 1.8s; }
+@keyframes sparkle {
+  0%, 70%, 100% { opacity: 0; transform: scale(0.2) rotate(0deg); }
+  80% { opacity: 1; transform: scale(1) rotate(45deg); }
+  90% { opacity: 0.6; transform: scale(0.6) rotate(90deg); }
+}
+
+/* rare things glow softly on the shelf */
+.cold-can { position: relative; isolation: isolate; }
+.shelf-can .cold-can.r-epic::before, .shelf-can .cold-can.r-legendary::before,
+.shelf-can .cold-can.r-mythic::before, .shelf-can .cold-can.r-cosmic::before {
+  content: ''; position: absolute; left: 50%; bottom: 0; width: 130%; height: 34%; z-index: -1; pointer-events: none;
+  transform: translateX(-50%); border-radius: 50%; filter: blur(5px);
+  background: radial-gradient(ellipse at 50% 70%, color-mix(in srgb, var(--rar) 70%, transparent), transparent 70%);
+  animation: aura 3s ease-in-out infinite;
+}
+.shelf-can .cold-can.r-mythic::before { animation: aura 2.4s ease-in-out infinite, fx-hue 6s linear infinite; }
+.shelf-can .cold-can.r-cosmic::before { height: 60%; bottom: 10%; animation: aura 2s ease-in-out infinite, fx-hue 5s linear infinite; }
+@keyframes aura { 0%, 100% { opacity: 0.45; transform: translateX(-50%) scale(0.9); } 50% { opacity: 0.95; transform: translateX(-50%) scale(1.08); } }
+
+/* shop grouped by rarity */
+.shop-group { margin-top: 22px; }
+.shop-group-head { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font: 500 0.82rem var(--font-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.shop-group-head .gem-wrap { height: 14px; }
+.shop-group-head .gem { width: 14px; height: 12px; }
+.shop-group.r-cosmic .shop-group-head { color: #7b6cff; }
+
+/* shop cards lean towards the pointer, with a soft glare */
+@media (hover: hover) {
+  .shop-item:not(.sold-out) { transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); position: relative; overflow: hidden; }
+  .shop-item.tilting { transition: transform 80ms linear, box-shadow var(--dur-med) var(--ease-out); box-shadow: 0 14px 30px rgba(0, 41, 65, 0.16); }
+  .shop-item:not(.sold-out)::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity var(--dur-med) ease;
+    background: radial-gradient(circle at var(--mx, 50%) var(--my, 30%), rgba(255, 255, 255, 0.35), transparent 55%);
+  }
+  .shop-item.tilting::after { opacity: 1; }
+  .shop-item.tilting .shop-can { transform: translateZ(30px) scale(1.04); transition: transform 120ms ease; }
+}
+
+/* ==========================================================================
+   Purchase celebration: uncommon and cosmic
+   ========================================================================== */
+.r-uncommon.buy-fx { --fx: #3fae5a; }
+.r-uncommon .fx-rays { animation: fx-fade-to 0.6s ease 0.2s forwards, fx-spin 16s linear infinite; }
+.r-uncommon .fx-item { animation: fx-drop 0.8s cubic-bezier(0.2, 1.5, 0.4, 1) 0.1s both, fx-float 3s ease-in-out 1s infinite; }
+.r-uncommon .fx-rarity { color: #9be3a8; }
+
+.r-cosmic.buy-fx { --fx: #7b6cff; }
+.r-cosmic .fx-backdrop { background: #000; animation: fx-fade 0.3s ease both; }
+.r-cosmic .fx-backdrop::after {
+  content: ''; position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(circle at 50% 45%, #2a1a6e, #0b0830 45%, #000 80%);
+  animation: fx-fade-to 1.2s ease var(--pre) forwards;
+}
+.fx-nebula { position: absolute; inset: -10%; pointer-events: none; opacity: 0; animation: fx-fade-to 2s ease var(--pre) forwards; }
+.fx-nebula i { position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%; filter: blur(40px); opacity: 0.5; animation: nebula-drift 14s ease-in-out infinite alternate; }
+.fx-nebula i:nth-child(1) { left: -10%; top: -20%; background: radial-gradient(circle, rgba(255, 106, 213, 0.55), transparent 65%); }
+.fx-nebula i:nth-child(2) { right: -15%; top: 10%; background: radial-gradient(circle, rgba(94, 242, 255, 0.4), transparent 65%); animation-delay: -4s; }
+.fx-nebula i:nth-child(3) { left: 15%; bottom: -30%; background: radial-gradient(circle, rgba(123, 108, 255, 0.55), transparent 65%); animation-delay: -8s; }
+@keyframes nebula-drift { to { transform: translate(6vmax, -4vmax) scale(1.15) rotate(25deg); } }
+.r-cosmic .fx-stars i { width: calc(2px * var(--z, 1)); height: calc(2px * var(--z, 1)); box-shadow: 0 0 6px #9d8bff; }
+/* the vortex: spins faster and faster, pulls inwards, then bursts */
+.fx-vortex {
+  width: 140%; height: 140%; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent, rgba(123, 108, 255, 0.85), transparent 25%, rgba(94, 242, 255, 0.7), transparent 50%, rgba(255, 106, 213, 0.8), transparent 75%, rgba(123, 108, 255, 0.85));
+  -webkit-mask: radial-gradient(circle, transparent 8%, #000 22%, #000 48%, transparent 70%); mask: radial-gradient(circle, transparent 8%, #000 22%, #000 48%, transparent 70%);
+  animation: vortex var(--pre) cubic-bezier(0.6, 0, 0.9, 0.4) both;
+}
+@keyframes vortex {
+  0% { opacity: 0; transform: scale(1.6) rotate(0deg); }
+  20% { opacity: 1; }
+  92% { opacity: 1; transform: scale(0.08) rotate(1260deg); }
+  100% { opacity: 0; transform: scale(0) rotate(1440deg); }
+}
+.r-cosmic .fx-item {
+  animation: fx-collapse var(--pre) ease-in both, fx-reveal 1s cubic-bezier(0.2, 1.6, 0.4, 1) var(--pre) forwards, fx-float 3.4s ease-in-out calc(var(--pre) + 1s) infinite;
+}
+@keyframes fx-collapse {
+  0% { opacity: 0; transform: scale(0.2) rotate(-90deg); filter: brightness(0); }
+  60% { opacity: 1; transform: scale(0.45) rotate(160deg); filter: brightness(0) drop-shadow(0 0 12px #5ef2ff); }
+  100% { opacity: 1; transform: scale(0.75) rotate(360deg); filter: brightness(0) drop-shadow(0 0 50px #7b6cff); }
+}
+.r-cosmic .fx-rays {
+  background: repeating-conic-gradient(from 0deg, rgba(157, 139, 255, 0.28) 0 6deg, transparent 6deg 18deg, rgba(94, 242, 255, 0.2) 18deg 22deg, transparent 22deg 36deg);
+  animation: fx-fade-to 0.5s ease var(--pre) forwards, fx-spin 10s linear infinite;
+}
+.r-cosmic .fx-particles { animation: fx-hue 3s linear infinite; }
+.r-cosmic .fx-particles i { animation-delay: calc(var(--pre) + var(--t)); }
+.r-cosmic .fx-rings i:first-child { border-color: #5ef2ff; animation: fx-ring 1.2s ease-out var(--pre) both; }
+.r-cosmic .fx-rings i:last-child { border-color: #ff6ad5; animation: fx-ring 1.5s ease-out calc(var(--pre) + 0.3s) both; }
+.r-cosmic .fx-stage { animation: fx-shake 0.8s ease var(--pre) both; --shake: 18px; }
+.r-cosmic .fx-flash { animation: fx-flash 1.1s ease var(--pre) both; --flash: 1; background: radial-gradient(circle, #fff, #e6e0ff 40%, #9d8bff); }
+/* planets circling the item once it's there */
+.fx-orbit { left: 50%; top: 50%; border-radius: 50%; border: 1px dashed rgba(157, 139, 255, 0.35); opacity: 0; animation: fx-fade-to 0.8s ease calc(var(--pre) + 0.4s) forwards, orbit 6s linear infinite; }
+.fx-orbit.o1 { width: 260px; height: 260px; margin: -130px 0 0 -130px; }
+.fx-orbit.o2 { width: 360px; height: 360px; margin: -180px 0 0 -180px; animation-duration: 0.8s, 10s; animation-direction: normal, reverse; }
+.fx-orbit.o3 { width: 470px; height: 470px; margin: -235px 0 0 -235px; animation-duration: 0.8s, 15s; }
+.fx-orbit i { position: absolute; top: -7px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #5ef2ff 40%, #1a6f8c); box-shadow: 0 0 12px #5ef2ff; }
+.fx-orbit.o2 i { width: 10px; height: 10px; margin-left: -5px; top: -5px; background: radial-gradient(circle at 35% 35%, #fff, #ff6ad5 45%, #7a1c64); box-shadow: 0 0 12px #ff6ad5; }
+.fx-orbit.o3 i { width: 18px; height: 18px; margin-left: -9px; top: -9px; background: radial-gradient(circle at 35% 35%, #fff1a8, #f2c230 45%, #7a5800); box-shadow: 0 0 14px #f2c230; }
+@keyframes orbit { to { transform: rotate(360deg); } }
+.r-cosmic .fx-rarity, .r-uncommon .fx-rarity { font-size: clamp(1rem, 3vw, 1.2rem); }
+.r-cosmic .fx-rarity {
+  font-size: clamp(1.6rem, 6vw, 2.6rem); letter-spacing: 0.3em;
+  background: linear-gradient(90deg, #9d8bff, #5ef2ff, #ff6ad5, #f2c230, #9d8bff); -webkit-background-clip: text; background-clip: text; color: transparent;
+  background-size: 300% 100%; animation: fx-sheen 3s linear infinite; filter: drop-shadow(0 0 14px rgba(123, 108, 255, 0.7));
+}
+@media (prefers-reduced-motion: reduce) {
+  .sparkle, .cosmos i, .r-cosmic .can-body .can, .rarity-tag.r-cosmic, .r-cosmic .gem, .r-uncommon .gem,
+  .shelf-can .cold-can::before, .fx-vortex, .fx-orbit, .fx-nebula i { animation: none !important; }
+  .shop-item:not(.sold-out) { transform: none !important; }
+}
