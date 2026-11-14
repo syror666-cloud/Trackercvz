@@ -2510,3 +2510,35 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .invite-card h2 { margin: 4px 0 6px; }
 .check.consent { display: flex; gap: 10px; align-items: flex-start; font-size: 0.88rem; line-height: 1.45; margin: 4px 0 16px; }
 .check.consent input { width: auto; margin-top: 3px; flex: none; }
+
+/* ==========================================================================
+   Welcome tour
+   ========================================================================== */
+.tour { position: fixed; inset: 0; z-index: 950; display: grid; place-items: center; padding: 16px; }
+.tour.out { opacity: 0; transition: opacity 0.25s ease; }
+.tour-backdrop { position: absolute; inset: 0; background: rgba(0, 20, 34, 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fx-fade 0.3s ease both; }
+.tour-card {
+  position: relative; width: min(100%, 440px); max-height: calc(100dvh - 32px); overflow: auto;
+  background: var(--surface); border-radius: 24px; padding: 34px 26px 20px; box-shadow: 0 24px 60px rgba(0, 20, 34, 0.35);
+  animation: tour-in 0.45s var(--ease-spring) both;
+}
+@keyframes tour-in { from { opacity: 0; transform: translateY(24px) scale(0.96); } }
+.tour-body { display: flex; flex-direction: column; gap: 12px; animation: tour-step 0.35s var(--ease-out) both; }
+@keyframes tour-step { from { opacity: 0; transform: translateX(18px); } }
+.tour-body h2 { margin: 0; text-align: center; font-size: 1.5rem; }
+.tour-body > p { margin: 0; text-align: center; }
+.tour-hero { display: grid; place-items: center; margin: 0 auto 4px; }
+.tour-hero .logo-mark { width: 68px; height: 68px; }
+.tour-hero.icon { font-size: 2.6rem; width: 76px; height: 76px; border-radius: 22px; background: var(--surface-2); }
+.tour-list { list-style: none; margin: 4px 0 6px; padding: 0; display: grid; gap: 12px; }
+.tour-list li { display: flex; gap: 12px; align-items: flex-start; }
+.tour-list li > span { font-size: 1.3rem; width: 36px; height: 36px; border-radius: 10px; background: var(--surface-2); display: grid; place-items: center; flex: none; }
+.tour-list b { display: block; font-size: 0.98rem; }
+.tour-list div span { color: var(--muted); font-size: 0.88rem; line-height: 1.4; }
+.tour-form { display: grid; gap: 10px; }
+.tour-skip { all: unset; position: absolute; top: 14px; right: 18px; font-size: 0.88rem; color: var(--muted); cursor: pointer; padding: 6px 8px; border-radius: 8px; }
+.tour-skip:focus-visible { outline: 2px solid var(--accent); }
+.tour-dots { display: flex; justify-content: center; gap: 6px; margin-top: 18px; }
+.tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: width var(--dur-med) var(--ease-out), background var(--dur-med); }
+.tour-dots i.on { width: 20px; border-radius: 4px; background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .tour-card, .tour-body { animation: none; } }

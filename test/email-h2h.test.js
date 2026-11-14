@@ -127,6 +127,7 @@ test('e-mail: changing the own address needs the password; addresses are unique;
   await coach('POST', '/api/clients', { username: 'max', displayName: 'Max', password: 'maxpass123' });
   const janaId = (await coach('POST', '/api/clients', { username: 'jana', displayName: 'Jana', password: 'janapass123', email: 'jana@example.com' })).data.client.id;
   const max = await login('max', 'maxpass123');
+  await max('POST', '/api/me/onboarded'); // after the welcome tour the password is required
   assert.equal((await max('PUT', '/api/me/email', { email: 'max@example.com', password: 'falsch' })).status, 400);
   assert.equal((await max('PUT', '/api/me/email', { email: 'kein-mail', password: 'maxpass123' })).status, 400);
   assert.equal((await max('PUT', '/api/me/email', { email: 'JANA@example.com', password: 'maxpass123' })).status, 409);

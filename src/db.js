@@ -415,6 +415,10 @@ function migrate(db) {
   addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT'], ['seen_release', 'TEXT'], ['prefs', 'TEXT']]);
   addColumns(db, 'users', [['email', 'TEXT'], ['email_verified', 'INTEGER NOT NULL DEFAULT 0'], ['h2h_visible', 'INTEGER NOT NULL DEFAULT 0'], ['showcase', "TEXT NOT NULL DEFAULT '[]'"]]);
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email COLLATE NOCASE) WHERE email IS NOT NULL');
+  // onboarding: start passwords from the coach must be replaced; existing accounts count as onboarded
+  const hadOnboarding = db.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'onboarded_at'").get();
+  addColumns(db, 'users', [['must_change_password', 'INTEGER NOT NULL DEFAULT 0'], ['onboarded_at', 'TEXT']]);
+  if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health
   db.exec('DROP TABLE IF EXISTS health_tokens');
   addColumns(db, 'h2h_challenges', [['final_challenger', 'REAL'], ['final_opponent', 'REAL'], ['winner_id', 'INTEGER'], ['frozen_at', 'TEXT']]);

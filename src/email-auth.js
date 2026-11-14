@@ -231,7 +231,9 @@ function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer,
     ['PUT', /^\/api\/me\/email$/, async (ctx) => {
       const u = requireUser(ctx);
       const { email, password } = await readBody(ctx.req);
-      if (typeof password !== 'string' || !verifyPassword(password, u.password_hash)) throw new HttpError(400, 'Passwort ist falsch');
+      // during the welcome tour of a brand-new account (first day) the password was just entered – no need to ask again
+      const fresh = !u.onboarded_at && u.role === 'client' && Date.now() - Date.parse(`${String(u.created_at).replace(' ', 'T')}Z`) < 864e5;
+      if (!fresh && (typeof password !== 'string' || !verifyPassword(password, u.password_hash))) throw new HttpError(400, 'Passwort ist falsch');
       const { delivery, ...r } = setEmail(u.id, email);
       const sent = delivery ? await delivery : null;
       return { ...r, mail: enabled, mailError: sent && sent.error ? friendlyMailError(sent.error) : null };

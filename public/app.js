@@ -391,7 +391,7 @@
   const RELEASE = CHANGELOG[0].id;
   let whatsNewChecked = false;
   async function maybeShowWhatsNew() {
-    if (whatsNewChecked || !me) return;
+    if (whatsNewChecked || !me || me.mustChangePassword) return;
     whatsNewChecked = true;
     if (me.seenRelease === undefined) {
       try {
@@ -400,6 +400,8 @@
         return;
       }
     }
+    // a brand-new client gets the welcome tour instead of release notes from before their time
+    if (me.role === 'client' && !me.onboarded) return startTour();
     if (me.seenRelease === RELEASE) return;
     // everything since the last update this person saw (unknown / none: the last three updates)
     const seenAt = CHANGELOG.findIndex((r) => r.id === me.seenRelease);
@@ -515,6 +517,8 @@
       unreadTimer = null;
       return renderLogin();
     }
+    // a start password from the coach is replaced before anything else
+    if (me.role === 'client' && me.mustChangePassword) return renderFirstPassword();
     topbar.hidden = false;
     renderUserBadge();
     if (location.hash === '#/fame') return location.replace('#/account/fame');
@@ -2716,6 +2720,195 @@
     }));
   }
 
+  /** First login with a start password: pick an own one (blocking, before the app opens). */
+  function renderFirstPassword() {
+    topbar.hidden = true;
+    setView(`
+      <div class="login-wrap single">
+        <form class="card login-card" id="first-pw" novalidate>
+          <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
+          <p class="eyebrow">Willkommen, ${esc(me.displayName.split(' ')[0])}!</p>
+          <h2>Leg dein eigenes Passwort fest</h2>
+          <p class="muted small">Dein Coach hat dir ein Startpasswort gegeben. Ersetz es jetzt durch eines, das nur du kennst.</p>
+          <div class="field"><label for="fp-1">Neues Passwort</label>
+            <input id="fp-1" name="pw" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mindestens 8 Zeichen</div></div>
+          <div class="field"><label for="fp-2">Wiederholen</label>
+            <input id="fp-2" name="pw2" type="password" autocomplete="new-password" minlength="8" required></div>
+          <button class="btn-primary btn-block" type="submit">Passwort speichern</button>
+          <p class="error" hidden></p>
+          <p class="small" style="text-align:center"><button type="button" class="link-btn" data-logout>Abmelden</button></p>
+        </form>
+      </div>`);
+    const form = document.getElementById('first-pw');
+    form.pw.focus();
+    form.querySelector('[data-logout]').addEventListener('click', () => document.getElementById('btn-logout').click());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = form.querySelector('.error');
+      err.hidden = true;
+      try {
+        if (form.pw.value.length < 8) throw new Error('Das Passwort braucht mindestens 8 Zeichen.');
+        if (form.pw.value !== form.pw2.value) throw new Error('Die beiden Passwörter stimmen nicht überein.');
+        me = (await api('POST', '/api/me/first-password', { newPassword: form.pw.value })).user;
+        savedHud('Passwort gespeichert');
+        route();
+        setTimeout(maybeShowWhatsNew, 600);
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+      }
+    });
+  }
+
+  /**
+   * Welcome tour for a new client: what the app does, then e-mail, notifications and Google Health –
+   * each can be skipped. Shown once; closing it counts as done.
+   */
+  async function startTour() {
+    if (document.querySelector('.tour')) return;
+    const google = await api('GET', '/api/google').catch(() => ({ configured: false }));
+    const pushBlock = push.blocker();
+    const steps = ['welcome'];
+    if (!me.email) steps.push('email');
+    if (pushBlock !== 'unsupported') steps.push('push');
+    if (google.configured && !google.connected) steps.push('google');
+    steps.push('done');
+    let i = 0;
+    const el = document.createElement('div');
+    el.className = 'tour';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', 'Willkommen bei StayOnTrack');
+    document.body.appendChild(el);
+    document.body.classList.add('fx-open');
+    const finish = async (then) => {
+      el.classList.add('out');
+      setTimeout(() => {
+        el.remove();
+        document.body.classList.remove('fx-open');
+      }, 250);
+      try {
+        me = (await api('POST', '/api/me/onboarded')).user;
+        await api('POST', '/api/me/release', { release: RELEASE });
+        me.seenRelease = RELEASE;
+      } catch { /* shown again next time – no harm */ }
+      if (then) then();
+    };
+    const first = esc(me.displayName.split(' ')[0]);
+    const view = {
+      welcome: () => `
+        <div class="tour-hero" aria-hidden="true">${LOGO}</div>
+        <h2>Willkommen, ${first}!</h2>
+        <p class="muted">Schön, dass du da bist. So funktioniert StayOnTrack:</p>
+        <ul class="tour-list">
+          <li><span aria-hidden="true">📈</span><div><b>Tracker</b><span>Jeden Tag kurz Gewicht, Schritte und Schlaf eintragen – dauert 20 Sekunden.</span></div></li>
+          <li><span aria-hidden="true">🍽</span><div><b>Ernährung</b><span>Dein Plan vom Coach und ein Tagebuch mit Barcode-Scanner.</span></div></li>
+          <li><span aria-hidden="true">🏋️</span><div><b>Training</b><span>Dein Trainingsplan mit Gewichten und Bestleistungen.</span></div></li>
+          <li><span aria-hidden="true">📋</span><div><b>Wöchentlicher Check-in</b><span>Dein Coach schaut sich deine Woche an und gibt dir Feedback.</span></div></li>
+          <li><span aria-hidden="true">🏆</span><div><b>Hall of Fame</b><span>Medaillen sammeln, Token verdienen, den Kühlschrank füllen.</span></div></li>
+        </ul>
+        <button type="button" class="btn-primary btn-block" data-next>Los geht's</button>`,
+      email: () => `
+        <div class="tour-hero icon" aria-hidden="true">✉️</div>
+        <h2>Deine E-Mail-Adresse</h2>
+        <p class="muted">Damit kannst du dich auch mit ihr anmelden und ein vergessenes Passwort selbst zurücksetzen. Sieht nur dein Coach.</p>
+        <form class="tour-form" novalidate><input name="email" type="email" autocomplete="email" placeholder="name@beispiel.de" aria-label="E-Mail-Adresse">
+          <button type="submit" class="btn-primary btn-block">Speichern</button><p class="error" hidden></p></form>
+        <button type="button" class="btn-ghost btn-block" data-next>Später</button>`,
+      push: () => pushBlock === 'ios-home-screen' ? `
+        <div class="tour-hero icon" aria-hidden="true">📲</div>
+        <h2>Als App auf den Home-Bildschirm</h2>
+        <p class="muted">Tipp in Safari unten auf <b>Teilen</b> und dann auf <b>„Zum Home-Bildschirm“</b>. Dann öffnet sich StayOnTrack wie eine App – und du kannst Erinnerungen deines Coaches bekommen.</p>
+        <button type="button" class="btn-primary btn-block" data-next>Verstanden</button>` : `
+        <div class="tour-hero icon" aria-hidden="true">🔔</div>
+        <h2>Erinnerungen & Nachrichten</h2>
+        <p class="muted">Erlaube Mitteilungen, dann erinnert dich die App ans Eintragen und du siehst sofort, wenn dein Coach schreibt.</p>
+        <button type="button" class="btn-primary btn-block" data-push>Mitteilungen erlauben</button>
+        <button type="button" class="btn-ghost btn-block" data-next>Später</button>`,
+      google: () => `
+        <div class="tour-hero icon" aria-hidden="true">🔗</div>
+        <h2>Schritte & Schlaf automatisch</h2>
+        <p class="muted">Nutzt du Fitbit, eine Pixel Watch oder eine App mit Health Connect? Dann verbinde Google Health – Schritte und Schlaf kommen von selbst in deinen Tracker.</p>
+        <button type="button" class="btn-primary btn-block" data-google>Mit Google Health verbinden</button>
+        <button type="button" class="btn-ghost btn-block" data-next>Später</button>`,
+      done: () => `
+        <div class="tour-hero icon" aria-hidden="true">🎉</div>
+        <h2>Alles bereit!</h2>
+        <p class="muted">Am besten trägst du gleich dein heutiges Gewicht ein – dein Coach sieht dann, wo du startest.</p>
+        <button type="button" class="btn-primary btn-block" data-finish>Ersten Eintrag machen</button>`,
+    };
+    const draw = () => {
+      const step = steps[i];
+      el.innerHTML = `<div class="tour-backdrop"></div>
+        <div class="tour-card">
+          <button type="button" class="tour-skip" data-skip>${step === 'done' ? 'Schließen' : 'Überspringen'}</button>
+          <div class="tour-body" data-step="${step}">${view[step]()}</div>
+          <div class="tour-dots" aria-hidden="true">${steps.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+        </div>`;
+      const next = () => {
+        i = Math.min(i + 1, steps.length - 1);
+        draw();
+      };
+      el.querySelectorAll('[data-next]').forEach((b) => b.addEventListener('click', next));
+      el.querySelector('[data-skip]').addEventListener('click', () => finish());
+      const fin = el.querySelector('[data-finish]');
+      if (fin) fin.addEventListener('click', () => finish(() => {
+        location.hash = '#/';
+        setTimeout(() => {
+          const sheet = document.querySelector('[data-open-sheet], #f-weight');
+          if (sheet && sheet.focus) sheet.focus();
+        }, 400);
+      }));
+      const form = el.querySelector('.tour-form');
+      if (form) {
+        form.email.focus();
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const err = form.querySelector('.error');
+          err.hidden = true;
+          try {
+            if (!form.email.value.trim()) throw new Error('Bitte eine E-Mail-Adresse eingeben – oder „Später“.');
+            const r = await api('PUT', '/api/me/email', { email: form.email.value.trim() });
+            me = (await api('GET', '/api/me')).user;
+            if (r.mailError) toast(r.mailError, true);
+            else if (r.verifySent) toast('Bestätigungslink ist unterwegs – schau in dein Postfach.');
+            next();
+          } catch (ex) {
+            err.textContent = ex.message;
+            err.hidden = false;
+          }
+        });
+      }
+      const pb = el.querySelector('[data-push]');
+      if (pb) pb.addEventListener('click', async () => {
+        pb.disabled = true;
+        try {
+          await push.enable();
+          toast('Mitteilungen sind an ✓');
+        } catch (ex) {
+          toast(ex.message, true);
+        }
+        next();
+      });
+      const gb = el.querySelector('[data-google]');
+      if (gb) gb.addEventListener('click', async () => {
+        gb.disabled = true;
+        try {
+          const { url } = await api('POST', '/api/google/connect');
+          await finish();
+          location.href = url;
+        } catch (ex) {
+          toast(ex.message, true);
+          gb.disabled = false;
+        }
+      });
+      const focusable = el.querySelector('.tour-body button, .tour-body input');
+      if (focusable && !form) focusable.focus();
+    };
+    el.addEventListener('keydown', (e) => { if (e.key === 'Escape') finish(); });
+    draw();
+  }
+
   /** Public page behind the invitation link: the client creates their own account. */
   async function renderInvite(token) {
     if (dialog.open) dialog.close();
@@ -2763,10 +2956,11 @@
           token, username: form.username.value.trim(), password: form.password.value, email: form.email.value.trim() || undefined, consent: true,
         });
         me = r.user;
-        whatsNewChecked = true; // a brand-new client gets the welcome tour, not old release notes
+        whatsNewChecked = false; // a brand-new client gets the welcome tour, not old release notes
         applyPrefs(me.prefs);
         history.replaceState(null, '', '#/');
         route();
+        setTimeout(maybeShowWhatsNew, 500);
         if (r.emailNote) toast(r.emailNote, true);
       } catch (ex) {
         err.textContent = ex.message;

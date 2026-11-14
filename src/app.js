@@ -258,6 +258,7 @@ function prefsOf(u) {
 const publicUser = (u) => ({
   id: u.id, username: u.username, displayName: u.display_name, role: u.role, avatar: avatarUrl(u), prefs: prefsOf(u),
   email: u.email || null, emailVerified: Boolean(u.email_verified), h2hVisible: Boolean(u.h2h_visible),
+  mustChangePassword: Boolean(u.must_change_password), onboarded: Boolean(u.onboarded_at) || u.role === 'coach',
 });
 
 /** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
@@ -296,7 +297,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     deleteAllUserSessions: db.prepare('DELETE FROM sessions WHERE user_id = ?'),
     userByName: db.prepare('SELECT * FROM users WHERE username = ?'),
     userById: db.prepare('SELECT * FROM users WHERE id = ?'),
-    setPassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
+    setPassword: db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?'),
+    mustChange: db.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?'),
+    setOnboarded: db.prepare("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ? AND onboarded_at IS NULL"),
     setDisplayName: db.prepare('UPDATE users SET display_name = ? WHERE id = ?'),
     setUsername: db.prepare('UPDATE users SET username = ? WHERE id = ?'),
     setAvatar: db.prepare('UPDATE users SET avatar = ?, avatar_updated = ? WHERE id = ?'),
@@ -710,6 +713,24 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       return undefined;
     }],
 
+    // first login with a start password: set an own one (the start password was just typed to log in)
+    ['POST', /^\/api\/me\/first-password$/, async (ctx) => {
+      const u = requireUser(ctx);
+      if (!u.must_change_password) throw new HttpError(409, 'Dein Passwort ist schon eingerichtet');
+      const { newPassword } = await readBody(ctx.req);
+      const pw = validatePassword(newPassword);
+      if (verifyPassword(pw, u.password_hash)) throw new HttpError(400, 'Bitte ein anderes Passwort als das Startpasswort wählen');
+      q.setPassword.run(hashPassword(pw), u.id);
+      q.deleteUserSessions.run(u.id, u.tokenHash);
+      return { user: publicUser(q.userById.get(u.id)) };
+    }],
+
+    ['POST', /^\/api\/me\/onboarded$/, async (ctx) => {
+      const u = requireUser(ctx);
+      q.setOnboarded.run(u.id);
+      return { user: publicUser(q.userById.get(u.id)) };
+    }],
+
     ['POST', /^\/api\/me\/password$/, async (ctx) => {
       const u = requireUser(ctx);
       const { currentPassword, newPassword } = await readBody(ctx.req);
@@ -760,6 +781,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const displayName = textField(body.displayName, { name: 'Name', max: 80 }) || username;
       if (q.userByName.get(username)) throw new HttpError(409, 'Benutzername ist bereits vergeben');
       const id = createUser(db, { username, displayName, password, role: 'client' });
+      q.mustChange.run(id); // a start password from the coach: the client picks their own at first login
       if (body.email) {
         try {
           mail.setEmail(id, body.email);
@@ -787,6 +809,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       }
       if (body.password !== undefined) {
         q.setPassword.run(hashPassword(validatePassword(body.password)), c.id);
+        q.mustChange.run(c.id);
         q.deleteAllUserSessions.run(c.id);
       }
       let verifySent = false;
