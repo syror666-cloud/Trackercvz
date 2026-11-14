@@ -52,8 +52,19 @@ function createNotifier(db, { subject, timezone = 'Europe/Berlin', fetchImpl } =
     }
   }
 
+  // other channels (e.g. Telegram for the coach) get every notification too
+  const listeners = [];
+  const onSend = (fn) => listeners.push(fn);
+
   /** Sends `payload` ({title, body, url}) to every device of the given users. */
   async function sendToUsers(userIds, payload) {
+    for (const fn of listeners) {
+      try {
+        Promise.resolve(fn([...new Set(userIds)], payload)).catch((err) => console.error('Weiterleitung:', err.message));
+      } catch (err) {
+        console.error('Weiterleitung:', err.message);
+      }
+    }
     const result = { devices: 0, delivered: 0, failed: 0 };
     for (const userId of new Set(userIds)) {
       for (const sub of q.subsForUser.all(userId)) {
@@ -131,7 +142,7 @@ function createNotifier(db, { subject, timezone = 'Europe/Berlin', fetchImpl } =
     return q.coaches.all().map((r) => r.id);
   }
 
-  return { publicKey: keys.publicKey, timezone, sendToUsers, runDue, sendNow, rememberOrigin, coachIds };
+  return { publicKey: keys.publicKey, timezone, sendToUsers, runDue, sendNow, rememberOrigin, coachIds, onSend };
 }
 
 module.exports = { createNotifier };

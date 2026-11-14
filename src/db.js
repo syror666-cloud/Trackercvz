@@ -325,6 +325,21 @@ CREATE TABLE IF NOT EXISTS email_tokens (
 CREATE INDEX IF NOT EXISTS email_tokens_user ON email_tokens (user_id, purpose);
 
 -- Invitation links for new clients (only the token's hash is stored).
+-- Telegram: the coach's chat with the bot, and which bot message belongs to which client (for replies)
+CREATE TABLE IF NOT EXISTS telegram_links (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  chat_id    TEXT NOT NULL UNIQUE,
+  tg_name    TEXT,
+  linked_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE TABLE IF NOT EXISTS telegram_refs (
+  chat_id    TEXT NOT NULL,
+  message_id INTEGER NOT NULL,
+  client_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  PRIMARY KEY (chat_id, message_id)
+);
+
 CREATE TABLE IF NOT EXISTS invites (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash   TEXT NOT NULL UNIQUE,

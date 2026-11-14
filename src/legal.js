@@ -93,7 +93,8 @@ function privacyPage(env) {
       <li><strong>Hosting:</strong> Die App und ihre Datenbank laufen bei Render Services, Inc. (USA), je nach gewählter Server-Region in der EU (Frankfurt) oder in den USA. Übermittlungen in die USA sind durch die EU-Standardvertragsklauseln abgesichert.</li>
       <li><strong>E-Mail:</strong> Bestätigungs-Mails, Codes zum Zurücksetzen des Passworts und Berichte (Check-in, Ernährungsplan als PDF) versenden wir über Resend (Region EU/Irland). Dabei werden deine E-Mail-Adresse und der Inhalt der Mail übermittelt.</li>
       <li><strong>Produktdaten:</strong> Beim Scannen eines Barcodes wird nur die Barcode-Nummer an Open Food Facts gesendet, wenn das Produkt nicht in unserer eigenen Datenbank ist.</li>
-      <li><strong>KI-Unterstützung für den Coach</strong> (optional): Für Zusammenfassungen und Planentwürfe werden Messwerte und Ernährungswünsche – ohne deinen Namen – an Anthropic (USA) übermittelt; Anthropic nutzt diese Daten nicht zum Training.</li>
+      <li><strong>Benachrichtigungen an den Coach über Telegram</strong> (optional): Hat dein Coach Telegram verbunden, erhält er Hinweise wie „Neue Nachricht von …“ samt Nachrichtentext auch über Telegram (Telegram Messenger Inc., Server u. a. in der EU). Antwortet er dort, wird seine Antwort in der App gespeichert.</li>
+      <li><strong>KI-Unterstützung für den Coach</strong> (optional): Für Zusammenfassungen, Planentwürfe und den Assistenten des Coaches werden Messwerte und Ernährungswünsche – ohne deinen Namen – an Anthropic (USA) übermittelt; Anthropic nutzt diese Daten nicht zum Training.</li>
       <li><strong>Push-Nachrichten:</strong> Werden über die Push-Dienste deines Browsers bzw. Geräteherstellers (z. B. Apple, Google, Mozilla) zugestellt.</li>
     </ul>
 

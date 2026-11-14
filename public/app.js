@@ -194,6 +194,14 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-telegram', date: 'November 2026',
+      client: [],
+      coach: [
+        ['✈️', 'Telegram für dich', 'Unter Admin → Telegram verbindest du die App mit Telegram. Neue Nachrichten, Plan-Wünsche und Löschanträge kommen dann auch dort an. Antwortest du auf eine Klienten-Nachricht, geht die Antwort direkt an den Klienten.'],
+        ['🤖', 'Assistent im Chat', 'Schreib dem Bot einfach, was du brauchst – „Was ist offen?“, „Wie läuft es bei Max?“, „Pausier Jana bis 1. Dezember“. Bevor etwas passiert, bestätigst du per Button. Klientennamen gehen dabei nicht an die KI.'],
+      ],
+    },
+    {
       id: '2026-11-archive', date: 'November 2026',
       client: [
         ['⏸', 'Coaching-Pause', 'Macht ihr eine Pause, siehst du das auf der Startseite – Erinnerungen sind dann aus, eintragen und schreiben geht weiter.'],
@@ -4792,6 +4800,7 @@
     setView(`
       <div class="page-head"><div>${eyebrow('Werkzeuge')}<h1>Admin</h1><p class="muted">Aktivität deiner Klienten, automatische Erinnerungen und Lebensmittel-Datenbank.</p></div></div>
       <div class="stack">
+        <section class="card" id="telegram-card"></section>
         <section class="card" id="backup-card"></section>
         <section class="card" id="mail-status"></section>
         <section class="card" id="activity"></section>
@@ -4803,12 +4812,99 @@
       </div>`);
     drawAiGuidelines();
     drawMailStatus();
+    drawTelegram();
     drawBackup();
     drawActivity(ov);
     drawReminder(ov);
     drawWeightReminder(ov);
     drawFoods();
     drawMetricsAdmin();
+  }
+
+  /** Telegram: coach notifications as Telegram messages, replies and the assistant. */
+  async function drawTelegram() {
+    const root = document.getElementById('telegram-card');
+    let st;
+    try {
+      st = await api('GET', '/api/telegram');
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    let waiting = null;
+    onCleanup(() => clearInterval(waiting));
+    const draw = () => {
+      const linked = st.linked;
+      root.innerHTML = `
+        <div class="row-between"><h2>✈️ Telegram</h2><span class="badge ${linked ? 'good' : st.enabled ? 'warn' : ''}">${linked ? 'verbunden' : st.enabled ? 'nicht verbunden' : 'aus'}</span></div>
+        <p class="muted small">Alle Benachrichtigungen für dich – neue Nachrichten, Plan-Wünsche, Löschanträge – kommen zusätzlich als Telegram-Nachricht. Antwortest du dort auf eine Klienten-Nachricht, geht deine Antwort direkt an den Klienten.${st.ai ? ' Und du kannst dem Assistenten schreiben, z. B. „Wer braucht heute Aufmerksamkeit?“ oder „Pausier Jana bis 1. Dezember“ – bevor etwas passiert, bestätigst du per Button.' : ''}</p>
+        ${!st.enabled ? `<ol class="small tg-steps">
+            <li>In Telegram <strong>@BotFather</strong> öffnen und <code>/newbot</code> senden. Namen wählen, z. B. „StayOnTrack Coach“.</li>
+            <li>Den Token, den BotFather schickt, bei Render unter <em>Environment</em> als <code>TELEGRAM_BOT_TOKEN</code> eintragen – nirgendwo sonst teilen.</li>
+            <li>Nach dem Neustart hier „Mit Telegram verbinden“ tippen.</li>
+          </ol>`
+        : linked ? `<dl class="mail-status">
+            <div><dt>Konto</dt><dd>${esc(linked.name || 'Telegram')}</dd></div>
+            <div><dt>Bot</dt><dd>${st.bot ? `@${esc(st.bot)}` : '–'}</dd></div>
+            <div><dt>Assistent</dt><dd>${st.ai ? 'aktiv (Claude Haiku) – Klientennamen gehen nicht an die KI' : 'aus – ANTHROPIC_API_KEY fehlt'}</dd></div>
+          </dl>
+          <div class="row" style="gap:8px">
+            <button type="button" class="btn-secondary btn-sm" data-tg-test>Test senden</button>
+            <button type="button" class="btn-ghost btn-sm danger-text" data-tg-off>Trennen</button>
+          </div>`
+        : `<button type="button" class="btn-primary" data-tg-link>Mit Telegram verbinden</button>
+          ${waiting ? '<p class="muted small" role="status">Tippe in Telegram auf „Starten“ – diese Seite merkt es von selbst.</p>' : ''}`}`;
+      const link = root.querySelector('[data-tg-link]');
+      if (link) link.addEventListener('click', async () => {
+        // open the window right away (pop-up blockers), then point it at the link
+        const win = window.open('about:blank', '_blank');
+        try {
+          const r = await api('POST', '/api/telegram/link');
+          if (win) win.location.href = r.url;
+          else location.href = r.url;
+          clearInterval(waiting);
+          const until = Date.now() + 10 * 60 * 1000;
+          waiting = setInterval(async () => {
+            if (Date.now() > until) {
+              clearInterval(waiting);
+              waiting = null;
+              draw();
+              return;
+            }
+            try {
+              st = await api('GET', '/api/telegram');
+            } catch { return; }
+            if (st.linked) {
+              clearInterval(waiting);
+              waiting = null;
+              savedHud('Telegram verbunden', st.linked.name || '');
+              draw();
+            }
+          }, 3000);
+          draw();
+        } catch (err) {
+          if (win) win.close();
+          toast(err.message, true);
+        }
+      });
+      const test = root.querySelector('[data-tg-test]');
+      if (test) test.addEventListener('click', async () => {
+        try {
+          await api('POST', '/api/telegram/test');
+          toast('Testnachricht gesendet');
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+      const off = root.querySelector('[data-tg-off]');
+      if (off) off.addEventListener('click', async () => {
+        if (!confirm('Telegram trennen? Du bekommst dort keine Benachrichtigungen mehr.')) return;
+        await api('DELETE', '/api/telegram');
+        st = await api('GET', '/api/telegram');
+        draw();
+      });
+    };
+    draw();
   }
 
   /** Backups: when the last one was made, whether it is encrypted and mailed, make one now, download the newest. */

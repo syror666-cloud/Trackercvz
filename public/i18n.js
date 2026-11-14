@@ -676,6 +676,16 @@ Der Name stimmt nicht überein|The name doesn't match|El nombre no coincide|Il n
 Alle Klienten sind gerade pausiert.|All clients are paused right now.|Todos los clientes están en pausa.|Tutti i clienti sono in pausa.
 Erinnerungen sind solange aus. Du kannst weiter eintragen und deinem Coach schreiben.|Reminders are off until then. You can keep logging and messaging your coach.|Los recordatorios están desactivados mientras tanto. Puedes seguir registrando y escribir a tu coach.|I promemoria sono disattivati fino ad allora. Puoi continuare a registrare e scrivere al tuo coach.
 Coaching pausiert|Coaching paused|Coaching en pausa|Coaching in pausa
+Mit Telegram verbinden|Connect Telegram|Conectar Telegram|Collega Telegram
+verbunden|connected|conectado|collegato
+nicht verbunden|not connected|no conectado|non collegato
+Assistent|Assistant|Asistente|Assistente
+Testnachricht gesendet|Test message sent|Mensaje de prueba enviado|Messaggio di prova inviato
+Telegram verbunden|Telegram connected|Telegram conectado|Telegram collegato
+Tippe in Telegram auf „Starten“ – diese Seite merkt es von selbst.|Tap “Start” in Telegram – this page notices by itself.|Toca «Iniciar» en Telegram: esta página lo detecta sola.|Tocca «Avvia» in Telegram: questa pagina se ne accorge da sola.
+Telegram trennen? Du bekommst dort keine Benachrichtigungen mehr.|Disconnect Telegram? You will no longer get notifications there.|¿Desconectar Telegram? Ya no recibirás notificaciones allí.|Scollegare Telegram? Non riceverai più notifiche lì.
+aktiv (Claude Haiku) – Klientennamen gehen nicht an die KI|active (Claude Haiku) – client names are never sent to the AI|activo (Claude Haiku): los nombres de los clientes no se envían a la IA|attivo (Claude Haiku): i nomi dei clienti non vengono inviati all'IA
+aus – ANTHROPIC_API_KEY fehlt|off – ANTHROPIC_API_KEY missing|desactivado: falta ANTHROPIC_API_KEY|disattivato: manca ANTHROPIC_API_KEY
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

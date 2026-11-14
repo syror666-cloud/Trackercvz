@@ -13,7 +13,8 @@ const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : nul
 const hoursSince = (iso, now) => (now - Date.parse(iso)) / 3600000;
 const de = (v, d = 1) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-function attentionRoutes({ db, requireCoach, localDate, notifier }) {
+/** Returns list(today, now): every active client with score, level and reasons (also used by the Telegram bot). */
+function createAttention(db) {
   const q = {
     clients: db.prepare("SELECT id, display_name, category, created_at, deletion_requested_at, archived_at, avatar IS NOT NULL AS has_avatar, avatar_updated FROM users WHERE role = 'client'"),
     entries: db.prepare('SELECT date, weight, steps, calories_ok FROM entries WHERE user_id = ? AND date >= ? ORDER BY date'),
@@ -113,17 +114,24 @@ function attentionRoutes({ db, requireCoach, localDate, notifier }) {
     };
   }
 
-  return [
-    ['GET', /^\/api\/attention$/, async (ctx) => {
-      requireCoach(ctx);
-      const now = Date.now();
-      const today = localDate(now, notifier.timezone);
+  function list(today, now) {
       // archived clients (on a break) are left out – unless they asked for deletion
       const all = q.clients.all().filter((c) => !c.archived_at || c.deletion_requested_at).map((c) => analyse(c, today, now));
       const list = all.filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
       return { clients: list, fine: all.length - list.length, total: all.length, archived: q.clients.all().filter((c) => c.archived_at).length };
+  }
+  return { list };
+}
+
+function attentionRoutes({ db, requireCoach, localDate, notifier }) {
+  const attention = createAttention(db);
+  return [
+    ['GET', /^\/api\/attention$/, async (ctx) => {
+      requireCoach(ctx);
+      const now = Date.now();
+      return attention.list(localDate(now, notifier.timezone), now);
     }],
   ];
 }
 
-module.exports = { attentionRoutes };
+module.exports = { attentionRoutes, createAttention };

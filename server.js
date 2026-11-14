@@ -11,6 +11,7 @@ const { openCatalog } = require('./src/catalog');
 const { createMailer } = require('./src/mail');
 const { createBackups } = require('./src/backup');
 const { localDate } = require('./src/schedule');
+const { createTelegram } = require('./src/telegram');
 
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
@@ -91,8 +92,13 @@ if (!process.env.BACKUP_KEY) console.warn('Sicherung: BACKUP_KEY fehlt – Siche
 setInterval(() => backups.tick().catch((err) => console.error('Sicherung fehlgeschlagen:', err.message)), 10 * 60 * 1000).unref();
 setTimeout(() => backups.tick().catch((err) => console.error('Sicherung fehlgeschlagen:', err.message)), 60 * 1000).unref();
 
+// Telegram for the coach (TELEGRAM_BOT_TOKEN): notifications, replies and the assistant; see src/telegram.js.
+const telegram = createTelegram({ db, notifier, localDate, appUrl });
+telegram.start();
+
 const app = createApp({
   db,
+  telegram,
   backups,
   catalog,
   mailer,
