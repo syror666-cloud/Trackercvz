@@ -2563,3 +2563,9 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .deletion-banner { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-left: 4px solid var(--bad); margin-bottom: 18px; }
 .deletion-banner h2 { margin: 0 0 4px; color: var(--bad); }
 .deletion-banner p { margin: 0 0 4px; }
+
+/* workout in progress */
+.wo-kept { margin: -6px 0 12px; }
+.resume-card { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; border-left: 4px solid var(--accent); margin-bottom: 14px; }
+.resume-card > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.resume-icon { font-size: 1.5rem; }

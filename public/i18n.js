@@ -657,6 +657,9 @@ Antrag zurückziehen|Withdraw request|Retirar solicitud|Ritira richiesta
 Antrag zurückgezogen|Request withdrawn|Solicitud retirada|Richiesta ritirata
 Konto endgültig löschen|Delete account permanently|Eliminar cuenta definitivamente|Elimina account definitivamente
 Konto gelöscht|Account deleted|Cuenta eliminada|Account eliminato
+✓ Deine Eingaben werden auf diesem Gerät zwischengespeichert – auch wenn du die App kurz verlässt.|✓ Your input is kept on this device – even if you briefly leave the app.|✓ Tus datos se guardan en este dispositivo, aunque salgas un momento de la app.|✓ I tuoi dati restano salvati su questo dispositivo, anche se esci un attimo dall'app.
+Angefangenes Training verwerfen? Deine Eingaben gehen verloren.|Discard the workout in progress? Your input will be lost.|¿Descartar el entrenamiento empezado? Se perderán tus datos.|Scartare l'allenamento iniziato? I dati inseriti andranno persi.
+Deine Eingaben sind gesichert – tipp hier, um weiterzumachen.|Your input is safe – tap here to carry on.|Tus datos están a salvo: toca aquí para continuar.|I tuoi dati sono al sicuro: tocca qui per continuare.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -732,6 +735,8 @@ noch nie|never|nunca|mai
     [/^Einladung für (.+)$/, W(0, (m) => `Invitation for ${m[1]}`, (m) => `Invitación para ${m[1]}`, (m) => `Invito per ${m[1]}`)],
     [/^(\d+) von (\d+) im grünen Bereich$/, W(0, (m) => `${m[1]} of ${m[2]} on track`, (m) => `${m[1]} de ${m[2]} en buen camino`, (m) => `${m[1]} di ${m[2]} in linea`)],
     [/^Alle (\d+) anzeigen$/, W(0, (m) => `Show all ${m[1]}`, (m) => `Mostrar los ${m[1]}`, (m) => `Mostra tutti i ${m[1]}`)],
+    [/^Training läuft noch: (.+)$/, W(0, (m) => `Workout in progress: ${m[1]}`, (m) => `Entrenamiento en curso: ${m[1]}`, (m) => `Allenamento in corso: ${m[1]}`)],
+    [/^Dein angefangenes Training „(.+)“ ist wieder da\.$/, W(0, (m) => `Your workout “${m[1]}” is back where you left it.`, (m) => `Tu entrenamiento «${m[1]}» está de vuelta.`, (m) => `Il tuo allenamento «${m[1]}» è di nuovo qui.`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

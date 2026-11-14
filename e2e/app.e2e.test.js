@@ -150,3 +150,30 @@ test('privacy: client downloads own data', { skip }, async () => {
   assert.equal(data.profile.username, 'max');
   assert.deepEqual(errors, []);
 });
+
+test('training: unsaved workout input survives a reload and is cleared after saving', { skip }, async () => {
+  const maxId = db.prepare("SELECT id FROM users WHERE username = 'max'").get().id;
+  const days = [{ id: 'd-push', name: 'Push', exercises: [{ id: 'e1', name: 'Brustpresse', sets: 2, reps: '10' }] }];
+  db.prepare('INSERT OR REPLACE INTO training_plans (client_id, split, days_per_week, data, updated_by) VALUES (?, ?, ?, ?, ?)')
+    .run(maxId, 'Custom', 1, JSON.stringify(days), maxId);
+  const { page, errors } = await loginAs('max', 'maxpass123', { width: 420, height: 900 });
+  await page.goto(`${base}/#/training`);
+  await page.click('[data-start="0"]');
+  const weight = page.locator('[data-f="weight"]').first();
+  await weight.fill('55');
+  await page.locator('[data-f="reps"]').first().fill('12');
+  // the phone throws the page away while the app is in the background
+  await page.reload();
+  await page.waitForSelector('#app:not([data-loading="1"])');
+  await page.goto(`${base}/#/training`);
+  await page.waitForSelector('[data-f="weight"]');
+  assert.equal(await page.locator('[data-f="weight"]').first().inputValue(), '55');
+  assert.equal(await page.locator('[data-f="reps"]').first().inputValue(), '12');
+  await page.click('[data-save]');
+  await page.waitForTimeout(800);
+  const set = db.prepare('SELECT weight, reps FROM workout_sets WHERE workout_id = (SELECT MAX(id) FROM workouts WHERE client_id = ?) ORDER BY id LIMIT 1').get(maxId);
+  assert.deepEqual({ ...set }, { weight: 55, reps: 12 });
+  const left = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('sot-workout-')));
+  assert.deepEqual(left, []);
+  assert.deepEqual(errors, []);
+});

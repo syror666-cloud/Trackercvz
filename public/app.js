@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-training-draft', date: 'November 2026',
+      client: [
+        ['🏋️', 'Training geht nicht mehr verloren', 'Gewichte und Wiederholungen werden beim Tippen auf deinem Gerät zwischengespeichert. Verlässt du die App kurz, ist beim Zurückkommen alles noch da – auf der Startseite erinnert dich eine Karte an das laufende Training.'],
+      ],
+      coach: [
+        ['🏋️', 'Angefangene Trainings bleiben erhalten', 'Bugfix: Klienten verloren ihre Eingaben, wenn sie im Training kurz die App verlassen haben. Jetzt bleibt alles bis zum Speichern auf dem Gerät erhalten.'],
+      ],
+    },
+    {
       id: '2026-11-invites-attention', date: 'November 2026',
       client: [
         ['🗂️', 'Deine Daten in deiner Hand', 'Unter Einstellungen → „Konto & Daten“ lädst du alle deine Daten herunter oder beantragst die Löschung deines Kontos.'],
@@ -1285,6 +1294,7 @@
       <div class="page-head">
         <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p></div>
       </div>
+      <div id="workout-resume"></div>
       <div id="push-prompt"></div>
       <div id="checkin-card"></div>
       <div id="h2h-home"></div>
@@ -1558,6 +1568,7 @@
     updateStreak();
     drawToday();
     maybeShowPushPrompt(document.getElementById('push-prompt'));
+    mountWorkoutResume(document.getElementById('workout-resume'));
     mountH2HHome(document.getElementById('h2h-home'));
     mountClientCheckin(document.getElementById('checkin-card'), async () => {
       const g = await api('GET', '/api/goals');
@@ -5410,6 +5421,38 @@
    * Training plan page. opts: { userId (coach only), base: hash of the page, coach: bool, clientName }.
    * Modes: setup (no plan yet) → edit → overview → workout; the history has its own hash (base + '/history').
    */
+  // A workout in progress is kept on the device (phones often reload a web app that was in the background).
+  const WORKOUT_DRAFT_DAYS = 3;
+  const workoutDraftKey = (userId) => `sot-workout-${me ? me.id : 0}-${userId || 'me'}`;
+  function readWorkoutDraft(key) {
+    try {
+      const d = JSON.parse(localStorage.getItem(key) || 'null');
+      if (d && d.dayId && Array.isArray(d.rows) && Date.now() - d.savedAt < WORKOUT_DRAFT_DAYS * 864e5) return d;
+      if (d) localStorage.removeItem(key);
+    } catch { /* private mode or broken data */ }
+    return null;
+  }
+  function writeWorkoutDraft(key, d) {
+    try {
+      localStorage.setItem(key, JSON.stringify({ ...d, savedAt: Date.now() }));
+    } catch { /* storage full or blocked: nothing we can do */ }
+  }
+  function clearWorkoutDraft(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch { /* ignore */ }
+  }
+  /** Tracker home: a reminder that a workout is still open. */
+  function mountWorkoutResume(root) {
+    if (!root || !me || me.role !== 'client') return;
+    const d = readWorkoutDraft(workoutDraftKey());
+    if (!d) return;
+    root.innerHTML = `<a class="card resume-card" href="#/training">
+      <span class="resume-icon" aria-hidden="true">🏋️</span>
+      <span><strong>Training läuft noch: ${esc(d.dayName || 'Training')}</strong><span class="muted small">Deine Eingaben sind gesichert – tipp hier, um weiterzumachen.</span></span>
+      <span class="att-chev" aria-hidden="true">›</span></a>`;
+  }
+
   async function mountTraining(root, opts) {
     const query = opts.userId ? `?userId=${opts.userId}` : '';
     let data;
@@ -5428,6 +5471,20 @@
     let draft = null; // { split, days } while editing
     let setupDays = data.plan ? data.plan.daysPerWeek : 3;
     let workoutDay = null;
+    let restored = null; // a started workout that survived the app being closed
+    const draftKey = workoutDraftKey(opts.userId);
+    const pending = readWorkoutDraft(draftKey);
+    if (pending && data.plan) {
+      const day = data.plan.days.find((x) => x.id === pending.dayId);
+      if (day) {
+        workoutDay = day;
+        restored = pending;
+        mode = 'workout';
+        setTimeout(() => toast(`Dein angefangenes Training „${day.name}“ ist wieder da.`), 300);
+      } else {
+        clearWorkoutDraft(draftKey); // the day is no longer in the plan
+      }
+    }
     const you = opts.coach ? esc(opts.clientName || 'dein Klient') : 'du';
     const H = opts.coach ? 'h2 class="page-title-sm"' : 'h1';
     const HC = opts.coach ? 'h2' : 'h1';
@@ -5620,18 +5677,32 @@
     // ---- 4. workout: weight + reps per set, prefilled with the last session ----
     function drawWorkout() {
       const d = workoutDay;
+      const draft = restored && restored.dayId === d.id ? restored : null;
+      restored = null;
       const rows = d.exercises.map((e) => {
         const l = data.last[exKey(e.name)];
         const n = Math.max(Number(e.sets) || 1, l ? l.sets.length : 0);
-        return { name: e.name, target: `${e.sets} × ${e.reps || '–'}`, last: l, sets: Array.from({ length: n }, (_, i) => (l && l.sets[i] ? { ...l.sets[i] } : { weight: null, reps: null })) };
+        const kept = draft && draft.rows.find((x) => x.name === e.name);
+        return {
+          name: e.name, target: `${e.sets} × ${e.reps || '–'}`, last: l,
+          sets: kept ? kept.sets.map((x) => ({ ...x })) : Array.from({ length: n }, (_, i) => (l && l.sets[i] ? { ...l.sets[i] } : { weight: null, reps: null })),
+        };
       });
+      let woDate = draft && draft.date && draft.date <= todayStr() ? draft.date : todayStr();
+      let touched = Boolean(draft);
+      // every change is kept on the device right away, so closing the app loses nothing
+      const keep = () => {
+        touched = true;
+        writeWorkoutDraft(draftKey, { dayId: d.id, dayName: d.name, date: woDate, rows: rows.map((r) => ({ name: r.name, sets: r.sets })) });
+      };
       const val = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
       function paint() {
         root.innerHTML = `
           <button type="button" class="back" data-back>← Trainingsplan</button>
           <div class="page-head"><div>${eyebrow('Training')}<${H}>${esc(d.name)}</${HC}>
             <p class="muted">${rows.some((r) => r.last) ? 'Die Werte vom letzten Mal sind schon eingetragen – passe an, was du heute geschafft hast.' : 'Trag pro Satz Gewicht und Wiederholungen ein. Beim nächsten Mal stehen diese Werte schon hier.'}</p></div>
-            <div class="field wo-date"><label for="wo-date">Datum</label><input type="date" id="wo-date" value="${todayStr()}" max="${todayStr()}"></div></div>
+            <div class="field wo-date"><label for="wo-date">Datum</label><input type="date" id="wo-date" value="${woDate}" max="${todayStr()}"></div></div>
+          ${touched ? '<p class="wo-kept small muted" role="status">✓ Deine Eingaben werden auf diesem Gerät zwischengespeichert – auch wenn du die App kurz verlässt.</p>' : ''}
           <div class="wo-list">${rows.map((r, i) => `
             <section class="card wo-ex" data-r="${i}">
               <div class="row-between wo-head"><h2>${esc(r.name)} ${infoBtn(r.name)}</h2><span class="badge">Ziel ${esc(r.target)}</span></div>
@@ -5652,14 +5723,25 @@
           const r = rows[Number(el.dataset.r)];
           el.querySelectorAll('[data-s]').forEach((sEl) => sEl.querySelectorAll('[data-f]').forEach((inp) => inp.addEventListener('input', () => {
             r.sets[Number(sEl.dataset.s)][inp.dataset.f] = inp.value;
+            keep();
           })));
           el.querySelector('[data-add-set]').addEventListener('click', () => {
             const prev = r.sets[r.sets.length - 1] || { weight: null, reps: null };
             r.sets.push({ ...prev });
+            keep();
             paint();
           });
         });
-        root.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => { mode = 'overview'; draw(); }));
+        document.getElementById('wo-date').addEventListener('change', (e) => {
+          woDate = e.target.value || todayStr();
+          keep();
+        });
+        root.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => {
+          if (touched && !confirm('Angefangenes Training verwerfen? Deine Eingaben gehen verloren.')) return;
+          clearWorkoutDraft(draftKey);
+          mode = 'overview';
+          draw();
+        }));
         root.querySelector('[data-save]').addEventListener('click', async (e) => {
           const btn = e.currentTarget;
           btn.disabled = true;
@@ -5671,6 +5753,7 @@
               dayName: d.name,
               exercises: rows.map((r) => ({ name: r.name, sets: r.sets.map((s) => ({ weight: clean(s.weight), reps: clean(s.reps) })) })),
             });
+            clearWorkoutDraft(draftKey);
             mode = 'overview';
             draw();
             window.scrollTo(0, 0);
