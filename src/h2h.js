@@ -25,7 +25,7 @@ const GRACE_DAYS = 1; // the last day can still be logged the next day; then the
 const dayNum = (s) => Math.round(Date.parse(`${s}T00:00:00Z`) / 864e5);
 const dayStr = (n) => new Date(n * 864e5).toISOString().slice(0, 10);
 
-function h2hRoutes({ db, notifier, HttpError, readBody, textField, requireUser, targetClient, localDate, publicUser }) {
+function h2hRoutes({ db, notifier, HttpError, readBody, textField, requireUser, targetClient, localDate, publicUser, achievements }) {
   const q = {
     user: db.prepare('SELECT * FROM users WHERE id = ?'),
     players: db.prepare("SELECT * FROM users WHERE role = 'client' AND h2h_visible = 1 AND id <> ? ORDER BY display_name COLLATE NOCASE"),
@@ -96,9 +96,20 @@ function h2hRoutes({ db, notifier, HttpError, readBody, textField, requireUser, 
     return out;
   }
 
+  /** What other players see of someone: name, picture and the medals they put in their showcase. */
+  const showcaseCache = new Map(); // userId → { at, list } – medals are evaluated at most every few seconds per person
+  const showcaseFor = (id) => {
+    if (!achievements) return [];
+    const c = showcaseCache.get(id);
+    if (c && Date.now() - c.at < 5000) return c.list;
+    const list = achievements.showcaseOf(id).map(({ key, level, icon, title, text }) => ({ key, level, icon, title, text }));
+    showcaseCache.set(id, { at: Date.now(), list });
+    if (showcaseCache.size > 500) showcaseCache.delete(showcaseCache.keys().next().value);
+    return list;
+  };
   const player = (u) => {
     const p = publicUser(u);
-    return { id: p.id, displayName: p.displayName, avatar: p.avatar };
+    return { id: p.id, displayName: p.displayName, avatar: p.avatar, showcase: showcaseFor(u.id) };
   };
 
   function statusOf(c) {

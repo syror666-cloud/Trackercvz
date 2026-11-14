@@ -97,7 +97,7 @@ const ACHIEVEMENTS = [
   },
 ];
 
-function achievementsModule({ db, targetClient }) {
+function achievementsModule({ db, targetClient, HttpError, readBody, requireUser }) {
   const q = {
     entries: db.prepare('SELECT date, weight, steps, sleep, training, calories_ok FROM entries WHERE user_id = ? ORDER BY date'),
     goals: db.prepare('SELECT steps_goal, sleep_goal FROM goals WHERE user_id = ?'),
@@ -184,9 +184,61 @@ function achievementsModule({ db, targetClient }) {
     return out;
   }
 
+  // ---- showcase: up to SHOWCASE_MAX earned medals a client puts on their profile (seen by Head2Head players) ----
+  const SHOWCASE_MAX = 3;
+  const qs = {
+    get: db.prepare('SELECT showcase FROM users WHERE id = ?'),
+    set: db.prepare('UPDATE users SET showcase = ? WHERE id = ?'),
+  };
+  const parseShowcase = (raw) => {
+    try {
+      const v = JSON.parse(raw || '[]');
+      return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, SHOWCASE_MAX) : [];
+    } catch {
+      return [];
+    }
+  };
+  /** The pinned medals that are still earned (a correction can take one away), in pinned order. */
+  function showcaseOf(userId, evaluated) {
+    const ids = parseShowcase((qs.get.get(userId) || {}).showcase);
+    if (!ids.length) return [];
+    const data = evaluated || evaluate(userId);
+    const out = [];
+    for (const id of ids) {
+      const [key, level] = id.split(':');
+      const a = data.achievements.find((x) => x.key === key);
+      const t = a && a.tiers.find((x) => x.level === level && x.achievedAt);
+      if (t) out.push({ id, key, level, icon: a.icon, title: a.title, text: t.text, achievedAt: t.achievedAt });
+    }
+    return out;
+  }
+
   return {
     evaluate,
-    routes: [['GET', /^\/api\/achievements$/, async (ctx) => evaluate(targetClient(ctx).id)]],
+    showcaseOf,
+    routes: [
+      ['GET', /^\/api\/achievements$/, async (ctx) => {
+        const id = targetClient(ctx).id;
+        const data = evaluate(id);
+        return { ...data, showcase: showcaseOf(id, data), showcaseMax: SHOWCASE_MAX };
+      }],
+      ['PUT', /^\/api\/me\/showcase$/, async (ctx) => {
+        const u = requireUser(ctx);
+        if (u.role !== 'client') throw new HttpError(403, 'Die Vitrine gibt es für Klienten');
+        const { medals } = await readBody(ctx.req);
+        if (!Array.isArray(medals)) throw new HttpError(400, 'Bitte eine Liste von Medaillen schicken');
+        const ids = [...new Set(medals.filter((m) => typeof m === 'string'))];
+        if (ids.length > SHOWCASE_MAX) throw new HttpError(400, `Höchstens ${SHOWCASE_MAX} Medaillen in der Vitrine`);
+        const data = evaluate(u.id);
+        for (const id of ids) {
+          const [key, level] = id.split(':');
+          const a = data.achievements.find((x) => x.key === key);
+          if (!a || !a.tiers.some((t) => t.level === level && t.achievedAt)) throw new HttpError(400, 'Nur erreichte Medaillen kommen in die Vitrine');
+        }
+        qs.set.run(JSON.stringify(ids), u.id);
+        return { showcase: showcaseOf(u.id, data), showcaseMax: SHOWCASE_MAX };
+      }],
+    ],
   };
 }
 

@@ -194,6 +194,18 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-shop-cosmic', date: 'November 2026',
+      client: [
+        ['🌌', 'Zwei neue Seltenheiten', 'Neu im Shop: „Ungewöhnlich“ und ganz oben „Kosmisch“ – mit eigener Kaufanimation zwischen Sternen und Planeten.'],
+        ['🛒', '13 neue Produkte', 'Unter anderem ESN Designer Whey, Isoclear, Crank, Flexpresso, Designer Bar, MORE Matcha, MORE Zero Sirup, der Goldene Shaker und der Galaxy Shaker. Der Shop ist jetzt nach Seltenheit sortiert.'],
+        ['🏅', 'Deine Vitrine', 'Wähle in der Hall of Fame bis zu drei erreichte Medaillen für dein Profil. Deine Head2Head-Gegner sehen sie.'],
+      ],
+      coach: [
+        ['🌌', 'Shop: 2 Seltenheiten, 13 Produkte', 'Ungewöhnlich und Kosmisch, neue Formen (Proteindose, Shaker, Riegel, Flasche, Beutel) und mehr Animation – probier sie im Test-Kühlschrank aus.'],
+        ['🏅', 'Medaillen-Vitrine', 'Klienten können bis zu drei erreichte Medaillen ins Profil stellen; im Head2Head sehen sich die Spieler gegenseitig.'],
+      ],
+    },
+    {
       id: '2026-11-google-health', date: 'November 2026',
       client: [
         ['🔗', 'Google Health verbinden', 'Unter Einstellungen kannst du Google Health verbinden. Dann kommen deine Schritte und dein Schlaf automatisch in den Tracker – von Fitbit, Pixel Watch oder Apps über Health Connect. Kein Abtippen mehr.'],
@@ -676,6 +688,7 @@
           <button type="submit" class="btn-primary">Speichern</button>
           <p class="error" hidden></p>
         </form>
+        ${me.role === 'client' ? '<section class="card profile-vitrine" id="profile-vitrine"></section>' : ''}
         <section class="card" id="email-card"></section>
         <section class="card">
           <h2 style="margin-bottom:8px">Passwort</h2>
@@ -686,6 +699,13 @@
       </div>`);
     if (me.role === 'coach') mountPrefsCard(document.getElementById('prefs-card'));
     mountEmailCard(document.getElementById('email-card'));
+    const pv = document.getElementById('profile-vitrine');
+    if (pv) api('GET', '/api/achievements').then((d) => {
+      pv.innerHTML = `${FAME_DEFS}<h2 style="margin-bottom:8px">Vitrine</h2>
+        ${d.showcase.length ? `<div class="profile-showcase">${d.showcase.map((m) => `<div>${miniMedal(m, 'lg')}<span class="small">${esc(m.title)}</span></div>`).join('')}</div>`
+          : '<p class="muted small">Noch leer. Wähle in der Hall of Fame bis zu drei erreichte Medaillen – deine Head2Head-Gegner sehen sie.</p>'}
+        <a class="btn btn-secondary btn-sm" href="#/account/fame">${d.showcase.length ? 'Vitrine ändern' : 'Medaillen auswählen'}</a>`;
+    }).catch(() => pv.remove());
 
     const fileInput = app.querySelector('[data-avatar-file]');
     fileInput.addEventListener('change', async () => {
@@ -973,7 +993,7 @@
   function h2hCard(c, metrics, { actions: canAct = true, link = true } = {}) {
     const m = metrics[c.metric];
     const title = `${H2H_ICONS[c.metric] || '⚔️'} ${m.label} · ${h2hWeeks(c.days)}`;
-    const vs = `<div class="h2h-vs">${h2hAvatar(c.me)}<span class="h2h-vs-x" aria-hidden="true">VS</span>${h2hAvatar(c.them)}</div>`;
+    const vs = `<div class="h2h-vs"><span class="h2h-side-col">${h2hAvatar(c.me)}${showcaseRow(c.me.showcase, 'sm')}</span><span class="h2h-vs-x" aria-hidden="true">VS</span><span class="h2h-side-col">${h2hAvatar(c.them)}${showcaseRow(c.them.showcase, 'sm')}</span></div>`;
     let body = '';
     let actions = '';
     if (c.status === 'pending') {
@@ -1066,6 +1086,7 @@
       return;
     }
     const redraw = () => mountH2H(root, detailId);
+    const defs = FAME_DEFS; // medal gradients for the showcases
     if (detailId) return drawDetail();
     const M = data.metrics;
     if (!data.visible) {
@@ -1074,7 +1095,7 @@
         <h2>Head2Head</h2>
         <p>Fordere andere Klienten heraus – Schritte, Trainingstage, Schlaf, Kalorienziel oder Gewicht verlieren – für 1, 2 oder 4 Wochen. Wer am Ende vorne liegt, gewinnt – und bekommt 1 Token für den Kühlschrank-Shop.</p>
         <ul class="h2h-privacy small">
-          <li>Andere sehen nur deinen Namen <strong>${esc(me.displayName)}</strong> und dein Profilbild.</li>
+          <li>Andere sehen nur deinen Namen <strong>${esc(me.displayName)}</strong>, dein Profilbild und die Medaillen in deiner Vitrine.</li>
           <li>In einem Duell wird nur die gewählte Disziplin verglichen – und nur für dessen Dauer.</li>
           <li>Gewicht zählt in Prozent vom Startgewicht. Deine Kilos sieht niemand.</li>
           <li>Du kannst Head2Head jederzeit wieder ausschalten.</li>
@@ -1094,7 +1115,7 @@
     const running = data.challenges.filter((c) => c.status === 'running' || (c.status === 'pending' && c.role === 'challenger'));
     const past = data.challenges.filter((c) => c.status === 'finished');
     const r = data.record;
-    root.innerHTML = `
+    root.innerHTML = `${defs}
       <div class="h2h-top">
         <div class="h2h-record" aria-label="Deine Bilanz"><span><strong>${r.won}</strong> Siege</span><span><strong>${r.draw}</strong> Unentschieden</span><span><strong>${r.lost}</strong> Niederlagen</span></div>
         <button type="button" class="btn-primary" data-h2h-new ${data.players.length ? '' : 'disabled'}>⚔️ Herausfordern</button>
@@ -1103,7 +1124,7 @@
       ${inbox.length ? `<h3 class="h2h-section">Für dich</h3><div class="h2h-grid">${inbox.map((c) => h2hCard(c, M)).join('')}</div>` : ''}
       ${running.length ? `<h3 class="h2h-section">Laufend</h3><div class="h2h-grid">${running.map((c) => h2hCard(c, M)).join('')}</div>` : ''}
       ${past.length ? `<h3 class="h2h-section">Beendet</h3><div class="h2h-grid">${past.map((c) => h2hCard(c, M)).join('')}</div>` : ''}
-      ${data.players.length ? `<h3 class="h2h-section">Wer macht mit</h3><ul class="card h2h-players">${data.players.map((p) => `<li>${h2hAvatar(p)}<span class="h2h-pname">${esc(p.displayName)}<span class="muted small">${p.record.won} Siege · ${p.record.lost} Niederlagen</span></span>
+      ${data.players.length ? `<h3 class="h2h-section">Wer macht mit</h3><ul class="card h2h-players">${data.players.map((p) => `<li>${h2hAvatar(p)}<span class="h2h-pname">${esc(p.displayName)}<span class="muted small">${p.record.won} Siege · ${p.record.lost} Niederlagen</span>${showcaseRow(p.showcase, 'sm')}</span>
         <button type="button" class="btn-secondary btn-sm" data-h2h-challenge="${p.id}">Herausfordern</button></li>`).join('')}</ul>` : ''}
       <p class="small muted h2h-off"><button type="button" class="link-btn" data-h2h-off>Head2Head ausschalten</button> – offene Herausforderungen verfallen, laufende Duelle laufen zu Ende.</p>`;
     root.querySelectorAll('[data-h2h-act]').forEach((b) => b.addEventListener('click', async () => {
@@ -1141,7 +1162,7 @@
         return;
       }
       const m = data.metrics[c.metric];
-      root.innerHTML = `<p><a href="#/account/h2h" class="back-link">← Alle Duelle</a></p>
+      root.innerHTML = `${defs}<p><a href="#/account/h2h" class="back-link">← Alle Duelle</a></p>
         ${h2hCard(c, data.metrics, { actions: data.visible, link: false })}
         ${c.series ? `<section class="card"><h3 style="margin-bottom:8px">Verlauf</h3><p class="muted small" style="margin-top:0">${esc(m.hint)}</p><div class="h2h-chart-wrap"></div></section>` : ''}`;
       root.querySelectorAll('[data-h2h-act]').forEach((b) => b.addEventListener('click', async () => {
@@ -5251,6 +5272,10 @@
     </svg>`;
   }
 
+  /** Small earned medal for showcases (profile, Head2Head). Needs FAME_DEFS on the page. */
+  const miniMedal = (m, size = '') => `<span class="mini-medal ${size} tier-${m.level}" title="${esc(m.title)} – ${esc(TIER_NAMES[m.level])}" role="img" aria-label="${esc(m.title)} ${esc(TIER_NAMES[m.level])}">${medalSvg(m.icon, m.level, true, 100)}</span>`;
+  const showcaseRow = (list, size) => (list && list.length ? `<span class="showcase-row">${list.map((m) => miniMedal(m, size)).join('')}</span>` : '');
+
   async function mountMedals(root, opts) {
     const query = opts.userId ? `?userId=${opts.userId}` : '';
     let data;
@@ -5276,6 +5301,39 @@
     }
 
     const selected = {};
+    const own = !opts.coach && !opts.userId && me.role === 'client';
+    let pins = (data.showcase || []).map((m) => m.id);
+    const maxPins = data.showcaseMax || 3;
+    const medalById = (id) => {
+      const [key, level] = id.split(':');
+      const a = data.achievements.find((x) => x.key === key);
+      return a ? { id, key, level, icon: a.icon, title: a.title } : null;
+    };
+    function vitrine() {
+      const slots = Array.from({ length: maxPins }, (_, i) => pins[i] && medalById(pins[i]));
+      return `<section class="card vitrine" aria-label="Deine Vitrine">
+        <div class="row-between"><div><h2>Deine Vitrine</h2>
+          <p class="muted small">${own ? `Bis zu ${maxPins} Medaillen für dein Profil – deine Head2Head-Gegner sehen sie.` : 'Diese Medaillen zeigt der Klient in seinem Profil.'}</p></div></div>
+        <div class="vitrine-slots">${slots.map((m, i) => (m
+          ? `<div class="vitrine-slot filled">${miniMedal(m, 'lg')}<span class="vs-title">${esc(m.title)}</span><span class="muted small">${esc(TIER_NAMES[m.level])}</span>
+              ${own ? `<button type="button" class="icon-btn vs-remove" data-unpin="${esc(m.id)}" aria-label="${esc(m.title)} aus der Vitrine nehmen">✕</button>` : ''}</div>`
+          : `<div class="vitrine-slot empty"><span class="vs-plus" aria-hidden="true">+</span><span class="muted small">${own ? (i === pins.length ? 'Tipp unten eine erreichte Medaille an' : 'Frei') : 'Leer'}</span></div>`)).join('')}</div>
+      </section>`;
+    }
+    async function savePins(next) {
+      try {
+        const r = await api('PUT', '/api/me/showcase', { medals: next });
+        pins = r.showcase.map((m) => m.id);
+        root.querySelector('.vitrine').outerHTML = vitrine();
+        bindVitrine();
+        root.querySelectorAll('[data-fame]').forEach((el) => refreshCard(el));
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+    function bindVitrine() {
+      root.querySelectorAll('[data-unpin]').forEach((b) => b.addEventListener('click', () => savePins(pins.filter((x) => x !== b.dataset.unpin))));
+    }
     const nextTier = (a) => a.tiers.find((t) => !t.achievedAt);
     const s = data.summary;
     const upcoming = data.achievements
@@ -5290,9 +5348,14 @@
       const status = t.achievedAt
         ? `<span class="fame-done">✓ Erreicht am ${esc(fmtDate(t.achievedAt, { day: 'numeric', month: 'long', year: 'numeric' }))}</span>`
         : `<span>${esc(fmtVal(a, Math.min(a.current, t.goal)))} von ${esc(fmtGoal(a, t.goal))} ${esc(a.unit)}</span><span class="fame-pct">${t.progress} %</span>`;
+      const id = `${a.key}:${t.level}`;
+      const pinned = pins.includes(id);
+      const pinBtn = own && t.achievedAt
+        ? `<button type="button" class="btn-ghost btn-sm pin-btn ${pinned ? 'on' : ''}" data-pin="${esc(id)}" ${!pinned && pins.length >= maxPins ? 'disabled title="Vitrine ist voll – nimm erst eine Medaille heraus"' : ''}>${pinned ? '★ In der Vitrine' : '☆ In die Vitrine'}</button>`
+        : '';
       return `<p class="fame-goal"><span class="fame-tier-name tier-${t.level}">${TIER_NAMES[t.level]}</span> ${esc(t.text)}</p>
         <div class="fame-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${t.achievedAt ? 100 : t.progress}" aria-label="${esc(a.title)} ${TIER_NAMES[t.level]}"><span style="width:${t.achievedAt ? 100 : t.progress}%" class="tier-${t.level}"></span></div>
-        <p class="fame-status small">${status}</p>`;
+        <p class="fame-status small">${status}${pinBtn}</p>`;
     }
 
     function card(a) {
@@ -5305,7 +5368,7 @@
           ${a.tiers.map((t) => {
             const isNew = fresh.includes(`${a.key}:${t.level}`);
             const label = `${TIER_NAMES[t.level]}: ${t.text} – ${t.achievedAt ? 'erreicht' : `${t.progress} % geschafft`}`;
-            return `<button type="button" class="medal ${t.achievedAt ? 'earned' : 'locked'} ${isNew ? 'new' : ''} tier-${t.level}" data-tier="${t.level}" aria-pressed="false" aria-label="${esc(label)}">
+            return `<button type="button" class="medal ${t.achievedAt ? 'earned' : 'locked'} ${isNew ? 'new' : ''} ${pins.includes(`${a.key}:${t.level}`) ? 'pinned' : ''} tier-${t.level}" data-tier="${t.level}" aria-pressed="false" aria-label="${esc(label)}">
               ${medalSvg(a.icon, t.level, Boolean(t.achievedAt), t.progress)}
               <span class="medal-cap"><b>${TIER_NAMES[t.level]}</b><span>${t.achievedAt ? '✓' : `${t.progress} %`}</span></span>
             </button>`;
@@ -5321,6 +5384,7 @@
     });
     root.innerHTML = `${FAME_DEFS}
       ${hofHeader(opts, 'medals', opts.coach ? `Was ${esc(opts.clientName || 'dein Klient')} schon geschafft hat – und was als Nächstes kommt.` : 'Jede Medaille steht für etwas, das du durchgezogen hast. Ausgegraute zeigen, was als Nächstes kommt.')}
+      ${own || pins.length ? vitrine() : ''}
       ${freshNames.length ? `<div class="fame-new-banner" role="status">🎉 <strong>Neu freigeschaltet:</strong> ${esc(freshNames.slice(0, 3).join(', '))}${freshNames.length > 3 ? ` und ${freshNames.length - 3} weitere` : ''}</div>` : ''}
       <section class="card fame-summary">
         <div class="fame-count"><span class="fame-big">${s.earned}</span><span class="muted">von ${s.total} Medaillen</span><span class="fame-tokens"><i class="coin" aria-hidden="true"></i> ${s.tokens} Token verdient</span></div>
@@ -5334,16 +5398,32 @@
       </section>
       <div class="fame-grid">${data.achievements.map(card).join('')}</div>`;
 
+    function bindPin(el) {
+      const b = el.querySelector('[data-pin]');
+      if (b) b.addEventListener('click', () => {
+        const id = b.dataset.pin;
+        savePins(pins.includes(id) ? pins.filter((x) => x !== id) : [...pins, id]);
+      });
+    }
+    function refreshCard(el) {
+      const a = data.achievements.find((x) => x.key === el.dataset.fame);
+      el.querySelector('.fame-detail').innerHTML = detail(a);
+      el.querySelectorAll('.medal').forEach((m) => m.classList.toggle('pinned', pins.includes(`${a.key}:${m.dataset.tier}`)));
+      bindPin(el);
+    }
     root.querySelectorAll('[data-fame]').forEach((el) => {
       const a = data.achievements.find((x) => x.key === el.dataset.fame);
       const sync = () => el.querySelectorAll('.medal').forEach((m) => m.setAttribute('aria-pressed', String(m.dataset.tier === selected[a.key])));
       sync();
+      bindPin(el);
       el.querySelectorAll('.medal').forEach((m) => m.addEventListener('click', () => {
         selected[a.key] = m.dataset.tier;
         el.querySelector('.fame-detail').innerHTML = detail(a);
+        bindPin(el);
         sync();
       }));
     });
+    bindVitrine();
   }
 
   /** opts: { base (hash), sub: 'medals' | 'fridge' | 'shop', coach, userId, clientName } */

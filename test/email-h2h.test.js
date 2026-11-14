@@ -288,3 +288,37 @@ test('e-mail: coach test mail goes out when set up', async (t) => {
   assert.equal(outbox[0].to, 'coach@example.com');
   assert.equal(outbox[0].subject, 'Test-Mail von StayOnTrack');
 });
+
+test('showcase: up to 3 earned medals on the profile, visible to Head2Head players', async (t) => {
+  const { server, coach, login, db } = await setup();
+  t.after(() => server.close());
+  const maxId = (await coach('POST', '/api/clients', { username: 'max', displayName: 'Max', password: 'maxpass123' })).data.client.id;
+  await coach('POST', '/api/clients', { username: 'jana', displayName: 'Jana', password: 'janapass123' });
+  const max = await login('max', 'maxpass123');
+  const jana = await login('jana', 'janapass123');
+  // 10 days with 12 000 steps: streak and step goal bronze
+  for (let i = 0; i < 10; i++) {
+    const d = new Date(Date.UTC(2026, 9, 1) + i * 864e5).toISOString().slice(0, 10);
+    await max('PUT', `/api/entries/${d}`, { steps: 12000 });
+  }
+  const ach = (await max('GET', '/api/achievements')).data;
+  assert.deepEqual(ach.showcase, []);
+  assert.equal(ach.showcaseMax, 3);
+  const earned = ach.achievements.flatMap((a) => a.tiers.filter((x) => x.achievedAt).map((x) => `${a.key}:${x.level}`));
+  assert.ok(earned.length >= 2);
+  const locked = ach.achievements.flatMap((a) => a.tiers.filter((x) => !x.achievedAt).map((x) => `${a.key}:${x.level}`))[0];
+  assert.equal((await max('PUT', '/api/me/showcase', { medals: [locked] })).status, 400, 'only earned medals');
+  assert.equal((await max('PUT', '/api/me/showcase', { medals: ['a:bronze', 'b:bronze', 'c:bronze', 'd:bronze'] })).status, 400, 'at most 3');
+  assert.equal((await coach('PUT', '/api/me/showcase', { medals: [] })).status, 403);
+  const r = (await max('PUT', '/api/me/showcase', { medals: earned.slice(0, 2) })).data;
+  assert.deepEqual(r.showcase.map((m) => m.id), earned.slice(0, 2));
+  assert.ok(r.showcase[0].title && r.showcase[0].icon);
+  // a Head2Head player sees them
+  await max('PUT', '/api/h2h/visible', { visible: true });
+  await jana('PUT', '/api/h2h/visible', { visible: true });
+  const p = (await jana('GET', '/api/h2h')).data.players.find((x) => x.id === maxId);
+  assert.deepEqual(p.showcase.map((m) => `${m.key}:${m.level}`), earned.slice(0, 2));
+  // a medal that goes away (corrected entries) drops out of the showcase
+  db.prepare('DELETE FROM entries WHERE user_id = ?').run(maxId);
+  assert.deepEqual((await max('GET', '/api/achievements')).data.showcase, []);
+});

@@ -1322,7 +1322,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   });
   reports = reportRoutes({ ...deps, mailer, appUrl, planOf: nutrition.planOf, describeProposal, goalsRow, prefsOf });
   shop = shopRoutes({ ...deps, achievements });
-  routes.push(...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

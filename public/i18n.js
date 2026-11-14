@@ -597,6 +597,18 @@ Teilweise verbunden|Partly connected|Conectado en parte|Collegato in parte
 Schritte und Schlaf kommen jetzt automatisch|Steps and sleep now arrive automatically|Pasos y sueño llegan ahora automáticamente|Passi e sonno arrivano ora automaticamente
 Nicht alle Daten sind freigegeben|Not all data is shared|No se comparten todos los datos|Non tutti i dati sono condivisi
 Schritte und Schlaf kommen automatisch in deinen Tracker – von deinem Fitbit, deiner Pixel Watch oder aus Apps, die mit Google Health bzw. Health Connect verbunden sind.|Steps and sleep arrive in your tracker automatically – from your Fitbit, Pixel Watch or apps connected to Google Health or Health Connect.|Pasos y sueño llegan solos a tu tracker – desde tu Fitbit, Pixel Watch o apps conectadas a Google Health o Health Connect.|Passi e sonno arrivano da soli nel tracker – da Fitbit, Pixel Watch o app collegate a Google Health o Health Connect.
+Ungewöhnlich|Uncommon|Poco común|Non comune
+Kosmisch|Cosmic|Cósmico|Cosmico
+Deine Vitrine|Your showcase|Tu vitrina|La tua vetrina
+Vitrine|Showcase|Vitrina|Vetrina
+Vitrine ändern|Edit showcase|Cambiar vitrina|Modifica vetrina
+Medaillen auswählen|Choose medals|Elegir medallas|Scegli medaglie
+☆ In die Vitrine|☆ Add to showcase|☆ A la vitrina|☆ In vetrina
+★ In der Vitrine|★ In showcase|★ En la vitrina|★ In vetrina
+Tipp unten eine erreichte Medaille an|Tap an earned medal below|Toca abajo una medalla conseguida|Tocca sotto una medaglia ottenuta
+Leer|Empty|Vacío|Vuoto
+Noch leer. Wähle in der Hall of Fame bis zu drei erreichte Medaillen – deine Head2Head-Gegner sehen sie.|Still empty. Pick up to three earned medals in the Hall of Fame – your Head2Head opponents see them.|Aún vacía. Elige hasta tres medallas en el Salón de la Fama – tus rivales de Head2Head las verán.|Ancora vuota. Scegli fino a tre medaglie nella Hall of Fame – i tuoi avversari Head2Head le vedranno.
+Diese Medaillen zeigt der Klient in seinem Profil.|The client shows these medals on their profile.|El cliente muestra estas medallas en su perfil.|Il cliente mostra queste medaglie nel profilo.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -666,6 +678,7 @@ noch nie|never|nunca|mai
     [/^Der Code ist falsch oder abgelaufen\. Noch (\d) Versuche?\.$/, W(0, (m) => `The code is wrong or expired. ${m[1]} tries left.`, (m) => `Código incorrecto o caducado. Quedan ${m[1]} intentos.`, (m) => `Codice errato o scaduto. Ancora ${m[1]} tentativi.`)],
     [/^Per E-Mail an (.+)$/, W(0, (m) => `Email to ${m[1]}`, (m) => `Enviar a ${m[1]}`, (m) => `Invia a ${m[1]}`)],
     [/^(\d+) Tage Schritte · (\d+) Nächte Schlaf$/, W(0, (m) => `${m[1]} days of steps · ${m[2]} nights of sleep`, (m) => `${m[1]} días de pasos · ${m[2]} noches de sueño`, (m) => `${m[1]} giorni di passi · ${m[2]} notti di sonno`)],
+    [/^Bis zu (\d) Medaillen für dein Profil – deine Head2Head-Gegner sehen sie\.$/, W(0, (m) => `Up to ${m[1]} medals for your profile – your Head2Head opponents see them.`, (m) => `Hasta ${m[1]} medallas para tu perfil – tus rivales de Head2Head las ven.`, (m) => `Fino a ${m[1]} medaglie per il profilo – i tuoi avversari Head2Head le vedono.`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

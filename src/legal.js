@@ -98,7 +98,7 @@ function privacyPage(env) {
     </ul>
 
     <h2>6. Wer deine Daten sieht</h2>
-    <p>Dein Coach sieht deine Einträge, Pläne, Check-ins und Nachrichten. Andere Klienten sehen nichts davon. Ausnahme: Wenn du Head2Head einschaltest, sehen andere Teilnehmende deinen Namen, dein Profilbild und in einem Duell nur die gewählte Disziplin (Gewicht ausschließlich als Prozentwert).</p>
+    <p>Dein Coach sieht deine Einträge, Pläne, Check-ins und Nachrichten. Andere Klienten sehen nichts davon. Ausnahme: Wenn du Head2Head einschaltest, sehen andere Teilnehmende deinen Namen, dein Profilbild, die bis zu drei Medaillen, die du selbst in deine Vitrine gestellt hast, und in einem Duell nur die gewählte Disziplin (Gewicht ausschließlich als Prozentwert).</p>
 
     <h2>7. Speicherdauer</h2>
     <p>Wir speichern deine Daten, solange dein Konto besteht. Wird das Konto gelöscht, werden alle zugehörigen Daten gelöscht. Einmal-Codes und Bestätigungslinks verfallen nach 15 Minuten bzw. 7 Tagen.</p>
