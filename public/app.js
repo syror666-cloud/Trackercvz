@@ -194,6 +194,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-backup', date: 'November 2026',
+      client: [],
+      coach: [
+        ['🛟', 'Automatische Datensicherung', 'Jede Nacht eine verschlüsselte Sicherung aller Daten – auf dem Server und per E-Mail an dich. Im Admin-Tool siehst du den Stand und kannst sofort sichern. Einrichtung: BACKUP_KEY und BACKUP_EMAIL (siehe README).'],
+      ],
+    },
+    {
       id: '2026-11-shop-cosmic', date: 'November 2026',
       client: [
         ['🌌', 'Zwei neue Seltenheiten', 'Neu im Shop: „Ungewöhnlich“ und ganz oben „Kosmisch“ – mit eigener Kaufanimation zwischen Sternen und Planeten.'],
@@ -4204,6 +4211,7 @@
     setView(`
       <div class="page-head"><div>${eyebrow('Werkzeuge')}<h1>Admin</h1><p class="muted">Aktivität deiner Klienten, automatische Erinnerungen und Lebensmittel-Datenbank.</p></div></div>
       <div class="stack">
+        <section class="card" id="backup-card"></section>
         <section class="card" id="mail-status"></section>
         <section class="card" id="activity"></section>
         <section class="card" id="weight-reminder"></section>
@@ -4214,11 +4222,53 @@
       </div>`);
     drawAiGuidelines();
     drawMailStatus();
+    drawBackup();
     drawActivity(ov);
     drawReminder(ov);
     drawWeightReminder(ov);
     drawFoods();
     drawMetricsAdmin();
+  }
+
+  /** Backups: when the last one was made, whether it is encrypted and mailed, make one now, download the newest. */
+  async function drawBackup() {
+    const root = document.getElementById('backup-card');
+    let st;
+    try {
+      st = await api('GET', '/api/admin/backup');
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    const kb = (n) => (n > 1048576 ? `${num(n / 1048576, 1)} MB` : `${num(Math.max(1, Math.round(n / 1024)))} KB`);
+    const draw = (busy) => {
+      const l = st.last || {};
+      const ok = l.at && st.encrypted && l.mailed;
+      root.innerHTML = `
+        <div class="row-between"><h2>🛟 Datensicherung</h2><span class="badge ${ok ? 'good' : 'warn'}">${ok ? 'aktiv' : 'prüfen'}</span></div>
+        <dl class="mail-status">
+          <div><dt>Letzte</dt><dd>${l.at ? `${esc(new Date(l.at).toLocaleString((window.I18N ? I18N.locale : 'de-DE'), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} · ${kb(l.size)}${l.mailed ? ` · per Mail an ${esc(l.mailed)}` : ''}` : 'noch keine'}</dd></div>
+          <div><dt>Automatisch</dt><dd>täglich ab ${st.hour}:00 Uhr · ${st.local} ${st.local === 1 ? 'Sicherung' : 'Sicherungen'} auf dem Server (${st.keepDays} Tage)</dd></div>
+          <div><dt>Verschlüsselt</dt><dd>${st.encrypted ? 'ja (BACKUP_KEY)' : 'nein – BACKUP_KEY fehlt'}</dd></div>
+        </dl>
+        ${l.mailError ? `<p class="mail-warning">⚠️ Mail-Versand der Sicherung fehlgeschlagen: ${esc(l.mailError)}</p>` : ''}
+        ${!st.mailReady ? `<p class="mail-warning">⚠️ ${!st.encrypted ? 'Ohne <code>BACKUP_KEY</code> wird nichts verschlüsselt und nichts verschickt.' : !st.email ? 'Mit <code>BACKUP_EMAIL</code> bekommst du jede Nacht eine Kopie per Mail – deine Sicherung außerhalb des Servers.' : 'E-Mail-Versand ist nicht eingerichtet.'}</p>` : ''}
+        <div class="row" style="gap:8px">
+          <button type="button" class="btn-secondary btn-sm" data-backup-now ${busy ? 'disabled' : ''}>${busy ? 'Sichere…' : 'Jetzt sichern'}</button>
+          ${l.at ? '<a class="btn btn-ghost btn-sm" href="/api/admin/backup/latest" download>Neueste herunterladen</a>' : ''}
+        </div>`;
+      root.querySelector('[data-backup-now]').addEventListener('click', async () => {
+        draw(true);
+        try {
+          st = await api('POST', '/api/admin/backup');
+          savedHud('Gesichert', st.last.mailed ? `Kopie an ${st.last.mailed}` : '');
+        } catch (err) {
+          toast(err.message, true);
+        }
+        draw(false);
+      });
+    };
+    draw(false);
   }
 
   /** E-mail setup: sender, provider, a warning for an example sender, and a test mail that shows the real error. */

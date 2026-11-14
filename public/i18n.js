@@ -609,6 +609,14 @@ Tipp unten eine erreichte Medaille an|Tap an earned medal below|Toca abajo una m
 Leer|Empty|Vacío|Vuoto
 Noch leer. Wähle in der Hall of Fame bis zu drei erreichte Medaillen – deine Head2Head-Gegner sehen sie.|Still empty. Pick up to three earned medals in the Hall of Fame – your Head2Head opponents see them.|Aún vacía. Elige hasta tres medallas en el Salón de la Fama – tus rivales de Head2Head las verán.|Ancora vuota. Scegli fino a tre medaglie nella Hall of Fame – i tuoi avversari Head2Head le vedranno.
 Diese Medaillen zeigt der Klient in seinem Profil.|The client shows these medals on their profile.|El cliente muestra estas medallas en su perfil.|Il cliente mostra queste medaglie nel profilo.
+Datensicherung|Backups|Copias de seguridad|Backup
+Jetzt sichern|Back up now|Copiar ahora|Esegui backup
+Sichere…|Backing up…|Copiando…|Backup in corso…
+Neueste herunterladen|Download latest|Descargar la última|Scarica l'ultimo
+Gesichert|Backed up|Copiado|Salvato
+Letzte|Last|Última|Ultimo
+Automatisch|Automatic|Automático|Automatico
+Verschlüsselt|Encrypted|Cifrado|Cifrato
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

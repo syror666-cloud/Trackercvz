@@ -99,6 +99,9 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | optional: Google Health (Schritte und Schlaf automatisch), siehe unten |
 | `GOOGLE_TOKEN_KEY` | optional: eigener Schlüssel zum Verschlüsseln der Google-Tokens (sonst aus dem Clientschlüssel abgeleitet) |
 | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_EMAIL`, `LEGAL_PHONE` | Betreiberangaben für `/datenschutz` und `/impressum` (Adresszeilen mit `|` trennen, z. B. `Musterweg 1|12345 Musterstadt`) |
+| `BACKUP_KEY` | Schlüssel für die nächtliche Sicherung (lange Zufallszeichenkette, **gut aufbewahren** – ohne ihn lässt sich keine Sicherung öffnen) |
+| `BACKUP_EMAIL` | Adresse, an die jede Nacht die verschlüsselte Sicherung geht (Sicherung außerhalb des Servers) |
+| `BACKUP_HOUR` | Uhrzeit der Sicherung (Standard `3`, App-Zeitzone) |
 | `APP_URL` | Adresse der App für Links in E-Mails, z. B. `https://stayontrack.onrender.com` (auf Render automatisch über `RENDER_EXTERNAL_URL`) |
 
 **Google Health einrichten (Schritte und Schlaf automatisch):**
@@ -124,7 +127,7 @@ docker run -d -p 3000:3000 -v tracker-data:/data \
 Wichtig:
 - Das Volume bzw. die Disk muss auf `/data` (oder deinen `DATA_DIR`) gemountet sein, sonst gehen die Daten bei einem Neustart verloren.
 - Betreib die App nur über **HTTPS**. Die genannten Plattformen machen das automatisch, auf einem eigenen Server z. B. mit Caddy oder nginx davor.
-- Backup: Regelmäßig die Datei `tracker.db` sichern.
+- **Backup:** automatisch jede Nacht (siehe unten). Wiederherstellen: App stoppen, `BACKUP_KEY=… node scripts/restore-backup.js <sicherung> neu.db`, `neu.db` als `tracker.db` in den Datenordner legen, App starten.
 
 ## Entwicklung
 

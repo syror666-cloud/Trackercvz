@@ -276,7 +276,7 @@ function csvCell(v) {
 
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null, googleEnv, googleFetch, legalEnv }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null, googleEnv, googleFetch, legalEnv, backups = null }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
@@ -1241,6 +1241,32 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   });
   reports = reportRoutes({ ...deps, mailer, appUrl, planOf: nutrition.planOf, describeProposal, goalsRow, prefsOf });
   shop = shopRoutes({ ...deps, achievements });
+  // ---- Coach: backups ----
+  if (backups) {
+    routes.push(
+      ['GET', /^\/api\/admin\/backup$/, async (ctx) => {
+        requireCoach(ctx);
+        return backups.status();
+      }],
+      ['POST', /^\/api\/admin\/backup$/, async (ctx) => {
+        requireCoach(ctx);
+        return backups.run('manual');
+      }],
+      // the newest backup file (encrypted when BACKUP_KEY is set)
+      ['GET', /^\/api\/admin\/backup\/latest$/, async (ctx) => {
+        requireCoach(ctx);
+        const file = backups.latestPath();
+        if (!file) throw new HttpError(404, 'Noch keine Sicherung vorhanden');
+        const buf = require('node:fs').readFileSync(file);
+        ctx.res.writeHead(200, {
+          'Content-Type': 'application/octet-stream', 'Content-Length': buf.length,
+          'Content-Disposition': `attachment; filename="${require('node:path').basename(file)}"`, 'Cache-Control': 'no-store',
+        });
+        ctx.res.end(buf);
+        return undefined;
+      }],
+    );
+  }
   routes.push(...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.

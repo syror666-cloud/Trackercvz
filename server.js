@@ -9,6 +9,8 @@ const { createNotifier } = require('./src/notify');
 const { createReminders } = require('./src/admin');
 const { openCatalog } = require('./src/catalog');
 const { createMailer } = require('./src/mail');
+const { createBackups } = require('./src/backup');
+const { localDate } = require('./src/schedule');
 
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
@@ -69,8 +71,15 @@ if (mailer.enabled && !appUrl) console.warn('E-Mail ist eingerichtet, aber APP_U
 else if (mailer.enabled) console.log(`E-Mail aktiv (${mailer.via}), Links auf ${appUrl}`);
 if (mailer.enabled && /deine-domain|beispiel|example\./i.test(mailer.from)) console.warn(`E-Mail: MAIL_FROM ist noch ein Beispielwert (${mailer.from}) – Mails werden abgelehnt.`);
 
+// Nightly encrypted backup (BACKUP_KEY), sent to BACKUP_EMAIL; see src/backup.js.
+const backups = createBackups({ db, dataDir: DATA_DIR, mailer, localDate, timezone: notifier.timezone });
+if (!process.env.BACKUP_KEY) console.warn('Sicherung: BACKUP_KEY fehlt – Sicherungen bleiben unverschlüsselt auf dem Server und werden nicht per E-Mail verschickt.');
+setInterval(() => backups.tick().catch((err) => console.error('Sicherung fehlgeschlagen:', err.message)), 10 * 60 * 1000).unref();
+setTimeout(() => backups.tick().catch((err) => console.error('Sicherung fehlgeschlagen:', err.message)), 60 * 1000).unref();
+
 const app = createApp({
   db,
+  backups,
   catalog,
   mailer,
   appUrl,
