@@ -82,14 +82,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
--- Personal key for automatic imports (e.g. Apple Health via the Shortcuts app).
-CREATE TABLE IF NOT EXISTS health_tokens (
-  user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  token_hash   TEXT NOT NULL UNIQUE,
-  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  last_used_at TEXT
-);
-
 -- Every successful login, and one row per day a user opened the app (for the admin tool).
 CREATE TABLE IF NOT EXISTS logins (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -408,6 +400,8 @@ function migrate(db) {
   addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT'], ['seen_release', 'TEXT'], ['prefs', 'TEXT']]);
   addColumns(db, 'users', [['email', 'TEXT'], ['email_verified', 'INTEGER NOT NULL DEFAULT 0'], ['h2h_visible', 'INTEGER NOT NULL DEFAULT 0'], ['showcase', "TEXT NOT NULL DEFAULT '[]'"]]);
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email COLLATE NOCASE) WHERE email IS NOT NULL');
+  // the Apple Health shortcut import was replaced by Google Health
+  db.exec('DROP TABLE IF EXISTS health_tokens');
   addColumns(db, 'h2h_challenges', [['final_challenger', 'REAL'], ['final_opponent', 'REAL'], ['winner_id', 'INTEGER'], ['frozen_at', 'TEXT']]);
   addColumns(db, 'email_tokens', [['attempts', 'INTEGER NOT NULL DEFAULT 0']]);
 

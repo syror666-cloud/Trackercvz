@@ -31,7 +31,6 @@ Web-App, in der Klienten täglich **Gewicht, Schritte und Schlaf** eintragen und
 - **Anmelden mit Benutzername oder E-Mail;** Passwort vergessen → Link per E-Mail (nur an bestätigte Adressen)
 - **Ernährungstagebuch** mit Barcode-Scanner: Packung scannen (Kamera, eingebauter `BarcodeDetector` oder mitgeliefertes ZXing unter `public/vendor/`, Apache-2.0) oder Nummer eintippen, aus der Datenbank wählen oder selbst eintragen. Kalorien und Makros pro Tag gegen die Ziele; die Tageskalorien landen automatisch im Tracker. Produktdaten: rund 320.000 Produkte aus DE/AT/CH von [Open Food Facts](https://world.openfoodfacts.org) (ODbL) sind mitgeliefert (`src/data/`, beim ersten Start wird daraus `products.db` im Datenordner gebaut, ca. 50 MB, 2 Sekunden); fehlende Produkte werden online bei Open Food Facts gesucht, notfalls direkt vom Handy aus, und von Klienten eingetragene Produkte für den nächsten Scan gemerkt. Markenprodukte sind auch per Name suchbar. Die Kamera braucht HTTPS
 - **Google Health:** Klienten verbinden ihr Google-Konto (Einstellungen → Google Health); Schritte (Tagessumme) und Schlafdauer (ohne Nickerchen) werden beim Verbinden für 14 Tage und danach alle 2 Stunden übernommen – aus Fitbit, Pixel Watch und Health Connect. Nur lesend, Refresh-Token verschlüsselt gespeichert, jederzeit trennbar
-- **Apple Health:** vorerst deaktiviert (der Code ist noch da; `createApp({ health: true })` schaltet die Import-Schnittstelle wieder ein)
 
 **Coach**
 - Reiter **Nachrichten** mit allen Chats auf einer Seite (Liste mit Vorschau und ungelesenen Nachrichten, Chat daneben; am Handy Liste → Chat)
@@ -87,7 +86,7 @@ Die App braucht einen Server mit **dauerhaftem Speicher** für die Datei `tracke
 | `DATA_DIR` | Ordner für die Datenbank (Standard `./data`) |
 | `COACH_USERNAME`, `COACH_PASSWORD`, `COACH_NAME` | Coach-Konto beim ersten Start |
 | `NODE_ENV=production` oder `SECURE_COOKIES=true` | Login-Cookie nur über HTTPS (im Live-Betrieb setzen) |
-| `APP_TIMEZONE` | Zeitzone für geplante Push-Nachrichten und Health-Importe (Standard `Europe/Berlin`) |
+| `APP_TIMEZONE` | Zeitzone für geplante Push-Nachrichten, Erinnerungen und den Google-Health-Abgleich (Standard `Europe/Berlin`) |
 | `VAPID_SUBJECT` | optional: Kontakt für Push-Dienste, z. B. `mailto:du@deine-domain.de` (sonst die Adresse der Seite) |
 | `ANTHROPIC_API_KEY` | optional: schaltet die KI-Funktionen für den Coach ein (Check-in-Zusammenfassung, Ernährungsplan-Entwurf) |
 | `AI_MODEL` | optional: Claude-Modell (Standard `claude-opus-5-5`; am günstigsten `claude-haiku-5-5`) |

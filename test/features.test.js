@@ -100,7 +100,7 @@ async function setup() {
     return { status: url.includes('gone') ? 410 : 201 };
   };
   const notifier = createNotifier(db, { subject: 'mailto:test@example.com', fetchImpl });
-  const server = http.createServer(createApp({ db, notifier, health: true, publicDir: path.join(__dirname, '..', 'public') }));
+  const server = http.createServer(createApp({ db, notifier, publicDir: path.join(__dirname, '..', 'public') }));
   await new Promise((r) => server.listen(0, r));
   const base = `http://127.0.0.1:${server.address().port}`;
   function client() {
@@ -205,47 +205,3 @@ test('push consent, coach notifications and chat push', async (t) => {
   assert.equal((await anna('GET', '/api/push/config')).data.devices, 0);
 });
 
-test('health import with personal key', async (t) => {
-  const { server, client } = await setup();
-  t.after(() => server.close());
-  const coach = client();
-  await coach('POST', '/api/login', { username: 'coach', password: 'coachpass123' });
-  await coach('POST', '/api/clients', { username: 'anna', password: 'annapass123' });
-  const anna = client();
-  await anna('POST', '/api/login', { username: 'anna', password: 'annapass123' });
-
-  assert.equal((await anna('GET', '/api/health/token')).data.linked, false);
-  const { token } = (await anna('POST', '/api/health/token')).data;
-  assert.match(token, /^tt_/);
-
-  const shortcut = client(); // no session cookie, like the Shortcuts app
-  const imp = (body, key = token) => shortcut('POST', '/api/health/import', body, { Authorization: `Bearer ${key}` });
-  assert.equal((await imp({ steps: 100 }, 'tt_wrong')).status, 401);
-  assert.equal((await imp({})).status, 400);
-
-  await anna('PUT', '/api/entries/2026-01-05', { weight: 70, note: 'Notiz bleibt' });
-  let r = await imp({ date: '2026-01-05', steps: '8.523' });
-  assert.equal(r.status, 200);
-  assert.equal(r.data.saved.steps, 8523);
-  r = await imp({ date: '2026-01-05', steps: 9001.6 });
-  const e = (await anna('GET', '/api/entries')).data.entries.find((x) => x.date === '2026-01-05');
-  assert.deepEqual([e.weight, e.steps, e.note], [70, 9002, 'Notiz bleibt']);
-
-  // Without date → today
-  r = await imp({ steps: 1234, weight: '71,2' });
-  assert.equal(r.status, 200);
-  assert.match(r.data.date, /^\d{4}-\d{2}-\d{2}$/);
-
-  const status = (await anna('GET', '/api/health/token')).data;
-  assert.ok(status.linked && status.lastUsedAt);
-  const overview = (await coach('GET', '/api/clients')).data.clients[0];
-  assert.equal(overview.healthLinked, true);
-
-  // New key invalidates the old one; deleting unlinks.
-  const { token: token2 } = (await anna('POST', '/api/health/token')).data;
-  assert.equal((await imp({ steps: 1 })).status, 401);
-  assert.equal((await imp({ steps: 1 }, token2)).status, 200);
-  await anna('DELETE', '/api/health/token');
-  assert.equal((await imp({ steps: 1 }, token2)).status, 401);
-  assert.equal((await coach('POST', '/api/health/token')).status, 403);
-});

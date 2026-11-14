@@ -274,20 +274,9 @@ function csvCell(v) {
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Step counts from the Shortcuts app may arrive as "8.523", "8523,0" or 8523.4. */
-function parseSteps(value) {
-  if (value === undefined || value === null || value === '') return value === '' ? null : value;
-  if (typeof value === 'number') return Math.round(value);
-  const t = String(value).replace(/[^\d.,]/g, '');
-  if (/^\d{1,3}([.,]\d{3})+$/.test(t)) return Number(t.replace(/[.,]/g, ''));
-  const n = Number(t.replace(',', '.'));
-  return Number.isFinite(n) && t ? Math.round(n) : value;
-}
-
 const WEEKDAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-// Apple Health import (Shortcuts) is switched off for now; `health: true` turns the routes back on.
-function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, health = false, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null, googleEnv, googleFetch, legalEnv }) {
+function createApp({ db, publicDir, secureCookies = false, trustProxy = false, notifier, reminders, aiClient = null, barcodeLookup, catalog = null, mailer = null, appUrl = null, googleEnv, googleFetch, legalEnv }) {
   notifier = notifier || createNotifier(db, {});
   reminders = reminders || createReminders(db, notifier);
   let metrics; // created further down, once all helpers exist
@@ -323,8 +312,6 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
          (SELECT COUNT(*) FROM messages m WHERE m.client_id = u.id AND m.sender_id = u.id AND m.read_at IS NULL) AS unread_messages,
          (SELECT status FROM push_consent pc WHERE pc.user_id = u.id) AS push_status,
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
-         (SELECT last_used_at FROM health_tokens ht WHERE ht.user_id = u.id) AS health_last_used,
-         (SELECT COUNT(*) FROM health_tokens ht WHERE ht.user_id = u.id) AS health_linked,
          (SELECT gl.last_sync_at FROM google_links gl WHERE gl.user_id = u.id AND COALESCE(gl.last_error, '') <> 'revoked') AS google_sync,
          (SELECT COUNT(*) FROM google_links gl WHERE gl.user_id = u.id AND COALESCE(gl.last_error, '') <> 'revoked') AS google_linked,
          (SELECT COUNT(*) FROM nutrition_requests nr WHERE nr.client_id = u.id AND nr.status = 'open') AS plan_request,
@@ -368,19 +355,6 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     ),
     setNotificationActive: db.prepare('UPDATE notifications SET active = ?, next_run_at = ? WHERE id = ?'),
     deleteNotification: db.prepare('DELETE FROM notifications WHERE id = ?'),
-    healthToken: db.prepare('SELECT * FROM health_tokens WHERE user_id = ?'),
-    upsertHealthToken: db.prepare(
-      `INSERT INTO health_tokens (user_id, token_hash) VALUES (?, ?)
-       ON CONFLICT (user_id) DO UPDATE SET token_hash = excluded.token_hash,
-         created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), last_used_at = NULL`
-    ),
-    deleteHealthToken: db.prepare('DELETE FROM health_tokens WHERE user_id = ?'),
-    touchHealthToken: db.prepare(
-      "UPDATE health_tokens SET last_used_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE user_id = ?"
-    ),
-    userByHealthToken: db.prepare(
-      "SELECT u.* FROM health_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND u.role = 'client'"
-    ),
     messages: db.prepare(
       `SELECT m.*, u.role AS sender_role, u.display_name AS sender_name
        FROM messages m JOIN users u ON u.id = m.sender_id
@@ -768,10 +742,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           avatar: r.has_avatar ? `/api/avatar/${r.id}?v=${encodeURIComponent(r.avatar_updated || '1')}` : null,
           pushStatus: r.push_status || 'unknown',
           pushDevices: r.push_devices,
-          healthLinked: Boolean(r.health_linked),
           googleLinked: Boolean(r.google_linked),
           googleSyncAt: r.google_sync || null,
-          healthLastUsed: r.health_last_used,
           openSwaps: r.open_swaps,
           planRequest: Boolean(r.plan_request),
           weightToday: r.weight_today,
@@ -1186,56 +1158,6 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       return { ok: true };
     }],
 
-    // ---- Apple Health & Co.: personal import key ----
-    ['GET', /^\/api\/health\/token$/, async (ctx) => {
-      const u = requireUser(ctx);
-      const t = q.healthToken.get(u.id);
-      return { linked: Boolean(t), createdAt: t ? t.created_at : null, lastUsedAt: t ? t.last_used_at : null };
-    }],
-
-    ['POST', /^\/api\/health\/token$/, async (ctx) => {
-      const u = requireUser(ctx);
-      if (u.role !== 'client') throw new HttpError(403, 'Nur für Klienten');
-      const token = `tt_${crypto.randomBytes(24).toString('base64url')}`;
-      q.upsertHealthToken.run(u.id, sha256(token));
-      return { token };
-    }],
-
-    ['DELETE', /^\/api\/health\/token$/, async (ctx) => {
-      const u = requireUser(ctx);
-      q.deleteHealthToken.run(u.id);
-      return { ok: true };
-    }],
-
-    ['POST', /^\/api\/health\/import$/, async (ctx) => {
-      const auth = String(ctx.req.headers.authorization || '');
-      const m = auth.match(/^Bearer\s+(\S+)$/i);
-      const owner = m ? q.userByHealthToken.get(sha256(m[1])) : null;
-      if (!owner) throw new HttpError(401, 'Ungültiger oder fehlender Schlüssel');
-      const body = await readBody(ctx.req);
-      const date = body.date === undefined || body.date === '' ? localDate(Date.now(), notifier.timezone) : body.date;
-      if (!isValidDate(date) || date > maxAllowedDate()) throw new HttpError(400, 'Ungültiges Datum');
-      const incoming = {
-        weight: numberField(body.weight === '' ? undefined : body.weight, { name: 'Gewicht', min: 20, max: 400 }),
-        steps: numberField(parseSteps(body.steps === '' ? undefined : body.steps), { name: 'Schritte', min: 0, max: 200000, integer: true }),
-        sleep: numberField(body.sleep === '' ? undefined : body.sleep, { name: 'Schlaf', min: 0, max: 24 }),
-      };
-      if (Object.values(incoming).every((v) => v === undefined || v === null)) {
-        throw new HttpError(400, 'Keine Werte übermittelt (steps, weight oder sleep)');
-      }
-      const existing = q.entry.get(owner.id, date) || {};
-      const merged = {};
-      for (const k of ['weight', 'steps', 'sleep']) {
-        merged[k] = incoming[k] !== undefined && incoming[k] !== null ? incoming[k] : existing[k] ?? null;
-      }
-      q.upsertEntry.run(
-        owner.id, date, merged.weight, merged.steps, merged.sleep, existing.note ?? null,
-        existing.calories_ok ?? null, existing.calories ?? null, existing.training ?? null
-      );
-      q.touchHealthToken.run(owner.id);
-      return { ok: true, date, saved: incoming };
-    }],
-
     // ---- Entries ----
     ['GET', /^\/api\/entries$/, async (ctx) => {
       const c = targetClient(ctx);
@@ -1310,9 +1232,6 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     onPlanApplied: (clientId) => reports && reports.autoPlanMail(clientId),
   };
   metrics = metricsModule(deps);
-  if (!health) {
-    for (let i = routes.length - 1; i >= 0; i--) if (String(routes[i][1]).includes('health')) routes.splice(i, 1);
-  }
   const achievements = achievementsModule(deps);
   const ai = aiRoutes(deps);
   const nutrition = nutritionRoutes(deps);
