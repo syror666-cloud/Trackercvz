@@ -135,8 +135,11 @@ Wichtig:
 ## Entwicklung
 
 ```bash
-npm test
+npm test          # Server-Tests (node:test, ohne Browser)
+npm run test:e2e  # Oberflächen-Tests im echten Browser
 ```
+
+Die Oberflächen-Tests (`e2e/`) starten die App mit einer frischen Testdatenbank und klicken die wichtigsten Abläufe durch: Tageseintrag, Ernährungstagebuch, Kauf im Test-Kühlschrank, Check-in, Einladung mit Willkommens-Tour, Datenexport. Sie brauchen Playwright mit Chromium (`npm i -D playwright && npx playwright install chromium`, nicht für den Server nötig) und werden ohne Playwright übersprungen. Ein vorhandenes Chromium nutzt `CHROMIUM_PATH=/pfad/zu/chromium`.
 
 Aufbau: `server.js` startet den Server, `src/app.js` enthält die API und die Auslieferung der Seiten, `src/db.js` das Datenbankschema und das Passwort-Hashing (scrypt), `public/` das Frontend (ohne Build-Schritt).
 

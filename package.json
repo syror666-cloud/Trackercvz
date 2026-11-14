@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node --no-warnings=ExperimentalWarning server.js",
     "create-coach": "node --no-warnings=ExperimentalWarning scripts/create-coach.js",
-    "test": "node --no-warnings=ExperimentalWarning --test \"test/*.test.js\""
+    "test": "node --no-warnings=ExperimentalWarning --test \"test/*.test.js\"",
+    "test:e2e": "node --no-warnings=ExperimentalWarning --test --test-concurrency=1 \"e2e/*.e2e.test.js\""
   },
   "license": "UNLICENSED",
   "dependencies": {
