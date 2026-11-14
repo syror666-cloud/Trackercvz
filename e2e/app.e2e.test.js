@@ -177,3 +177,39 @@ test('training: unsaved workout input survives a reload and is cleared after sav
   assert.deepEqual(left, []);
   assert.deepEqual(errors, []);
 });
+
+test('coach: pause a client, bring them back, delete another one', { skip }, async () => {
+  const pauseId = createUser(db, { username: 'paula', displayName: 'Paula Pause', password: 'paulapass123', role: 'client' });
+  const goneId = createUser(db, { username: 'gustav', displayName: 'Gustav Weg', password: 'gustavpass123', role: 'client' });
+  const { page, errors } = await loginAs('coach', 'coachpass123');
+  // pause for two weeks with a note
+  await page.goto(`${base}/#/client/${pauseId}`);
+  await page.click('[data-archive-client]');
+  await page.waitForSelector('#ar-note');
+  await page.click('dialog [data-days="14"]');
+  await page.fill('#ar-note', 'Urlaub');
+  await page.click('dialog [type=submit]');
+  await page.waitForSelector('.archive-banner');
+  const row = db.prepare('SELECT archived_at, archive_until, archive_note FROM users WHERE id = ?').get(pauseId);
+  assert.ok(row.archived_at);
+  assert.equal(row.archive_note, 'Urlaub');
+  assert.match(row.archive_until, /^\d{4}-\d{2}-\d{2}$/);
+  // home: no longer in the client list, but in the archive
+  await page.goto(`${base}/#/`);
+  await page.waitForSelector('.archive-section');
+  assert.equal(await page.locator('.client-list a[href="#/client/' + pauseId + '"]').count(), 0);
+  await page.click('.archive-section summary');
+  await page.click(`[data-unarchive="${pauseId}"]`);
+  await page.waitForSelector(`.client-list a[href="#/client/${pauseId}"]`);
+  assert.equal(db.prepare('SELECT archived_at FROM users WHERE id = ?').get(pauseId).archived_at, null);
+  // delete: only after typing the name
+  await page.goto(`${base}/#/client/${goneId}`);
+  await page.click('[data-delete-client]');
+  await page.waitForSelector('#del-confirm');
+  assert.equal(await page.locator('dialog [type=submit]').isDisabled(), true);
+  await page.fill('#del-confirm', 'gustav weg');
+  await page.click('dialog [type=submit]');
+  await page.waitForTimeout(800);
+  assert.equal(db.prepare('SELECT 1 FROM users WHERE id = ?').get(goneId), undefined);
+  assert.deepEqual(errors, []);
+});

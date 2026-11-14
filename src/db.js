@@ -419,6 +419,8 @@ function migrate(db) {
   const hadOnboarding = db.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'onboarded_at'").get();
   addColumns(db, 'users', [['must_change_password', 'INTEGER NOT NULL DEFAULT 0'], ['onboarded_at', 'TEXT']]);
   addColumns(db, 'users', [['deletion_requested_at', 'TEXT'], ['deletion_reason', 'TEXT']]);
+  // archive: a client on a break (holiday, injury, pause) leaves the coach's to-dos; optional date of return
+  addColumns(db, 'users', [['archived_at', 'TEXT'], ['archive_until', 'TEXT'], ['archive_note', 'TEXT']]);
   if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health
   db.exec('DROP TABLE IF EXISTS health_tokens');
@@ -487,4 +489,12 @@ function createUser(db, { username, displayName, password, role }) {
   return Number(info.lastInsertRowid);
 }
 
-module.exports = { openDb, hashPassword, verifyPassword, createUser };
+/** Clients whose break is over (archive_until reached) are active again. Returns their ids. */
+function wakeArchived(db, today) {
+  const sel = 'FROM users WHERE archived_at IS NOT NULL AND archive_until IS NOT NULL AND archive_until <= ?';
+  const due = db.prepare(`SELECT id ${sel}`).all(today).map((r) => r.id);
+  if (due.length) db.prepare(`UPDATE users SET archived_at = NULL, archive_until = NULL, archive_note = NULL WHERE id IN (SELECT id ${sel})`).run(today);
+  return due;
+}
+
+module.exports = { openDb, hashPassword, verifyPassword, createUser, wakeArchived };

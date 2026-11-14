@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const { openDb, createUser } = require('./src/db');
+const { openDb, createUser, wakeArchived } = require('./src/db');
 const { createApp } = require('./src/app');
 const { createNotifier } = require('./src/notify');
 const { createReminders } = require('./src/admin');
@@ -54,6 +54,20 @@ setInterval(() => {
   reminders.runScheduled().catch((err) => console.error(err));
   reminders.runWeightScheduled().catch((err) => console.error(err));
 }, 30000).unref();
+
+// Archived clients whose break is over come back on their date; the coach gets a note.
+function wakeClients() {
+  try {
+    for (const id of wakeArchived(db, localDate(Date.now(), notifier.timezone))) {
+      const u = db.prepare('SELECT display_name FROM users WHERE id = ?').get(id);
+      notifier.sendToUsers(notifier.coachIds(), { title: '👋 Zurück aus der Pause', body: `${u.display_name} ist wieder aktiv.`, url: `/#/client/${id}` }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Archiv:', err.message);
+  }
+}
+setInterval(wakeClients, 15 * 60 * 1000).unref();
+setTimeout(wakeClients, 5000).unref();
 
 // Barcode product database (built once from the bundled Open Food Facts extract).
 let catalog = null;

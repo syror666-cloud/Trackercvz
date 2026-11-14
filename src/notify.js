@@ -29,7 +29,7 @@ function createNotifier(db, { subject, timezone = 'Europe/Berlin', fetchImpl } =
     ),
     consentingClients: db.prepare(
       `SELECT u.id FROM users u JOIN push_consent c ON c.user_id = u.id
-       WHERE u.role = 'client' AND c.status = 'granted'`
+       WHERE u.role = 'client' AND u.archived_at IS NULL AND c.status = 'granted'`
     ),
     consentOf: db.prepare('SELECT status FROM push_consent WHERE user_id = ?'),
     coaches: db.prepare("SELECT id FROM users WHERE role = 'coach'"),

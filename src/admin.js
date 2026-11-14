@@ -45,7 +45,7 @@ function createReminders(db, notifier) {
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices,
          (SELECT last_sent_date FROM reminder_state rs WHERE rs.user_id = u.id) AS last_reminder,
          (SELECT last_result FROM reminder_state rs WHERE rs.user_id = u.id) AS last_reminder_result
-       FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
+       FROM users u WHERE u.role = 'client' AND u.archived_at IS NULL ORDER BY u.display_name COLLATE NOCASE`
     ),
     getWeight: db.prepare("SELECT value FROM settings WHERE key = 'weight_reminder'"),
     setWeight: db.prepare(
@@ -57,7 +57,7 @@ function createReminders(db, notifier) {
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND e.date = ?) AS weight_today,
          (SELECT status FROM push_consent pc WHERE pc.user_id = u.id) AS push_status,
          (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS push_devices
-       FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
+       FROM users u WHERE u.role = 'client' AND u.archived_at IS NULL ORDER BY u.display_name COLLATE NOCASE`
     ),
     setState: db.prepare(
       `INSERT INTO reminder_state (user_id, last_sent_date, last_result) VALUES (?, ?, ?)

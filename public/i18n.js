@@ -660,6 +660,22 @@ Konto gelöscht|Account deleted|Cuenta eliminada|Account eliminato
 ✓ Deine Eingaben werden auf diesem Gerät zwischengespeichert – auch wenn du die App kurz verlässt.|✓ Your input is kept on this device – even if you briefly leave the app.|✓ Tus datos se guardan en este dispositivo, aunque salgas un momento de la app.|✓ I tuoi dati restano salvati su questo dispositivo, anche se esci un attimo dall'app.
 Angefangenes Training verwerfen? Deine Eingaben gehen verloren.|Discard the workout in progress? Your input will be lost.|¿Descartar el entrenamiento empezado? Se perderán tus datos.|Scartare l'allenamento iniziato? I dati inseriti andranno persi.
 Deine Eingaben sind gesichert – tipp hier, um weiterzumachen.|Your input is safe – tap here to carry on.|Tus datos están a salvo: toca aquí para continuar.|I tuoi dati sono al sicuro: tocca qui per continuare.
+Pausierte Klienten bekommen keine Erinnerungen und tauchen nicht in „Braucht Aufmerksamkeit“ und bei den Check-ins auf. Mit Enddatum sind sie an dem Tag automatisch zurück.|Paused clients get no reminders and don't show up in “Needs attention” or check-ins. With an end date they are back automatically on that day.|Los clientes en pausa no reciben recordatorios ni aparecen en «Necesita atención» ni en los check-ins. Con fecha de fin vuelven automáticamente ese día.|I clienti in pausa non ricevono promemoria e non compaiono in «Ha bisogno di attenzione» né nei check-in. Con una data di fine tornano automaticamente quel giorno.
+Reaktivieren|Reactivate|Reactivar|Riattiva
+Pausieren|Pause|Pausar|Metti in pausa
+Klient ist wieder aktiv|Client is active again|El cliente vuelve a estar activo|Il cliente è di nuovo attivo
+Archiv|Archive|Archivo|Archivio
+1 Monat|1 month|1 mes|1 mese
+Zurück am|Back on|Vuelve el|Torna il
+Mit Datum ist der Klient an dem Tag automatisch wieder aktiv und du bekommst Bescheid.|With a date, the client is active again automatically on that day and you get notified.|Con fecha, el cliente vuelve a estar activo automáticamente ese día y se te avisa.|Con una data, il cliente torna attivo automaticamente quel giorno e ricevi un avviso.
+Notiz für dich|Note for you|Nota para ti|Nota per te
+Klient löschen|Delete client|Eliminar cliente|Elimina cliente
+Nur eine Pause? Dann lieber pausieren – da bleibt alles erhalten. Brauchst du Unterlagen, lade vorher den CSV-Export herunter.|Just a break? Then pause instead – everything is kept. Need records? Download the CSV export first.|¿Solo una pausa? Mejor pausar: se conserva todo. Si necesitas registros, descarga antes la exportación CSV.|Solo una pausa? Meglio metterlo in pausa: si conserva tutto. Se ti servono i dati, scarica prima l'esportazione CSV.
+Endgültig löschen|Delete permanently|Eliminar definitivamente|Elimina definitivamente
+Der Name stimmt nicht überein|The name doesn't match|El nombre no coincide|Il nome non corrisponde
+Alle Klienten sind gerade pausiert.|All clients are paused right now.|Todos los clientes están en pausa.|Tutti i clienti sono in pausa.
+Erinnerungen sind solange aus. Du kannst weiter eintragen und deinem Coach schreiben.|Reminders are off until then. You can keep logging and messaging your coach.|Los recordatorios están desactivados mientras tanto. Puedes seguir registrando y escribir a tu coach.|I promemoria sono disattivati fino ad allora. Puoi continuare a registrare e scrivere al tuo coach.
+Coaching pausiert|Coaching paused|Coaching en pausa|Coaching in pausa
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -737,6 +753,12 @@ noch nie|never|nunca|mai
     [/^Alle (\d+) anzeigen$/, W(0, (m) => `Show all ${m[1]}`, (m) => `Mostrar los ${m[1]}`, (m) => `Mostra tutti i ${m[1]}`)],
     [/^Training läuft noch: (.+)$/, W(0, (m) => `Workout in progress: ${m[1]}`, (m) => `Entrenamiento en curso: ${m[1]}`, (m) => `Allenamento in corso: ${m[1]}`)],
     [/^Dein angefangenes Training „(.+)“ ist wieder da\.$/, W(0, (m) => `Your workout “${m[1]}” is back where you left it.`, (m) => `Tu entrenamiento «${m[1]}» está de vuelta.`, (m) => `Il tuo allenamento «${m[1]}» è di nuovo qui.`)],
+    [/^(.+) pausieren$/, W(0, (m) => `Pause ${m[1]}`, (m) => `Pausar a ${m[1]}`, (m) => `Metti in pausa ${m[1]}`)],
+    [/^(.+) ist pausiert$/, W(0, (m) => `${m[1]} is paused`, (m) => `${m[1]} está en pausa`, (m) => `${m[1]} è in pausa`)],
+    [/^(.+) wurde gelöscht$/, W(0, (m) => `${m[1]} was deleted`, (m) => `${m[1]} ha sido eliminado`, (m) => `${m[1]} è stato eliminato`)],
+    [/^· (\d+) pausiert$/, W(0, (m) => `· ${m[1]} paused`, (m) => `· ${m[1]} en pausa`, (m) => `· ${m[1]} in pausa`)],
+    [/^Coaching pausiert bis (.+)$/, W(0, (m) => `Coaching paused until ${m[1]}`, (m) => `Coaching en pausa hasta ${m[1]}`, (m) => `Coaching in pausa fino al ${m[1]}`)],
+    [/^Zum Bestätigen den Namen eintippen: (.+)$/, W(0, (m) => `Type the name to confirm: ${m[1]}`, (m) => `Escribe el nombre para confirmar: ${m[1]}`, (m) => `Digita il nome per confermare: ${m[1]}`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

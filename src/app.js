@@ -58,6 +58,8 @@ class HttpError extends Error {
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
+const addDaysIso = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+
 function isValidDate(s) {
   if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const d = new Date(`${s}T00:00:00Z`);
@@ -262,6 +264,7 @@ const publicUser = (u) => ({
   email: u.email || null, emailVerified: Boolean(u.email_verified), h2hVisible: Boolean(u.h2h_visible),
   mustChangePassword: Boolean(u.must_change_password), onboarded: Boolean(u.onboarded_at) || u.role === 'coach',
   deletionRequestedAt: u.deletion_requested_at || null,
+  archivedAt: u.archived_at || null, archiveUntil: u.archive_until || null,
 });
 
 /** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
@@ -308,8 +311,11 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     setAvatar: db.prepare('UPDATE users SET avatar = ?, avatar_updated = ? WHERE id = ?'),
     setCategory: db.prepare('UPDATE users SET category = ? WHERE id = ?'),
     deleteUser: db.prepare("DELETE FROM users WHERE id = ? AND role = 'client'"),
+    archive: db.prepare("UPDATE users SET archived_at = COALESCE(archived_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), archive_until = ?, archive_note = ? WHERE id = ?"),
+    unarchive: db.prepare('UPDATE users SET archived_at = NULL, archive_until = NULL, archive_note = NULL WHERE id = ?'),
     clients: db.prepare(
       `SELECT u.id, u.username, u.display_name, u.email, u.email_verified, u.deletion_requested_at, u.deletion_reason, u.created_at, u.category, u.avatar IS NOT NULL AS has_avatar, u.avatar_updated,
+         u.archived_at, u.archive_until, u.archive_note,
          (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date DESC LIMIT 1) AS last_weight,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date ASC LIMIT 1) AS first_weight,
@@ -426,7 +432,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     clientsBasic: db.prepare(
       `SELECT u.id, u.display_name, u.username, u.category,
          (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry
-       FROM users u WHERE u.role = 'client' ORDER BY u.display_name COLLATE NOCASE`
+       FROM users u WHERE u.role = 'client' AND u.archived_at IS NULL ORDER BY u.display_name COLLATE NOCASE`
     ),
     messagesSince: db.prepare(
       `SELECT m.*, u.role AS sender_role FROM messages m JOIN users u ON u.id = m.sender_id
@@ -748,8 +754,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     // ---- Coach: client management ----
     ['GET', /^\/api\/clients$/, async (ctx) => {
       requireCoach(ctx);
+      const today = localDate(Date.now(), notifier.timezone);
       return {
-        clients: q.clients.all({ today: localDate(Date.now(), notifier.timezone) }).map((r) => ({
+        clients: q.clients.all({ today }).map((r) => ({
           id: r.id,
           username: r.username,
           displayName: r.display_name,
@@ -757,6 +764,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           emailVerified: Boolean(r.email_verified),
           deletionRequestedAt: r.deletion_requested_at || null,
           deletionReason: r.deletion_reason || null,
+          archivedAt: r.archived_at || null,
+          archiveUntil: r.archive_until || null,
+          archiveNote: r.archive_note || null,
           category: r.category,
           createdAt: r.created_at,
           lastEntry: r.last_entry,
@@ -816,6 +826,23 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         q.setPassword.run(hashPassword(validatePassword(body.password)), c.id);
         q.mustChange.run(c.id);
         q.deleteAllUserSessions.run(c.id);
+      }
+      // archive (a break: holiday, injury, pause) or bring back: { archive: { until?, note? } | null }
+      if (body.archive !== undefined) {
+        if (body.archive === null || body.archive === false) {
+          q.unarchive.run(c.id);
+        } else {
+          const a = typeof body.archive === 'object' ? body.archive : {};
+          const today = localDate(Date.now(), notifier.timezone);
+          let until = null;
+          if (a.until) {
+            if (!isValidDate(a.until)) throw new HttpError(400, 'Ungültiges Datum');
+            if (a.until <= today) throw new HttpError(400, 'Das Rückkehrdatum muss in der Zukunft liegen');
+            if (a.until > addDaysIso(today, 366)) throw new HttpError(400, 'Bitte höchstens ein Jahr im Voraus');
+            until = a.until;
+          }
+          q.archive.run(until, textField(a.note, { name: 'Notiz', max: 200 }) || null, c.id);
+        }
       }
       let verifySent = false;
       let mailError = null;

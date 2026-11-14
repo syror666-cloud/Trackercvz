@@ -194,6 +194,16 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-archive', date: 'November 2026',
+      client: [
+        ['⏸', 'Coaching-Pause', 'Macht ihr eine Pause, siehst du das auf der Startseite – Erinnerungen sind dann aus, eintragen und schreiben geht weiter.'],
+      ],
+      coach: [
+        ['⏸', 'Klienten pausieren', 'Für Urlaub, Verletzung oder Pause: Auf der Klientenseite „Pausieren“, optional mit Rückkehrdatum und Notiz. Pausierte Klienten sind aus „Braucht Aufmerksamkeit“, den Check-ins und den Erinnerungen raus und liegen im Archiv auf der Startseite. Mit Datum kommen sie automatisch zurück – du bekommst Bescheid.'],
+        ['🗑', 'Klienten löschen', 'Auf der Klientenseite „Löschen“: Zur Sicherheit tippst du den Namen ein, dann werden Konto und alle Daten endgültig entfernt.'],
+      ],
+    },
+    {
       id: '2026-11-training-draft', date: 'November 2026',
       client: [
         ['🏋️', 'Training geht nicht mehr verloren', 'Gewichte und Wiederholungen werden beim Tippen auf deinem Gerät zwischengespeichert. Verlässt du die App kurz, ist beim Zurückkommen alles noch da – auf der Startseite erinnert dich eine Karte an das laufende Training.'],
@@ -640,16 +650,28 @@
     const b = e.target.closest('[data-delete-now]');
     if (!b) return;
     const m = location.hash.match(/^#\/client\/(\d+)/);
-    if (!m || !confirm('Konto und alle Daten dieses Klienten endgültig löschen? Das lässt sich nicht rückgängig machen.')) return;
-    b.disabled = true;
+    if (!m) return;
+    const { clients } = await api('GET', '/api/clients');
+    const c = clients.find((x) => x.id === Number(m[1]));
+    if (c) openDeleteClientDialog(c);
+  });
+  // coach: delete / pause / bring back from the client page head
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-delete-client], [data-archive-client], [data-unarchive-client]');
+    if (!b) return;
+    const m = location.hash.match(/^#\/client\/(\d+)/);
+    if (!m) return;
+    let c;
     try {
-      await api('DELETE', `/api/clients/${m[1]}`);
-      toast('Konto gelöscht');
-      location.hash = '#/';
+      c = (await api('GET', '/api/clients')).clients.find((x) => x.id === Number(m[1]));
     } catch (err) {
       toast(err.message, true);
-      b.disabled = false;
+      return;
     }
+    if (!c) return;
+    if (b.hasAttribute('data-delete-client')) openDeleteClientDialog(c);
+    else if (b.hasAttribute('data-archive-client')) openArchiveDialog(c, () => route());
+    else unarchiveClient(c.id, b, () => route());
   });
 
   const avatarBtn = document.getElementById('avatar-btn');
@@ -1294,6 +1316,7 @@
       <div class="page-head">
         <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p></div>
       </div>
+      ${me.archivedAt ? `<div class="card pause-note" role="status"><span aria-hidden="true">⏸</span><span><strong>Coaching pausiert${me.archiveUntil ? ` bis ${esc(fmtDate(me.archiveUntil, { day: 'numeric', month: 'long' }))}` : ''}</strong><span class="muted small">Erinnerungen sind solange aus. Du kannst weiter eintragen und deinem Coach schreiben.</span></span></div>` : ''}
       <div id="workout-resume"></div>
       <div id="push-prompt"></div>
       <div id="checkin-card"></div>
@@ -2594,11 +2617,13 @@
   let pushOpen = false; // remembers whether the push section was expanded
   async function renderCoachHome() {
     setView(LOADING);
-    const [{ clients }, queue, { weightAutomation, automation }] = await Promise.all([
+    const [{ clients: everyone }, queue, { weightAutomation, automation }] = await Promise.all([
       api('GET', '/api/clients'),
       api('GET', '/api/checkins/queue'),
       api('GET', '/api/notifications'),
     ]);
+    const clients = everyone.filter((c) => !c.archivedAt);
+    const archived = everyone.filter((c) => c.archivedAt);
 
     const cards = clients
       .map((c) => {
@@ -2627,14 +2652,15 @@
 
     setView(`
       <div class="page-head">
-        <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}</p></div>
+        <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}${archived.length ? ` · ${archived.length} pausiert` : ''}</p></div>
         <button class="btn-primary" id="btn-new-client" type="button">+ Neuer Klient</button>
       </div>
       ${clients.length ? '<div id="attention"></div>' : ''}
       ${clients.length ? coachDashboard(clients, queue, weightAutomation) : ''}
-      ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
+      ${clients.length ? `<div class="client-list">${cards}</div>` : archived.length ? '<div class="card empty-state"><p>Alle Klienten sind gerade pausiert.</p></div>' : `<div class="card empty-state">
         <p>Noch keine Klienten angelegt.</p>
         <p>Lade deinen ersten Klienten per Link ein – er legt sein Konto selbst an.</p></div>`}
+      ${archiveSection(archived)}
       <div id="invites-card"></div>
       <details class="push-section" ${pushOpen ? 'open' : ''}>
       <summary class="push-summary">
@@ -2676,7 +2702,95 @@
 
     mountInvites(document.getElementById('invites-card'));
     mountAttention(document.getElementById('attention'));
+    app.querySelectorAll('[data-unarchive]').forEach((b) => b.addEventListener('click', (e) => {
+      e.preventDefault();
+      unarchiveClient(Number(b.dataset.unarchive), b, () => renderCoachHome());
+    }));
     document.getElementById('btn-new-client').addEventListener('click', () => openNewClientDialog());
+  }
+
+  // ---- Archive (a client on a break) and deleting a client ----
+  const untilText = (c) => (c.archiveUntil ? `bis ${fmtDate(c.archiveUntil, { day: 'numeric', month: 'long' })}` : 'ohne Enddatum');
+
+  /** Coach home: paused clients, folded away so they are out of the daily to-dos. */
+  function archiveSection(list) {
+    if (!list.length) return '';
+    return `<details class="card archive-section">
+      <summary><span><strong>Archiv</strong> <span class="muted">· ${list.length} pausiert</span></span><span class="archive-chev" aria-hidden="true">›</span></summary>
+      <p class="muted small">Pausierte Klienten bekommen keine Erinnerungen und tauchen nicht in „Braucht Aufmerksamkeit“ und bei den Check-ins auf. Mit Enddatum sind sie an dem Tag automatisch zurück.</p>
+      <ul class="archive-list">${list.map((c) => `<li>
+        <a href="#/client/${c.id}" class="archive-who">${c.avatar ? `<img class="mini-avatar" src="${esc(c.avatar)}" alt="">` : ''}<span><strong>${esc(c.displayName)}</strong>
+          <span class="muted small">Pausiert ${esc(untilText(c))}${c.archiveNote ? ` · ${esc(c.archiveNote)}` : ''}${c.unreadMessages ? ` · 💬 ${c.unreadMessages} neu` : ''}</span></span></a>
+        <button type="button" class="btn-secondary btn-sm" data-unarchive="${c.id}">Reaktivieren</button>
+      </li>`).join('')}</ul>
+    </details>`;
+  }
+
+  async function unarchiveClient(id, btn, done) {
+    if (btn) btn.disabled = true;
+    try {
+      await api('PATCH', `/api/clients/${id}`, { archive: null });
+      toast('Klient ist wieder aktiv');
+      done();
+    } catch (err) {
+      toast(err.message, true);
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function openArchiveDialog(client, done) {
+    const opt = (days, label) => `<button type="button" class="chip" data-days="${days}">${label}</button>`;
+    openDialog(
+      `<h2>${esc(client.displayName)} pausieren</h2>
+       <p class="muted small">Für Urlaub, Verletzung oder eine Pause: keine Erinnerungen, nicht mehr in deinen To-dos. Alle Daten bleiben erhalten, ${esc(client.displayName.split(' ')[0])} kann die App weiter nutzen und dir schreiben.</p>
+       <div class="field"><label for="ar-until">Zurück am <span class="muted">(optional)</span></label>
+         <div class="chip-row">${opt(7, '1 Woche')}${opt(14, '2 Wochen')}${opt(30, '1 Monat')}${opt(0, 'Offen')}</div>
+         <input type="date" id="ar-until" name="until" min="${addDays(todayStr(), 1)}" max="${addDays(todayStr(), 366)}">
+         <div class="hint">Mit Datum ist der Klient an dem Tag automatisch wieder aktiv und du bekommst Bescheid.</div></div>
+       <div class="field"><label for="ar-note">Notiz für dich <span class="muted">(optional)</span></label>
+         <input id="ar-note" name="note" maxlength="200" placeholder="z. B. Urlaub, Knie-OP"></div>
+       <div class="dialog-actions">
+         <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+         <button type="submit" class="btn-primary">Pausieren</button>
+       </div>`,
+      async (f) => {
+        await api('PATCH', `/api/clients/${client.id}`, { archive: { until: f.until.value || null, note: f.note.value.trim() || null } });
+        toast(`${client.displayName} ist pausiert`);
+        done();
+      }
+    );
+    const f = dialog.querySelector('form');
+    f.querySelectorAll('[data-days]').forEach((b) => b.addEventListener('click', () => {
+      const n = Number(b.dataset.days);
+      f.until.value = n ? addDays(todayStr(), n) : '';
+      f.querySelectorAll('[data-days]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    }));
+  }
+
+  /** Irreversible: the coach types the client's name to confirm. */
+  function openDeleteClientDialog(client) {
+    openDialog(
+      `<h2>Klient löschen</h2>
+       <p>Das Konto von <strong>${esc(client.displayName)}</strong> und <strong>alle Daten</strong> – Einträge, Pläne, Trainings, Nachrichten, Check-ins – werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.</p>
+       <p class="muted small">Nur eine Pause? Dann lieber pausieren – da bleibt alles erhalten. Brauchst du Unterlagen, lade vorher den CSV-Export herunter.</p>
+       <div class="field"><label for="del-confirm">Zum Bestätigen den Namen eintippen: <strong>${esc(client.displayName)}</strong></label>
+         <input id="del-confirm" name="confirm" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+       <div class="dialog-actions">
+         <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+         <button type="submit" class="btn-danger" disabled>Endgültig löschen</button>
+       </div>`,
+      async (f) => {
+        if (f.confirm.value.trim().toLowerCase() !== client.displayName.trim().toLowerCase()) throw new Error('Der Name stimmt nicht überein');
+        await api('DELETE', `/api/clients/${client.id}`);
+        toast(`${client.displayName} wurde gelöscht`);
+        location.hash = '#/';
+      }
+    );
+    const f = dialog.querySelector('form');
+    const btn = f.querySelector('[type=submit]');
+    f.confirm.addEventListener('input', () => {
+      btn.disabled = f.confirm.value.trim().toLowerCase() !== client.displayName.trim().toLowerCase();
+    });
   }
 
   /** New client: invite by link (recommended) or create the login yourself. */
@@ -6663,8 +6777,15 @@
           <div class="row" style="gap:6px;margin-top:6px">${consentBadge(client)}${client.googleLinked ? `<span class="badge good" title="Schritte und Schlaf kommen automatisch">Google Health ✓${client.googleSyncAt ? ` · ${esc(relDay(client.googleSyncAt.slice(0, 10)))}` : ''}</span>` : ''}</div></div>
         <div class="row">
           <a class="btn btn-secondary" href="/api/entries.csv?userId=${id}">CSV exportieren</a>
+          ${client.archivedAt ? '' : '<button type="button" class="btn-secondary" data-archive-client>Pausieren</button>'}
+          <button type="button" class="btn-ghost danger-text" data-delete-client>Löschen</button>
         </div>
       </div>
+      ${client.archivedAt ? `<section class="card archive-banner" role="status">
+        <div><h2>⏸ Pausiert ${esc(untilText(client))}</h2>
+          <p class="small muted">Seit ${esc(fmtDate(client.archivedAt.slice(0, 10), { day: 'numeric', month: 'long' }))}${client.archiveNote ? ` · ${esc(client.archiveNote)}` : ''} · keine Erinnerungen, nicht in deinen To-dos.</p></div>
+        <button type="button" class="btn-primary" data-unarchive-client>Reaktivieren</button>
+      </section>` : ''}
       ${client.deletionRequestedAt ? `<section class="card deletion-banner" role="alert">
         <div><h2>Löschung beantragt</h2>
           <p class="small">${esc(client.displayName)} möchte, dass das Konto gelöscht wird – seit ${esc(fmtDate(client.deletionRequestedAt.slice(0, 10), { day: 'numeric', month: 'long' }))}.${client.deletionReason ? ` Grund: „${esc(client.deletionReason)}“` : ''}</p>

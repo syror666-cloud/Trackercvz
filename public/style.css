@@ -2569,3 +2569,23 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .resume-card { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; border-left: 4px solid var(--accent); margin-bottom: 14px; }
 .resume-card > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .resume-icon { font-size: 1.5rem; }
+
+/* archive: paused clients */
+.archive-section { margin-top: 18px; }
+.archive-section > summary { display: flex; justify-content: space-between; align-items: center; cursor: pointer; list-style: none; }
+.archive-section > summary::-webkit-details-marker { display: none; }
+.archive-chev { font-size: 1.4rem; line-height: 1; color: var(--muted); transform: rotate(90deg); transition: transform .2s; }
+.archive-section[open] .archive-chev { transform: rotate(-90deg); }
+.archive-section > p { margin: 10px 0 6px; }
+.archive-list { list-style: none; margin: 0; padding: 0; }
+.archive-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
+.archive-who { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; min-width: 0; }
+.archive-who > span { display: flex; flex-direction: column; min-width: 0; }
+.archive-banner { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-left: 4px solid var(--muted, #8a97a0); margin-bottom: 18px; }
+.archive-banner h2 { margin: 0 0 4px; }
+.archive-banner p { margin: 0; }
+dialog .chip-row { display: flex; margin: 0 0 8px; }
+dialog .chip[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent) !important; }
+.pause-note { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.pause-note > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.pause-note > span:first-child { font-size: 1.4rem; }
