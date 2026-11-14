@@ -170,7 +170,12 @@ test('training: unsaved workout input survives a reload and is cleared after sav
   assert.equal(await page.locator('[data-f="weight"]').first().inputValue(), '55');
   assert.equal(await page.locator('[data-f="reps"]').first().inputValue(), '12');
   await page.click('[data-save]');
-  await page.waitForTimeout(800);
+  // the summary with the numbers of this workout
+  await page.waitForSelector('.wo-sum-tiles');
+  assert.match(await page.locator('.wo-sum-tiles').innerText(), /660\s+kg bewegt/); // 55 kg × 12
+  await page.click('[data-nophoto]');
+  await page.waitForFunction(() => (document.querySelector('.wo-preview') || {}).src?.startsWith('blob:'));
+  await page.click('[data-done]');
   const set = db.prepare('SELECT weight, reps FROM workout_sets WHERE workout_id = (SELECT MAX(id) FROM workouts WHERE client_id = ?) ORDER BY id LIMIT 1').get(maxId);
   assert.deepEqual({ ...set }, { weight: 55, reps: 12 });
   const left = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('sot-workout-')));

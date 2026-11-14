@@ -162,22 +162,50 @@ function trainingRoutes({ db, notifier, HttpError, readBody, textField, numberFi
         }));
         return { name, key: exerciseKey(name), sets: sets.filter((s) => s.weight !== null || s.reps !== null) };
       });
+      const durationMin = numberField(body.durationMin, { name: 'Dauer', min: 1, max: 600, integer: true }) ?? null;
+      const existing = q.workout.get(client.id, date, dayId);
+      const exclude = existing ? existing.id : -1;
+      // before saving: best weight per exercise so far, and the last session of this training day
+      const bestBefore = new Map(parsed.map((e) => [e.key, db.prepare(
+        'SELECT MAX(s.weight) AS best FROM workout_sets s JOIN workouts w ON w.id = s.workout_id WHERE w.client_id = ? AND s.exercise_key = ? AND w.id <> ?'
+      ).get(client.id, e.key, exclude).best]));
+      const prevSession = db.prepare('SELECT id FROM workouts WHERE client_id = ? AND day_id = ? AND id <> ? AND date <= ? ORDER BY date DESC, id DESC LIMIT 1').get(client.id, dayId, exclude, date);
+      const prevVolume = prevSession
+        ? db.prepare('SELECT COALESCE(SUM(weight * reps), 0) AS v FROM workout_sets WHERE workout_id = ? AND weight IS NOT NULL AND reps IS NOT NULL').get(prevSession.id).v
+        : null;
+      let id;
       db.exec('BEGIN');
       try {
-        let w = q.workout.get(client.id, date, dayId);
-        const id = w ? w.id : Number(q.insertWorkout.run(client.id, date, dayId, dayName).lastInsertRowid);
-        if (w) q.renameWorkout.run(dayName, id);
+        id = existing ? existing.id : Number(q.insertWorkout.run(client.id, date, dayId, dayName).lastInsertRowid);
+        if (existing) q.renameWorkout.run(dayName, id);
         for (const e of parsed) {
           q.clearSets.run(id, e.key);
           e.sets.forEach((s, i) => q.insertSet.run(id, e.key, e.name, i + 1, s.weight, s.reps));
         }
+        if (durationMin !== null) db.prepare('UPDATE workouts SET duration_min = ? WHERE id = ?').run(durationMin, id);
         if (!q.countSets.get(id).n) q.deleteWorkout.run(id);
         db.exec('COMMIT');
       } catch (err) {
         db.exec('ROLLBACK');
         throw err;
       }
-      return planOf(client.id);
+      // the summary for the end-of-workout screen and the share picture
+      const allSets = parsed.flatMap((e) => e.sets);
+      const volume = Math.round(allSets.reduce((a, s) => a + (s.weight !== null && s.reps !== null ? s.weight * s.reps : 0), 0));
+      const prs = parsed.map((e) => {
+        const top = Math.max(...e.sets.map((s) => (s.weight === null ? -1 : s.weight)), -1);
+        const before = bestBefore.get(e.key);
+        return before !== null && before !== undefined && top > before ? { name: e.name, weight: top, previous: before } : null;
+      }).filter(Boolean);
+      const number = db.prepare('SELECT COUNT(*) AS n FROM workouts WHERE client_id = ? AND (date < ? OR (date = ? AND id <= ?))').get(client.id, date, date, id).n;
+      return {
+        ...planOf(client.id),
+        summary: {
+          date, dayName, durationMin, volume, prevVolume: prevVolume === null ? null : Math.round(prevVolume),
+          sets: allSets.length, reps: allSets.reduce((a, s) => a + (s.reps || 0), 0),
+          exercises: parsed.filter((e) => e.sets.length).length, prs, number,
+        },
+      };
     }],
 
     // Per exercise: one point per session with the heaviest set (and its reps)

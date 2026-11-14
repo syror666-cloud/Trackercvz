@@ -436,6 +436,8 @@ function migrate(db) {
   addColumns(db, 'users', [['deletion_requested_at', 'TEXT'], ['deletion_reason', 'TEXT']]);
   // archive: a client on a break (holiday, injury, pause) leaves the coach's to-dos; optional date of return
   addColumns(db, 'users', [['archived_at', 'TEXT'], ['archive_until', 'TEXT'], ['archive_note', 'TEXT']]);
+  // training: how long a workout took (from the app's timer), for the summary and the share picture
+  addColumns(db, 'workouts', [['duration_min', 'INTEGER']]);
   if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health
   db.exec('DROP TABLE IF EXISTS health_tokens');

@@ -1378,7 +1378,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; connect-src 'self' https://world.openfoodfacts.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'"
+      "default-src 'self'; connect-src 'self' https://world.openfoodfacts.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'"
     );
 
     const url = new URL(req.url, 'http://localhost');

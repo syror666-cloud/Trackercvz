@@ -194,6 +194,16 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-workout-summary', date: 'November 2026',
+      client: [
+        ['🏁', 'Zusammenfassung nach dem Training', 'Nach dem Speichern siehst du Dauer, bewegtes Gewicht, Sätze und neue Bestleistungen – und womit sich dein Gewicht vergleichen lässt (Kuh? Elefant? Linienbus?).'],
+        ['📸', 'Dein Trainings-Foto', 'Mach direkt ein Foto (Formcheck, Pump, Selfie) oder nimm eins aus der Galerie: Die App legt Logo und deine Zahlen darüber – zum Speichern oder Teilen. Das Bild entsteht nur auf deinem Handy.'],
+      ],
+      coach: [
+        ['🏁', 'Trainings-Zusammenfassung für Klienten', 'Klienten sehen nach jedem Training ihre Zahlen und können ein Foto mit StayOnTrack-Overlay teilen. Die Trainingsdauer wird jetzt mitgespeichert.'],
+      ],
+    },
+    {
       id: '2026-11-telegram', date: 'November 2026',
       client: [],
       coach: [
@@ -5631,6 +5641,359 @@
    * Training plan page. opts: { userId (coach only), base: hash of the page, coach: bool, clientName }.
    * Modes: setup (no plan yet) → edit → overview → workout; the history has its own hash (base + '/history').
    */
+  // ---- End of a workout: summary, and a share picture (photo + overlay) made on the device ----
+  const T = (s) => (window.I18N ? I18N.t(s) : s);
+  const LOC = () => (window.I18N ? I18N.locale : 'de-DE');
+  const fmtInt = (n) => Math.round(n).toLocaleString(LOC());
+  // fun: what the moved weight compares to
+  const WEIGHT_THINGS = [
+    ['🐕', 'ein Golden Retriever', 'Golden Retriever', 30],
+    ['🛵', 'ein Motorroller', 'Motorroller', 110],
+    ['🐻', 'ein Braunbär', 'Braunbären', 350],
+    ['🎹', 'ein Konzertflügel', 'Konzertflügel', 500],
+    ['🐄', 'eine Kuh', 'Kühe', 700],
+    ['🚗', 'ein Kleinwagen', 'Kleinwagen', 1000],
+    ['🦏', 'ein Nashorn', 'Nashörner', 2300],
+    ['🐘', 'ein Elefant', 'Elefanten', 5000],
+    ['🦖', 'ein T-Rex', 'T-Rex', 8000],
+    ['🚌', 'ein Linienbus', 'Linienbusse', 12000],
+    ['🐋', 'ein Pottwal', 'Pottwale', 40000],
+  ];
+  function weightThing(kg) {
+    if (!kg || kg < 30) return null;
+    let pick = WEIGHT_THINGS[0];
+    for (const t of WEIGHT_THINGS) if (kg >= t[3]) pick = t;
+    const n = kg / pick[3];
+    const text = n < 1.5 ? T(pick[1]) : `${n.toLocaleString(LOC(), { maximumFractionDigits: 1 })} ${T(pick[2])}`;
+    return { emoji: pick[0], text };
+  }
+
+  function summaryStats(s) {
+    const tiles = [];
+    if (s.durationMin) tiles.push([String(s.durationMin), s.durationMin === 1 ? 'Minute' : 'Minuten']);
+    tiles.push([fmtInt(s.volume), 'kg bewegt']);
+    tiles.push([String(s.sets), s.sets === 1 ? 'Satz' : 'Sätze']);
+    if (!s.durationMin) tiles.push([String(s.reps), 'Wiederholungen']);
+    return tiles;
+  }
+
+  /** The app logo, drawn as vectors (same shapes as logo.svg). */
+  function drawLogo(ctx, x, y, size) {
+    const k = size / 64;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+    ctx.fillStyle = '#002941';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 64, 64, 18);
+    ctx.fill();
+    ctx.strokeStyle = '#b6dfed';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    const a0 = (-10 * Math.PI) / 180;
+    ctx.beginPath();
+    ctx.arc(32, 32, 17, a0, a0 + 86.04 / 17);
+    ctx.stroke();
+    ctx.fillStyle = '#fd6e6e';
+    ctx.beginPath();
+    ctx.arc(44.02, 19.98, 5.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Picture: the photo (or a brand background) with logo, app name and the workout numbers on top. */
+  async function composeWorkoutPicture(s, img, variant) {
+    try {
+      await Promise.all(['700 64px "Space Grotesk"', '700 30px Inter', '600 30px Inter'].map((f) => document.fonts.load(f)));
+    } catch { /* system fonts then */ }
+    let W = 1080;
+    let H = 1350;
+    if (img) {
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      let k = Math.min(1, 2048 / Math.max(iw, ih));
+      if (Math.min(iw, ih) * k < 900) k = 900 / Math.min(iw, ih);
+      W = Math.round(iw * k);
+      H = Math.round(ih * k);
+    }
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    const u = Math.min(W, H) / 1080;
+    const pad = Math.round(60 * u);
+    if (img) {
+      ctx.drawImage(img, 0, 0, W, H);
+    } else {
+      const bg = ctx.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, '#0d3f5e');
+      bg.addColorStop(1, '#001a2b');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+      const glow = ctx.createRadialGradient(W * 0.8, H * 0.22, 0, W * 0.8, H * 0.22, W * 0.7);
+      glow.addColorStop(0, 'rgba(253,110,110,0.35)');
+      glow.addColorStop(1, 'rgba(253,110,110,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(182,223,237,0.12)';
+      ctx.lineWidth = 70 * u;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(W * 0.78, H * 0.3, W * 0.36, -0.2, -0.2 + 86.04 / 17);
+      ctx.stroke();
+    }
+    const font = (weight, size, family) => `${weight} ${Math.round(size)}px ${family === 'display' ? '"Space Grotesk"' : 'Inter'}, system-ui, sans-serif`;
+    const fit = (text, maxW, size, weight, family) => {
+      let sz = size;
+      ctx.font = font(weight, sz, family);
+      while (ctx.measureText(text).width > maxW && sz > 10) {
+        sz -= 2;
+        ctx.font = font(weight, sz, family);
+      }
+      return sz;
+    };
+    ctx.textBaseline = 'alphabetic';
+    // top: scrim, logo, name, date
+    const top = ctx.createLinearGradient(0, 0, 0, 260 * u);
+    top.addColorStop(0, 'rgba(0,20,33,0.55)');
+    top.addColorStop(1, 'rgba(0,20,33,0)');
+    ctx.fillStyle = top;
+    ctx.fillRect(0, 0, W, 260 * u);
+    const logo = 76 * u;
+    drawLogo(ctx, pad, pad, logo);
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 12 * u;
+    ctx.font = font(700, 44 * u, 'display');
+    ctx.fillText('StayOnTrack', pad + logo + 20 * u, pad + logo / 2 + 15 * u);
+    ctx.textAlign = 'right';
+    ctx.font = font(600, 28 * u);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillText(new Date(`${s.date}T12:00:00`).toLocaleDateString(LOC(), { day: 'numeric', month: 'short', year: 'numeric' }), W - pad, pad + logo / 2 + 10 * u);
+    ctx.textAlign = 'left';
+    ctx.shadowBlur = 0;
+
+    const stats = summaryStats(s).slice(0, 3);
+    if (variant === 'minimal') {
+      const line = [s.dayName, ...stats.map(([v, l]) => `${v} ${T(l)}`)].join('  ·  ');
+      const size = fit(line, W - pad * 2 - 56 * u, 32 * u, 700);
+      const h = size + 44 * u;
+      const w = ctx.measureText(line).width + 56 * u;
+      ctx.fillStyle = 'rgba(0,26,43,0.72)';
+      ctx.beginPath();
+      ctx.roundRect(pad, H - pad - h, w, h, h / 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(line, pad + 28 * u, H - pad - h / 2 + size * 0.36);
+      return c;
+    }
+    // full: big numbers at the bottom
+    const scrimH = Math.min(H * 0.62, 760 * u);
+    const bottom = ctx.createLinearGradient(0, H - scrimH, 0, H);
+    bottom.addColorStop(0, 'rgba(0,20,33,0)');
+    bottom.addColorStop(0.45, 'rgba(0,20,33,0.6)');
+    bottom.addColorStop(1, 'rgba(0,20,33,0.92)');
+    ctx.fillStyle = bottom;
+    ctx.fillRect(0, H - scrimH, W, scrimH);
+    let y = H - pad;
+    const thing = weightThing(s.volume);
+    if (thing) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      const line = `${thing.emoji}  ≈ ${thing.text}`;
+      fit(line, W - pad * 2, 28 * u, 600);
+      ctx.fillText(line, pad, y);
+      y -= 58 * u;
+    }
+    // columns sized by their content, one shared number size so they look even
+    const gap = 44 * u;
+    const avail = W - pad * 2 - gap * (stats.length - 1);
+    let numSize = 92 * u;
+    const widthsAt = (sz) => stats.map(([v, l]) => {
+      ctx.font = font(700, sz, 'display');
+      const a = ctx.measureText(v).width;
+      ctx.font = font(700, 24 * u);
+      return Math.max(a, ctx.measureText(T(l).toUpperCase()).width);
+    });
+    let widths = widthsAt(numSize);
+    while (widths.reduce((a, b) => a + b, 0) > avail && numSize > 30 * u) {
+      numSize -= 4 * u;
+      widths = widthsAt(numSize);
+    }
+    const spare = Math.max(0, avail - widths.reduce((a, b) => a + b, 0)) / stats.length;
+    let x = pad;
+    stats.forEach(([v, l], i) => {
+      const label = T(l).toUpperCase();
+      ctx.fillStyle = '#b6dfed';
+      fit(label, widths[i] + spare, 24 * u, 700);
+      ctx.fillText(label, x, y);
+      ctx.fillStyle = '#fff';
+      ctx.font = font(700, numSize, 'display');
+      ctx.fillText(v, x, y - 38 * u);
+      x += widths[i] + spare + gap;
+    });
+    y -= 38 * u + numSize + 34 * u;
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 2 * u;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(W - pad, y);
+    ctx.stroke();
+    y -= 34 * u;
+    ctx.fillStyle = '#fff';
+    fit(s.dayName, W - pad * 2, 68 * u, 700, 'display');
+    ctx.fillText(s.dayName, pad, y);
+    y -= 68 * u + 6 * u;
+    ctx.fillStyle = '#fd6e6e';
+    ctx.font = font(700, 26 * u);
+    ctx.fillText(`${T('TRAINING')} #${s.number}`, pad, y);
+    if (s.prs.length) {
+      const pr = s.prs[0];
+      const text = `🏆  ${T('Bestleistung')}: ${pr.name} ${pr.weight.toLocaleString(LOC())} kg${s.prs.length > 1 ? ` +${s.prs.length - 1}` : ''}`;
+      const size = fit(text, W - pad * 2 - 48 * u, 28 * u, 700);
+      const h = size + 30 * u;
+      y -= 36 * u + h;
+      ctx.fillStyle = '#fd6e6e';
+      ctx.beginPath();
+      ctx.roundRect(pad, y, ctx.measureText(text).width + 48 * u, h, h / 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(text, pad + 24 * u, y + h / 2 + size * 0.36);
+    }
+    return c;
+  }
+
+  /** After saving a workout: the numbers, a fun comparison, and the share picture. */
+  function openWorkoutSummary(s) {
+    const pr = s.prs.length > 0;
+    const heads = pr ? ['Neue Bestleistung! 🏆'] : ['Training geschafft! 💪', 'Stark gemacht! 💪', 'Erledigt – stark! 🔥'];
+    const head = heads[Math.floor(Math.random() * heads.length)];
+    let compare = '';
+    if (s.prevVolume) {
+      const pct = Math.round(((s.volume - s.prevVolume) / s.prevVolume) * 100);
+      compare = pct > 300 ? '📈 Deutlich mehr Gewicht bewegt als beim letzten Mal' : pct > 0 ? `📈 ${pct} % mehr Gewicht bewegt als beim letzten Mal`
+        : pct < 0 ? `${Math.abs(pct)} % weniger als beim letzten Mal – jeder Tag zählt.`
+          : 'Genauso viel wie beim letzten Mal – konstant stark.';
+    }
+    const thing = weightThing(s.volume);
+    let variant = 'full';
+    let photo = null;
+    let blob = null;
+    let url = null;
+    const close = () => dialog.close();
+    const freeUrl = () => {
+      if (url) URL.revokeObjectURL(url);
+      url = null;
+    };
+    dialog.className = 'wo-summary-dialog';
+    dialog.addEventListener('close', () => {
+      dialog.className = '';
+      freeUrl();
+      if (photo && photo.src.startsWith('blob:')) URL.revokeObjectURL(photo.src);
+    }, { once: true });
+
+    function drawSummary() {
+      dialog.innerHTML = `<div class="wo-sum">
+        <div class="wo-sum-burst" aria-hidden="true">${pr ? '🏆' : '💪'}</div>
+        <p class="wo-sum-eyebrow">Training #${s.number} · ${esc(s.dayName)}</p>
+        <h2>${esc(head)}</h2>
+        <div class="wo-sum-tiles">${summaryStats(s).map(([v, l]) => `<div><strong>${esc(v)}</strong><span>${esc(l)}</span></div>`).join('')}</div>
+        ${compare ? `<p class="wo-sum-line">${esc(compare)}</p>` : ''}
+        ${thing ? `<p class="wo-sum-line">${thing.emoji} Du hast heute so viel bewegt wie <strong>${esc(thing.text)}</strong>.</p>` : ''}
+        ${pr ? `<ul class="wo-sum-prs">${s.prs.map((p) => `<li>🏆 <strong>${esc(p.name)}</strong> ${esc(num(p.weight, 1))} kg <span class="muted">(vorher ${esc(num(p.previous, 1))} kg)</span></li>`).join('')}</ul>` : ''}
+        <div class="wo-sum-photo">
+          <p class="small muted">Halte den Moment fest – Formcheck, Pump oder Gym-Selfie. Das Bild mit deinen Zahlen entsteht nur auf deinem Gerät.</p>
+          <div class="wo-sum-actions">
+            <label class="btn btn-primary"><input type="file" accept="image/*" capture="environment" data-photo hidden>📸 Foto aufnehmen</label>
+            <label class="btn btn-secondary"><input type="file" accept="image/*" data-photo hidden>🖼 Aus Galerie</label>
+          </div>
+          <button type="button" class="link-btn" data-nophoto>Ohne Foto teilen</button>
+        </div>
+        <button type="button" class="btn-ghost btn-block" data-done>Fertig</button>
+      </div>`;
+      dialog.querySelector('[data-done]').addEventListener('click', close);
+      dialog.querySelectorAll('[data-photo]').forEach((inp) => inp.addEventListener('change', async () => {
+        const file = inp.files && inp.files[0];
+        if (!file) return;
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        try {
+          await img.decode();
+        } catch {
+          toast('Dieses Bild konnte nicht geöffnet werden', true);
+          return;
+        }
+        photo = img;
+        drawEditor();
+      }));
+      dialog.querySelector('[data-nophoto]').addEventListener('click', () => {
+        photo = null;
+        drawEditor();
+      });
+    }
+
+    async function render() {
+      const canvas = await composeWorkoutPicture(s, photo, variant);
+      blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.9));
+      freeUrl();
+      url = URL.createObjectURL(blob);
+      const img = dialog.querySelector('.wo-preview');
+      if (img) img.src = url;
+    }
+
+    function drawEditor() {
+      const fileName = `stayontrack-${s.date}-${String(s.dayName).toLowerCase().replace(/[^a-z0-9äöüß]+/gi, '-')}.jpg`;
+      const asFile = () => new File([blob], fileName, { type: 'image/jpeg' });
+      dialog.innerHTML = `<div class="wo-sum wo-editor">
+        <img class="wo-preview" alt="Vorschau deines Bildes mit Trainingsdaten">
+        <div class="seg-wide" role="radiogroup" aria-label="Overlay">
+          <label><input type="radio" name="wo-variant" value="full" ${variant === 'full' ? 'checked' : ''}><span>Alle Zahlen</span></label>
+          <label><input type="radio" name="wo-variant" value="minimal" ${variant === 'minimal' ? 'checked' : ''}><span>Dezent</span></label>
+        </div>
+        <div class="wo-sum-actions">
+          <button type="button" class="btn-primary" data-share>Teilen</button>
+          <button type="button" class="btn-secondary" data-save-pic>Speichern</button>
+        </div>
+        <div class="row-between">
+          <button type="button" class="link-btn" data-back-sum>← Zurück</button>
+          <button type="button" class="link-btn" data-done>Fertig</button>
+        </div>
+      </div>`;
+      dialog.querySelectorAll('input[name=wo-variant]').forEach((r) => r.addEventListener('change', () => {
+        variant = r.value;
+        render();
+      }));
+      dialog.querySelector('[data-back-sum]').addEventListener('click', drawSummary);
+      dialog.querySelector('[data-done]').addEventListener('click', close);
+      const download = () => {
+        if (!url) return;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.append(a);
+        a.click();
+        a.remove();
+      };
+      dialog.querySelector('[data-save-pic]').addEventListener('click', download);
+      dialog.querySelector('[data-share]').addEventListener('click', async () => {
+        if (!blob) return;
+        if (!(navigator.canShare && navigator.canShare({ files: [asFile()] }))) {
+          download();
+          toast('Bild gespeichert – teile es aus deinen Fotos.');
+          return;
+        }
+        try {
+          await navigator.share({ files: [asFile()], title: 'StayOnTrack' });
+        } catch (err) {
+          if (err && err.name !== 'AbortError') toast(err.message, true);
+        }
+      });
+      render().catch((err) => toast(err.message, true));
+    }
+
+    drawSummary();
+    if (!dialog.open) dialog.showModal();
+  }
+
   // A workout in progress is kept on the device (phones often reload a web app that was in the background).
   const WORKOUT_DRAFT_DAYS = 3;
   const workoutDraftKey = (userId) => `sot-workout-${me ? me.id : 0}-${userId || 'me'}`;
@@ -5900,10 +6263,11 @@
       });
       let woDate = draft && draft.date && draft.date <= todayStr() ? draft.date : todayStr();
       let touched = Boolean(draft);
+      const startedAt = (draft && draft.startedAt) || Date.now(); // for the duration in the summary
       // every change is kept on the device right away, so closing the app loses nothing
       const keep = () => {
         touched = true;
-        writeWorkoutDraft(draftKey, { dayId: d.id, dayName: d.name, date: woDate, rows: rows.map((r) => ({ name: r.name, sets: r.sets })) });
+        writeWorkoutDraft(draftKey, { dayId: d.id, dayName: d.name, date: woDate, startedAt, rows: rows.map((r) => ({ name: r.name, sets: r.sets })) });
       };
       const val = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
       function paint() {
@@ -5962,12 +6326,17 @@
               dayId: d.id,
               dayName: d.name,
               exercises: rows.map((r) => ({ name: r.name, sets: r.sets.map((s) => ({ weight: clean(s.weight), reps: clean(s.reps) })) })),
+              durationMin: opts.coach ? null : (() => {
+                const m = Math.round((Date.now() - startedAt) / 60000);
+                return m >= 1 && m <= 300 ? m : null; // a workout left open for hours has no meaningful duration
+              })(),
             });
             clearWorkoutDraft(draftKey);
             mode = 'overview';
             draw();
             window.scrollTo(0, 0);
-            savedHud('Training gespeichert', d.name);
+            if (!opts.coach && data.summary && data.summary.sets) openWorkoutSummary(data.summary);
+            else savedHud('Training gespeichert', d.name);
           } catch (err) {
             toast(err.message, true);
             btn.disabled = false;

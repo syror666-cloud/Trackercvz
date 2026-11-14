@@ -686,6 +686,49 @@ Tippe in Telegram auf „Starten“ – diese Seite merkt es von selbst.|Tap “
 Telegram trennen? Du bekommst dort keine Benachrichtigungen mehr.|Disconnect Telegram? You will no longer get notifications there.|¿Desconectar Telegram? Ya no recibirás notificaciones allí.|Scollegare Telegram? Non riceverai più notifiche lì.
 aktiv (Claude Haiku) – Klientennamen gehen nicht an die KI|active (Claude Haiku) – client names are never sent to the AI|activo (Claude Haiku): los nombres de los clientes no se envían a la IA|attivo (Claude Haiku): i nomi dei clienti non vengono inviati all'IA
 aus – ANTHROPIC_API_KEY fehlt|off – ANTHROPIC_API_KEY missing|desactivado: falta ANTHROPIC_API_KEY|disattivato: manca ANTHROPIC_API_KEY
+Training geschafft! 💪|Workout done! 💪|¡Entrenamiento completado! 💪|Allenamento completato! 💪
+Stark gemacht! 💪|Strong work! 💪|¡Muy bien hecho! 💪|Ottimo lavoro! 💪
+Erledigt – stark! 🔥|Done – strong! 🔥|¡Hecho, genial! 🔥|Fatto, grande! 🔥
+Neue Bestleistung! 🏆|New personal best! 🏆|¡Nuevo récord personal! 🏆|Nuovo record personale! 🏆
+Minuten|minutes|minutos|minuti
+Minute|minute|minuto|minuto
+kg bewegt|kg moved|kg movidos|kg sollevati
+Wiederholungen|reps|repeticiones|ripetizioni
+Bestleistung|Personal best|Récord personal|Record personale
+TRAINING|WORKOUT|ENTRENAMIENTO|ALLENAMENTO
+Halte den Moment fest – Formcheck, Pump oder Gym-Selfie. Das Bild mit deinen Zahlen entsteht nur auf deinem Gerät.|Capture the moment – form check, pump or gym selfie. The picture with your numbers is made only on your device.|Captura el momento: revisión de técnica, pump o selfie en el gym. La imagen con tus datos se crea solo en tu dispositivo.|Cattura il momento: controllo della tecnica, pump o selfie in palestra. L'immagine con i tuoi dati viene creata solo sul tuo dispositivo.
+📸 Foto aufnehmen|📸 Take photo|📸 Hacer foto|📸 Scatta foto
+🖼 Aus Galerie|🖼 From gallery|🖼 De la galería|🖼 Dalla galleria
+Ohne Foto teilen|Share without photo|Compartir sin foto|Condividi senza foto
+Alle Zahlen|All numbers|Todos los datos|Tutti i dati
+Dezent|Subtle|Discreto|Discreto
+← Zurück|← Back|← Atrás|← Indietro
+Bild gespeichert – teile es aus deinen Fotos.|Picture saved – share it from your photos.|Imagen guardada: compártela desde tus fotos.|Immagine salvata: condividila dalle tue foto.
+Dieses Bild konnte nicht geöffnet werden|This picture could not be opened|No se pudo abrir esta imagen|Impossibile aprire questa immagine
+Genauso viel wie beim letzten Mal – konstant stark.|Exactly as much as last time – consistently strong.|Igual que la última vez: constancia pura.|Esattamente come l'ultima volta: costanza pura.
+📈 Deutlich mehr Gewicht bewegt als beim letzten Mal|📈 Much more weight moved than last time|📈 Mucho más peso movido que la última vez|📈 Molto più peso sollevato dell'ultima volta
+ein Golden Retriever|a golden retriever|un golden retriever|un golden retriever
+Golden Retriever|golden retrievers|golden retrievers|golden retriever
+ein Motorroller|a scooter|una moto|uno scooter
+Motorroller|scooters|motos|scooter
+ein Braunbär|a brown bear|un oso pardo|un orso bruno
+Braunbären|brown bears|osos pardos|orsi bruni
+ein Konzertflügel|a grand piano|un piano de cola|un pianoforte a coda
+Konzertflügel|grand pianos|pianos de cola|pianoforti a coda
+eine Kuh|a cow|una vaca|una mucca
+Kühe|cows|vacas|mucche
+ein Kleinwagen|a small car|un coche pequeño|un'utilitaria
+Kleinwagen|small cars|coches pequeños|utilitarie
+ein Nashorn|a rhino|un rinoceronte|un rinoceronte
+Nashörner|rhinos|rinocerontes|rinoceronti
+ein Elefant|an elephant|un elefante|un elefante
+Elefanten|elephants|elefantes|elefanti
+ein T-Rex|a T. rex|un T-Rex|un T-Rex
+T-Rex|T. rexes|T-Rex|T-Rex
+ein Linienbus|a city bus|un autobús|un autobus
+Linienbusse|city buses|autobuses|autobus
+ein Pottwal|a sperm whale|un cachalote|un capodoglio
+Pottwale|sperm whales|cachalotes|capodogli
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -769,6 +812,9 @@ noch nie|never|nunca|mai
     [/^· (\d+) pausiert$/, W(0, (m) => `· ${m[1]} paused`, (m) => `· ${m[1]} en pausa`, (m) => `· ${m[1]} in pausa`)],
     [/^Coaching pausiert bis (.+)$/, W(0, (m) => `Coaching paused until ${m[1]}`, (m) => `Coaching en pausa hasta ${m[1]}`, (m) => `Coaching in pausa fino al ${m[1]}`)],
     [/^Zum Bestätigen den Namen eintippen: (.+)$/, W(0, (m) => `Type the name to confirm: ${m[1]}`, (m) => `Escribe el nombre para confirmar: ${m[1]}`, (m) => `Digita il nome per confermare: ${m[1]}`)],
+    [/^📈 (\d+) % mehr Gewicht bewegt als beim letzten Mal$/, W(0, (m) => `📈 ${m[1]} % more weight moved than last time`, (m) => `📈 ${m[1]} % más peso movido que la última vez`, (m) => `📈 ${m[1]} % di peso in più rispetto all'ultima volta`)],
+    [/^(\d+) % weniger als beim letzten Mal – jeder Tag zählt\.$/, W(0, (m) => `${m[1]} % less than last time – every day counts.`, (m) => `${m[1]} % menos que la última vez: cada día cuenta.`, (m) => `${m[1]} % in meno dell'ultima volta: ogni giorno conta.`)],
+    [/^Training #(\d+) · (.+)$/, W(0, (m) => `Workout #${m[1]} · ${m[2]}`, (m) => `Entrenamiento #${m[1]} · ${m[2]}`, (m) => `Allenamento #${m[1]} · ${m[2]}`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

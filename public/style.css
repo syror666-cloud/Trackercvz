@@ -2593,3 +2593,25 @@ dialog .chip[aria-pressed="true"] { background: var(--accent); color: #fff; bord
 /* Telegram setup steps */
 .tg-steps { margin: 4px 0 12px; padding-left: 20px; }
 .tg-steps li { margin: 4px 0; }
+
+/* end of workout: summary + share picture */
+dialog.wo-summary-dialog { width: min(460px, calc(100vw - 24px)); padding: 26px 22px 18px; border-radius: 24px; }
+.wo-sum { display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.wo-sum h2 { margin: 0; font-size: 1.6rem; }
+.wo-sum-burst { font-size: 3rem; line-height: 1; animation: wo-pop 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+@keyframes wo-pop { from { transform: scale(0.2) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.wo-sum-eyebrow { margin: 0; color: var(--accent); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.wo-sum-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0; }
+.wo-sum-tiles > div { background: var(--surface-2, rgba(0,41,65,0.06)); border-radius: 16px; padding: 12px 6px; display: flex; flex-direction: column; gap: 2px; }
+.wo-sum-tiles strong { font-family: var(--font-display); font-size: 1.55rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.wo-sum-tiles span { font-size: 0.75rem; color: var(--muted); }
+.wo-sum-line { margin: 0; font-size: 0.95rem; }
+.wo-sum-prs { list-style: none; margin: 0; padding: 10px 12px; border-radius: 14px; background: rgba(253,110,110,0.12); text-align: left; font-size: 0.92rem; }
+.wo-sum-prs li + li { margin-top: 4px; }
+.wo-sum-photo { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.wo-sum-photo p { margin: 0; }
+.wo-sum-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+.wo-sum-actions .btn, .wo-sum-actions button { justify-content: center; text-align: center; cursor: pointer; }
+.wo-preview { width: 100%; max-height: 56vh; object-fit: contain; border-radius: 16px; background: #001a2b; min-height: 200px; }
+.wo-editor .row-between { width: 100%; }
+@media (prefers-reduced-motion: reduce) { .wo-sum-burst { animation: none; } }
