@@ -15,7 +15,7 @@ const de = (v, d = 1) => Number(v).toLocaleString('de-DE', { minimumFractionDigi
 
 function attentionRoutes({ db, requireCoach, localDate, notifier }) {
   const q = {
-    clients: db.prepare("SELECT id, display_name, category, created_at, avatar IS NOT NULL AS has_avatar, avatar_updated FROM users WHERE role = 'client'"),
+    clients: db.prepare("SELECT id, display_name, category, created_at, deletion_requested_at, avatar IS NOT NULL AS has_avatar, avatar_updated FROM users WHERE role = 'client'"),
     entries: db.prepare('SELECT date, weight, steps, calories_ok FROM entries WHERE user_id = ? AND date >= ? ORDER BY date'),
     lastEntry: db.prepare('SELECT MAX(date) AS d FROM entries WHERE user_id = ?'),
     goals: db.prepare('SELECT target_weight, steps_goal FROM goals WHERE user_id = ?'),
@@ -34,6 +34,12 @@ function attentionRoutes({ db, requireCoach, localDate, notifier }) {
     const last7 = inRange(addDays(today, -6), today);
     const prev7 = inRange(addDays(today, -13), addDays(today, -7));
     const g = q.goals.get(c.id) || {};
+
+    // 0. the client asked for their account to be deleted (GDPR: answer within a month)
+    if (c.deletion_requested_at) {
+      const d = Math.floor(hoursSince(c.deletion_requested_at, now) / 24);
+      add('deletion', 6, `Möchte das Konto löschen lassen${d ? ` (seit ${d} ${d === 1 ? 'Tag' : 'Tagen'})` : ''}`, 'high');
+    }
 
     // 1. going quiet
     const last = q.lastEntry.get(c.id).d;

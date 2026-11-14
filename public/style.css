@@ -2559,3 +2559,7 @@ button.diary-item:focus-visible { outline: 2px solid var(--accent); outline-offs
 .att-reason.r-high { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); }
 .att-reason.r-medium { background: color-mix(in srgb, #e8a33a 16%, transparent); color: var(--warn); }
 .att-chev { color: var(--muted); font-size: 1.4rem; }
+.soft-rule { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+.deletion-banner { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-left: 4px solid var(--bad); margin-bottom: 18px; }
+.deletion-banner h2 { margin: 0 0 4px; color: var(--bad); }
+.deletion-banner p { margin: 0 0 4px; }

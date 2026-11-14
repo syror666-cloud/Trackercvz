@@ -194,6 +194,18 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-invites-attention', date: 'November 2026',
+      client: [
+        ['🗂️', 'Deine Daten in deiner Hand', 'Unter Einstellungen → „Konto & Daten“ lädst du alle deine Daten herunter oder beantragst die Löschung deines Kontos.'],
+      ],
+      coach: [
+        ['✉️', 'Klienten per Link einladen', '„+ Neuer Klient“ → „Per Link einladen“: Dein Klient legt Benutzername und Passwort selbst an – mit Adresse kommt die Einladung per Mail. Offene Einladungen siehst du auf der Startseite.'],
+        ['👋', 'Onboarding', 'Neue Klienten legen beim ersten Login ein eigenes Passwort fest und bekommen eine kurze Tour mit E-Mail, Mitteilungen und Google Health.'],
+        ['🚦', 'Braucht Aufmerksamkeit', 'Ganz oben auf der Startseite: wer dich gerade am meisten braucht – mit Gründen wie „Seit 5 Tagen kein Eintrag“ oder „Gewicht entgegen dem Ziel“.'],
+        ['🗂️', 'Datenschutz-Selbstbedienung', 'Klienten laden ihre Daten selbst herunter und können die Löschung beantragen – du bekommst Bescheid und löschst mit einem Klick.'],
+      ],
+    },
+    {
       id: '2026-11-backup', date: 'November 2026',
       client: [],
       coach: [
@@ -613,6 +625,23 @@
   }
 
   window.addEventListener('hashchange', route);
+
+  // coach: delete a client who asked for it (banner on every tab of the client page)
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-delete-now]');
+    if (!b) return;
+    const m = location.hash.match(/^#\/client\/(\d+)/);
+    if (!m || !confirm('Konto und alle Daten dieses Klienten endgültig löschen? Das lässt sich nicht rückgängig machen.')) return;
+    b.disabled = true;
+    try {
+      await api('DELETE', `/api/clients/${m[1]}`);
+      toast('Konto gelöscht');
+      location.hash = '#/';
+    } catch (err) {
+      toast(err.message, true);
+      b.disabled = false;
+    }
+  });
 
   const avatarBtn = document.getElementById('avatar-btn');
   const userMenu = document.getElementById('user-menu');
@@ -2291,6 +2320,40 @@
     draw(false);
   }
 
+  /** Client: download own data, ask for the account to be deleted (or withdraw that). */
+  function mountDataCard(root) {
+    const draw = () => {
+      const req = me.deletionRequestedAt;
+      root.innerHTML = `
+        <h2 style="margin-bottom:8px">Konto & Daten</h2>
+        <p class="muted small">Du kannst jederzeit alle Daten herunterladen, die StayOnTrack über dich speichert. Mehr in der <a href="/datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a>.</p>
+        <a class="btn btn-secondary btn-sm" href="/api/me/export" download>Meine Daten herunterladen</a>
+        <hr class="soft-rule">
+        ${req ? `<p class="small"><strong>Löschung beantragt</strong> am ${esc(fmtDate(req.slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' }))}. Dein Coach löscht dein Konto und meldet sich bei Fragen.</p>
+            <button type="button" class="btn-ghost btn-sm" data-withdraw>Antrag zurückziehen</button>`
+          : `<p class="muted small">Du möchtest dein Konto und alle Daten löschen lassen? Dein Coach bekommt Bescheid und löscht es.</p>
+            <button type="button" class="btn-ghost btn-sm danger-text" data-request>Konto löschen beantragen</button>`}`;
+      const rq = root.querySelector('[data-request]');
+      if (rq) rq.addEventListener('click', () => openDialog(`
+        <h2>Konto löschen beantragen</h2>
+        <p class="muted small">Dein Coach löscht dann dein Konto mit allen Einträgen, Plänen, Nachrichten und Medaillen. Das lässt sich nicht rückgängig machen. Lade vorher deine Daten herunter, wenn du sie behalten möchtest.</p>
+        <div class="field"><label for="del-reason">Grund <span class="muted">(optional)</span></label><textarea id="del-reason" name="reason" rows="3" maxlength="500"></textarea></div>
+        <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-danger">Löschung beantragen</button></div>`,
+      async (f) => {
+        me = (await api('POST', '/api/me/deletion-request', { reason: f.reason.value })).user;
+        toast('Antrag gesendet – dein Coach meldet sich.');
+        draw();
+      }));
+      const wd = root.querySelector('[data-withdraw]');
+      if (wd) wd.addEventListener('click', async () => {
+        me = (await api('DELETE', '/api/me/deletion-request')).user;
+        toast('Antrag zurückgezogen');
+        draw();
+      });
+    };
+    draw();
+  }
+
   // ---------- client: settings (push + appearance) ----------
   async function renderClientSettings(sub) {
     setView(`
@@ -2299,7 +2362,9 @@
         <section class="card" id="google-card"></section>
         <section class="card" id="push-card"><p class="muted">Lade…</p></section>
         <section class="card" id="prefs-card"></section>
+        <section class="card" id="data-card"></section>
       </div>`);
+    mountDataCard(document.getElementById('data-card'));
     mountGoogleCard(document.getElementById('google-card'));
     // back from Google: show the result once, then clean up the address
     if (sub) {
@@ -6517,6 +6582,12 @@
           <a class="btn btn-secondary" href="/api/entries.csv?userId=${id}">CSV exportieren</a>
         </div>
       </div>
+      ${client.deletionRequestedAt ? `<section class="card deletion-banner" role="alert">
+        <div><h2>Löschung beantragt</h2>
+          <p class="small">${esc(client.displayName)} möchte, dass das Konto gelöscht wird – seit ${esc(fmtDate(client.deletionRequestedAt.slice(0, 10), { day: 'numeric', month: 'long' }))}.${client.deletionReason ? ` Grund: „${esc(client.deletionReason)}“` : ''}</p>
+          <p class="small muted">Nach der DSGVO solltest du innerhalb eines Monats löschen. Brauchst du Unterlagen, lade vorher den CSV-Export herunter.</p></div>
+        <button type="button" class="btn-danger" data-delete-now>Konto endgültig löschen</button>
+      </section>` : ''}
       <nav class="tabs" aria-label="Bereiche">
         <a href="#/client/${id}"${tab === 'overview' ? ' aria-current="page"' : ''}>Übersicht</a>
         <a href="#/client/${id}/nutrition"${tab === 'nutrition' ? ' aria-current="page"' : ''}>Ernährungsplan${

@@ -418,6 +418,7 @@ function migrate(db) {
   // onboarding: start passwords from the coach must be replaced; existing accounts count as onboarded
   const hadOnboarding = db.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'onboarded_at'").get();
   addColumns(db, 'users', [['must_change_password', 'INTEGER NOT NULL DEFAULT 0'], ['onboarded_at', 'TEXT']]);
+  addColumns(db, 'users', [['deletion_requested_at', 'TEXT'], ['deletion_reason', 'TEXT']]);
   if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health
   db.exec('DROP TABLE IF EXISTS health_tokens');

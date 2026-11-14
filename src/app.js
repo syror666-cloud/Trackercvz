@@ -23,6 +23,7 @@ const { googleHealth } = require('./google-health');
 const { legalHandler } = require('./legal');
 const { inviteRoutes } = require('./invites');
 const { attentionRoutes } = require('./attention');
+const { privacyRoutes } = require('./privacy');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -260,6 +261,7 @@ const publicUser = (u) => ({
   id: u.id, username: u.username, displayName: u.display_name, role: u.role, avatar: avatarUrl(u), prefs: prefsOf(u),
   email: u.email || null, emailVerified: Boolean(u.email_verified), h2hVisible: Boolean(u.h2h_visible),
   mustChangePassword: Boolean(u.must_change_password), onboarded: Boolean(u.onboarded_at) || u.role === 'coach',
+  deletionRequestedAt: u.deletion_requested_at || null,
 });
 
 /** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
@@ -307,7 +309,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     setCategory: db.prepare('UPDATE users SET category = ? WHERE id = ?'),
     deleteUser: db.prepare("DELETE FROM users WHERE id = ? AND role = 'client'"),
     clients: db.prepare(
-      `SELECT u.id, u.username, u.display_name, u.email, u.email_verified, u.created_at, u.category, u.avatar IS NOT NULL AS has_avatar, u.avatar_updated,
+      `SELECT u.id, u.username, u.display_name, u.email, u.email_verified, u.deletion_requested_at, u.deletion_reason, u.created_at, u.category, u.avatar IS NOT NULL AS has_avatar, u.avatar_updated,
          (SELECT MAX(date) FROM entries e WHERE e.user_id = u.id) AS last_entry,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date DESC LIMIT 1) AS last_weight,
          (SELECT weight FROM entries e WHERE e.user_id = u.id AND weight IS NOT NULL ORDER BY date ASC LIMIT 1) AS first_weight,
@@ -753,6 +755,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
           displayName: r.display_name,
           email: r.email || null,
           emailVerified: Boolean(r.email_verified),
+          deletionRequestedAt: r.deletion_requested_at || null,
+          deletionReason: r.deletion_reason || null,
           category: r.category,
           createdAt: r.created_at,
           lastEntry: r.last_entry,
@@ -1292,7 +1296,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       }],
     );
   }
-  routes.push(...attentionRoutes(deps), ...inviteRoutes({
+  routes.push(...privacyRoutes({ ...deps, publicUser }), ...attentionRoutes(deps), ...inviteRoutes({
     ...deps, mailer, appUrl, clientIp, validateUsername, validatePassword, startSession, setEmail: mail.setEmail,
   }), ...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 

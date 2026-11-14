@@ -617,6 +617,46 @@ Gesichert|Backed up|Copiado|Salvato
 Letzte|Last|Última|Ultimo
 Automatisch|Automatic|Automático|Automatico
 Verschlüsselt|Encrypted|Cifrado|Cifrato
+Neuer Klient|New client|Nuevo cliente|Nuovo cliente
+Per Link einladen|Invite by link|Invitar por enlace|Invita con link
+Zugang selbst anlegen|Create login yourself|Crear acceso tú mismo|Crea l'accesso tu
+Einladen|Invite|Invitar|Invita
+Anlegen|Create|Crear|Crea
+Einladungslink|Invitation link|Enlace de invitación|Link di invito
+Link kopieren|Copy link|Copiar enlace|Copia link
+Link kopiert|Link copied|Enlace copiado|Link copiato
+Teilen|Share|Compartir|Condividi
+Fertig|Done|Listo|Fatto
+Offene Einladungen|Open invitations|Invitaciones abiertas|Inviti aperti
+Neuer Link|New link|Nuevo enlace|Nuovo link
+Einladung zurückgezogen|Invitation withdrawn|Invitación retirada|Invito ritirato
+Einladung nicht gültig|Invitation not valid|Invitación no válida|Invito non valido
+Konto anlegen|Create account|Crear cuenta|Crea account
+Leg dein eigenes Passwort fest|Set your own password|Elige tu propia contraseña|Imposta la tua password
+Überspringen|Skip|Omitir|Salta
+Los geht's|Let's go|Vamos|Andiamo
+Mitteilungen erlauben|Allow notifications|Permitir notificaciones|Consenti notifiche
+Alles bereit!|All set!|¡Todo listo!|Tutto pronto!
+Ersten Eintrag machen|Make your first entry|Haz tu primer registro|Fai la prima registrazione
+Deine E-Mail-Adresse|Your email address|Tu correo|Il tuo indirizzo e-mail
+Erinnerungen & Nachrichten|Reminders & messages|Recordatorios y mensajes|Promemoria e messaggi
+Schritte & Schlaf automatisch|Steps & sleep automatically|Pasos y sueño automáticos|Passi e sonno automatici
+Als App auf den Home-Bildschirm|Add the app to your home screen|Añade la app a la pantalla de inicio|Aggiungi l'app alla schermata Home
+Braucht Aufmerksamkeit|Needs attention|Necesita atención|Richiede attenzione
+Dringend|Urgent|Urgente|Urgente
+Bald|Soon|Pronto|Presto
+Im Blick|Watch|Vigilar|Da tenere d'occhio
+Alle im grünen Bereich.|All on track.|Todos en buen camino.|Tutti in linea.
+Weniger anzeigen|Show less|Mostrar menos|Mostra meno
+Konto & Daten|Account & data|Cuenta y datos|Account e dati
+Meine Daten herunterladen|Download my data|Descargar mis datos|Scarica i miei dati
+Konto löschen beantragen|Request account deletion|Solicitar eliminación de la cuenta|Richiedi l'eliminazione dell'account
+Löschung beantragen|Request deletion|Solicitar eliminación|Richiedi eliminazione
+Löschung beantragt|Deletion requested|Eliminación solicitada|Eliminazione richiesta
+Antrag zurückziehen|Withdraw request|Retirar solicitud|Ritira richiesta
+Antrag zurückgezogen|Request withdrawn|Solicitud retirada|Richiesta ritirata
+Konto endgültig löschen|Delete account permanently|Eliminar cuenta definitivamente|Elimina account definitivamente
+Konto gelöscht|Account deleted|Cuenta eliminada|Account eliminato
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -687,6 +727,11 @@ noch nie|never|nunca|mai
     [/^Per E-Mail an (.+)$/, W(0, (m) => `Email to ${m[1]}`, (m) => `Enviar a ${m[1]}`, (m) => `Invia a ${m[1]}`)],
     [/^(\d+) Tage Schritte · (\d+) Nächte Schlaf$/, W(0, (m) => `${m[1]} days of steps · ${m[2]} nights of sleep`, (m) => `${m[1]} días de pasos · ${m[2]} noches de sueño`, (m) => `${m[1]} giorni di passi · ${m[2]} notti di sonno`)],
     [/^Bis zu (\d) Medaillen für dein Profil – deine Head2Head-Gegner sehen sie\.$/, W(0, (m) => `Up to ${m[1]} medals for your profile – your Head2Head opponents see them.`, (m) => `Hasta ${m[1]} medallas para tu perfil – tus rivales de Head2Head las ven.`, (m) => `Fino a ${m[1]} medaglie per il profilo – i tuoi avversari Head2Head le vedono.`)],
+    [/^Willkommen, (.+)!$/, W(0, (m) => `Welcome, ${m[1]}!`, (m) => `¡Bienvenido/a, ${m[1]}!`, (m) => `Benvenuto/a, ${m[1]}!`)],
+    [/^Einladung von (.+)$/, W(0, (m) => `Invitation from ${m[1]}`, (m) => `Invitación de ${m[1]}`, (m) => `Invito da ${m[1]}`)],
+    [/^Einladung für (.+)$/, W(0, (m) => `Invitation for ${m[1]}`, (m) => `Invitación para ${m[1]}`, (m) => `Invito per ${m[1]}`)],
+    [/^(\d+) von (\d+) im grünen Bereich$/, W(0, (m) => `${m[1]} of ${m[2]} on track`, (m) => `${m[1]} de ${m[2]} en buen camino`, (m) => `${m[1]} di ${m[2]} in linea`)],
+    [/^Alle (\d+) anzeigen$/, W(0, (m) => `Show all ${m[1]}`, (m) => `Mostrar los ${m[1]}`, (m) => `Mostra tutti i ${m[1]}`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],
