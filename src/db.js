@@ -324,6 +324,21 @@ CREATE TABLE IF NOT EXISTS email_tokens (
 );
 CREATE INDEX IF NOT EXISTS email_tokens_user ON email_tokens (user_id, purpose);
 
+-- Invitation links for new clients (only the token's hash is stored).
+CREATE TABLE IF NOT EXISTS invites (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash   TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  email        TEXT,
+  created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  expires_at   INTEGER NOT NULL,
+  mailed_at    TEXT,
+  used_at      TEXT,
+  revoked_at   TEXT,
+  user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
 -- Google Health: encrypted refresh token per client, and one-time OAuth states (CSRF + PKCE).
 CREATE TABLE IF NOT EXISTS google_links (
   user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

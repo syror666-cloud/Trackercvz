@@ -133,7 +133,7 @@ function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer,
   }
 
   /** Sets (or removes) an account's address; a new address is unconfirmed and gets a confirmation mail. */
-  function setEmail(userId, value) {
+  function setEmail(userId, value, { quiet = false } = {}) {
     const email = normalizeEmail(value);
     const u = q.byId.get(userId);
     if (email) {
@@ -148,7 +148,7 @@ function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer,
       q.dropTokens.run(userId, 'reset');
     }
     // new address – or the same one, still unconfirmed: (again) a confirmation mail
-    const delivery = sendVerify(u, email);
+    const delivery = quiet ? null : sendVerify(u, email);
     return { changed: !same, verifySent: Boolean(delivery), delivery };
   }
 

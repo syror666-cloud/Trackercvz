@@ -21,6 +21,7 @@ const { h2hRoutes } = require('./h2h');
 const { reportRoutes } = require('./reports');
 const { googleHealth } = require('./google-health');
 const { legalHandler } = require('./legal');
+const { inviteRoutes } = require('./invites');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -1267,7 +1268,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       }],
     );
   }
-  routes.push(...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  routes.push(...inviteRoutes({
+    ...deps, mailer, appUrl, clientIp, validateUsername, validatePassword, startSession, setEmail: mail.setEmail,
+  }), ...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
   const lastSeenWritten = new Map();

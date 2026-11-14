@@ -503,6 +503,12 @@
     // links from e-mails work with or without being logged in
     const verify = location.hash.match(/^#\/verify\/([a-f0-9]{64})$/);
     if (verify) return renderVerifyEmail(verify[1]);
+    const invite = location.hash.match(/^#\/invite\/([A-Za-z0-9_-]{30,80})$/);
+    if (invite && !me) return renderInvite(invite[1]);
+    if (invite && me) {
+      history.replaceState(null, '', '#/');
+      toast('Du bist schon angemeldet. Zum Annehmen einer Einladung bitte erst abmelden.', true);
+    }
     if (!me) {
       topbar.hidden = true;
       clearInterval(unreadTimer);
@@ -2547,7 +2553,8 @@
       ${clients.length ? coachDashboard(clients, queue, weightAutomation) : ''}
       ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
         <p>Noch keine Klienten angelegt.</p>
-        <p>Lege einen Zugang an und gib die Zugangsdaten an deinen Klienten weiter.</p></div>`}
+        <p>Lade deinen ersten Klienten per Link ein – er legt sein Konto selbst an.</p></div>`}
+      <div id="invites-card"></div>
       <details class="push-section" ${pushOpen ? 'open' : ''}>
       <summary class="push-summary">
         <span><span class="push-title">Push-Benachrichtigungen</span>
@@ -2586,32 +2593,185 @@
       intro: 'Lass dich auf diesem Gerät benachrichtigen, wenn ein Klient dir schreibt.',
     }).catch(() => {});
 
-    document.getElementById('btn-new-client').addEventListener('click', () => {
-      const pw = randomPassword();
-      openDialog(
-        `<h2>Neuen Klienten anlegen</h2>
-         <div class="field"><label for="c-name">Name</label><input id="c-name" name="displayName" required placeholder="Max Mustermann"></div>
-         <div class="field"><label for="c-user">Benutzername</label><input id="c-user" name="username" autocapitalize="none" required placeholder="max">
+    mountInvites(document.getElementById('invites-card'));
+    document.getElementById('btn-new-client').addEventListener('click', () => openNewClientDialog());
+  }
+
+  /** New client: invite by link (recommended) or create the login yourself. */
+  function openNewClientDialog() {
+    const pw = randomPassword();
+    openDialog(
+      `<h2>Neuer Klient</h2>
+       <div class="seg-wide" role="radiogroup" aria-label="Art">
+         <label><input type="radio" name="mode" value="invite" checked><span>Per Link einladen</span></label>
+         <label><input type="radio" name="mode" value="manual"><span>Zugang selbst anlegen</span></label>
+       </div>
+       <div class="field"><label for="c-name">Name</label><input id="c-name" name="displayName" required placeholder="Max Mustermann"></div>
+       <div class="field"><label for="c-mail">E-Mail <span class="muted">(optional)</span></label><input id="c-mail" name="email" type="email" autocomplete="off" placeholder="max@beispiel.de">
+         <div class="hint" data-mode-hint>Mit Adresse geht die Einladung direkt per Mail raus. Sonst bekommst du einen Link zum Teilen, z. B. per WhatsApp.</div></div>
+       <div data-manual hidden>
+         <div class="field"><label for="c-user">Benutzername</label><input id="c-user" name="username" autocapitalize="none" placeholder="max">
            <div class="hint">3–32 Zeichen: Buchstaben, Ziffern, . _ -</div></div>
-         <div class="field"><label for="c-mail">E-Mail <span class="muted">(optional)</span></label><input id="c-mail" name="email" type="email" autocomplete="off" placeholder="max@beispiel.de">
-           <div class="hint">Zum Anmelden und um ein vergessenes Passwort selbst zurückzusetzen. Der Klient bekommt einen Bestätigungslink.</div></div>
-         <div class="field"><label for="c-pw">Startpasswort</label><input id="c-pw" name="password" value="${pw}" required>
-           <div class="hint">Der Klient kann es nach dem ersten Login selbst ändern.</div></div>
-         <div class="dialog-actions">
-           <button type="button" class="btn-secondary" data-close>Abbrechen</button>
-           <button type="submit" class="btn-primary">Anlegen</button>
-         </div>`,
-        async (f) => {
-          const { client } = await api('POST', '/api/clients', {
-            displayName: f.displayName.value, username: f.username.value.trim(), password: f.password.value,
-            email: f.email.value.trim() || undefined,
-          });
-          showCredentials(client.displayName, client.username, f.password.value, () => {
-            location.hash = `#/client/${client.id}`;
-          });
-          return false;
+         <div class="field"><label for="c-pw">Startpasswort</label><input id="c-pw" name="password" value="${pw}">
+           <div class="hint">Der Klient legt beim ersten Login ein eigenes Passwort fest.</div></div>
+       </div>
+       <div class="dialog-actions">
+         <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+         <button type="submit" class="btn-primary" data-submit>Einladen</button>
+       </div>`,
+      async (f) => {
+        const mode = f.querySelector('input[name=mode]:checked').value;
+        if (mode === 'invite') {
+          const r = await api('POST', '/api/invites', { displayName: f.displayName.value, email: f.email.value.trim() || undefined });
+          setTimeout(() => showInviteLink(r), 0);
+          return;
         }
-      );
+        const { client } = await api('POST', '/api/clients', {
+          displayName: f.displayName.value, username: f.username.value.trim(), password: f.password.value,
+          email: f.email.value.trim() || undefined,
+        });
+        showCredentials(client.displayName, client.username, f.password.value, () => {
+          location.hash = `#/client/${client.id}`;
+        });
+        return false;
+      }
+    );
+    const f = dialog.querySelector('form');
+    const sync = () => {
+      const manual = f.querySelector('input[name=mode]:checked').value === 'manual';
+      f.querySelector('[data-manual]').hidden = !manual;
+      f.querySelector('[data-submit]').textContent = manual ? 'Anlegen' : 'Einladen';
+      f.querySelector('[data-mode-hint]').textContent = manual
+        ? 'Zum Anmelden und um ein vergessenes Passwort selbst zurückzusetzen. Der Klient bekommt einen Bestätigungslink.'
+        : 'Mit Adresse geht die Einladung direkt per Mail raus. Sonst bekommst du einen Link zum Teilen, z. B. per WhatsApp.';
+    };
+    f.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener('change', sync));
+  }
+
+  /** The invitation link: copy, share, or note that it went out by e-mail. */
+  function showInviteLink(r) {
+    const link = r.link || `${location.origin}/#/invite/${r.token}`;
+    const text = `Hallo ${r.invite.displayName.split(' ')[0]}, hier ist deine Einladung zu StayOnTrack – leg dein Konto in einer Minute an: ${link}`;
+    openDialog(
+      `<h2>Einladung für ${esc(r.invite.displayName)}</h2>
+       ${r.mailed ? `<p class="good small">✓ Per E-Mail an ${esc(r.invite.email)} gesendet.</p>` : r.mailError ? `<p class="bad small">E-Mail fehlgeschlagen: ${esc(r.mailError)} – schick den Link selbst.</p>` : ''}
+       <p class="muted small">Der Link gilt 14 Tage und funktioniert nur einmal. ${r.mailed ? 'Du kannst ihn zusätzlich selbst schicken.' : 'Schick ihn deinem Klienten, z. B. per WhatsApp oder SMS.'}</p>
+       <div class="field"><label for="inv-link">Einladungslink</label><input id="inv-link" readonly value="${esc(link)}"></div>
+       <div class="dialog-actions">
+         ${navigator.share ? '<button type="button" class="btn-secondary" data-share>Teilen</button>' : ''}
+         <button type="button" class="btn-secondary" data-copy>Link kopieren</button>
+         <button type="button" class="btn-primary" data-close>Fertig</button>
+       </div>`,
+      async () => {}
+    );
+    const inp = dialog.querySelector('#inv-link');
+    inp.addEventListener('focus', () => inp.select());
+    dialog.querySelector('[data-copy]').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        toast('Link kopiert');
+      } catch {
+        inp.select();
+        toast('Markiert – jetzt kopieren');
+      }
+    });
+    const sh = dialog.querySelector('[data-share]');
+    if (sh) sh.addEventListener('click', () => navigator.share({ title: 'Einladung zu StayOnTrack', text }).catch(() => {}));
+    dialog.addEventListener('close', () => { if (location.hash === '#/' || location.hash === '') route(); }, { once: true });
+  }
+
+  /** Coach home: open invitations with "new link" and "withdraw". */
+  async function mountInvites(root) {
+    if (!root) return;
+    let invites;
+    try {
+      ({ invites } = await api('GET', '/api/invites'));
+    } catch {
+      return;
+    }
+    if (!invites.length) {
+      root.innerHTML = '';
+      return;
+    }
+    root.innerHTML = `<section class="card invites-card">
+      <h2 style="margin-bottom:8px">Offene Einladungen</h2>
+      <ul class="invite-list">${invites.map((i) => `<li>
+        <span><strong>${esc(i.displayName)}</strong><span class="muted small">${i.email ? `${esc(i.email)} · ` : ''}gültig bis ${esc(fmtDate(i.expiresAt.slice(0, 10), { day: 'numeric', month: 'short' }))}</span></span>
+        <span class="row" style="gap:4px"><button type="button" class="btn-ghost btn-sm" data-renew="${i.id}">Neuer Link</button>
+          <button type="button" class="btn-ghost btn-sm danger-text" data-revoke="${i.id}" aria-label="Einladung für ${esc(i.displayName)} zurückziehen">Zurückziehen</button></span>
+      </li>`).join('')}</ul>
+    </section>`;
+    root.querySelectorAll('[data-renew]').forEach((b) => b.addEventListener('click', async () => {
+      try {
+        showInviteLink(await api('POST', `/api/invites/${b.dataset.renew}/renew`));
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }));
+    root.querySelectorAll('[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Einladung zurückziehen? Der Link funktioniert dann nicht mehr.')) return;
+      await api('DELETE', `/api/invites/${b.dataset.revoke}`);
+      toast('Einladung zurückgezogen');
+      mountInvites(root);
+    }));
+  }
+
+  /** Public page behind the invitation link: the client creates their own account. */
+  async function renderInvite(token) {
+    if (dialog.open) dialog.close();
+    topbar.hidden = true;
+    setView(LOADING);
+    let info;
+    try {
+      info = await api('GET', `/api/invite?token=${encodeURIComponent(token)}`);
+    } catch (err) {
+      setView(`<div class="login-wrap single"><div class="card login-card verify-card">
+        <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
+        <h2>Einladung nicht gültig</h2><p class="muted">${esc(err.message)}</p>
+        <a class="btn btn-primary btn-block" href="#/">Zur Anmeldung</a></div></div>`);
+      return;
+    }
+    setView(`
+      <div class="login-wrap single">
+        <form class="card login-card invite-card" id="invite-form" novalidate>
+          <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
+          <p class="eyebrow">Einladung von ${esc(info.coach)}</p>
+          <h2>Willkommen, ${esc(info.displayName.split(' ')[0])}!</h2>
+          <p class="muted small">Leg dein Konto an – damit hältst du Gewicht, Schritte, Schlaf und Ernährung fest, und ${esc(info.coach)} begleitet dich.</p>
+          <div class="field"><label for="iv-user">Benutzername</label>
+            <input id="iv-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(info.usernameSuggestion)}" required>
+            <div class="hint">Damit meldest du dich an. 3–32 Zeichen: Buchstaben, Ziffern, . _ -</div></div>
+          <div class="field"><label for="iv-pw">Passwort</label>
+            <input id="iv-pw" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mindestens 8 Zeichen</div></div>
+          <div class="field"><label for="iv-mail">E-Mail <span class="muted">(empfohlen)</span></label>
+            <input id="iv-mail" name="email" type="email" autocomplete="email" value="${esc(info.email || '')}">
+            <div class="hint">Zum Anmelden und um ein vergessenes Passwort selbst zurückzusetzen.</div></div>
+          <label class="check consent"><input type="checkbox" name="consent"> <span>Ich habe die <a href="/datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und bin einverstanden, dass meine Gesundheits- und Fitnessdaten für mein Coaching verarbeitet werden.</span></label>
+          <button class="btn-primary btn-block" type="submit">Konto anlegen</button>
+          <p class="error" hidden></p>
+        </form>
+      </div>`);
+    const form = document.getElementById('invite-form');
+    form.password.focus();
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = form.querySelector('.error');
+      err.hidden = true;
+      try {
+        if (!form.consent.checked) throw new Error('Bitte stimme der Datenschutzerklärung zu.');
+        const r = await api('POST', '/api/invite/accept', {
+          token, username: form.username.value.trim(), password: form.password.value, email: form.email.value.trim() || undefined, consent: true,
+        });
+        me = r.user;
+        whatsNewChecked = true; // a brand-new client gets the welcome tour, not old release notes
+        applyPrefs(me.prefs);
+        history.replaceState(null, '', '#/');
+        route();
+        if (r.emailNote) toast(r.emailNote, true);
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+      }
     });
   }
 
