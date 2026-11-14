@@ -110,7 +110,32 @@ function trainingRoutes({ db, notifier, HttpError, readBody, textField, numberFi
       .catch(() => {});
   }
 
+  // Rest timer: if the app is in the background when the break ends, a push says so. The app cancels it when it
+  // is open and rings itself; the push leaves 2 s later to give it the time.
+  const restTimers = new Map(); // userId -> timeout
+  const clearRest = (userId) => {
+    clearTimeout(restTimers.get(userId));
+    restTimers.delete(userId);
+  };
+
   return [
+    ['POST', /^\/api\/rest-timer$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const seconds = numberField((await readBody(ctx.req)).seconds, { name: 'Pause', min: 5, max: 900, integer: true });
+      if (!seconds) throw new HttpError(400, 'Pause fehlt');
+      clearRest(u.id);
+      const t = setTimeout(() => {
+        restTimers.delete(u.id);
+        notifier.sendToUsers([u.id], { title: '⏱ Pause vorbei', body: 'Weiter geht’s mit dem nächsten Satz 💪', url: '/#/training' }).catch(() => {});
+      }, (seconds + 2) * 1000);
+      if (t.unref) t.unref();
+      restTimers.set(u.id, t);
+      return { ok: true, endsAt: new Date(Date.now() + seconds * 1000).toISOString() };
+    }],
+    ['DELETE', /^\/api\/rest-timer$/, async (ctx) => {
+      clearRest(requireUser(ctx).id);
+      return { ok: true };
+    }],
     ['GET', /^\/api\/training$/, async (ctx) => planOf(targetClient(ctx).id)],
 
     // Default plan of a split (not saved until the plan is saved)

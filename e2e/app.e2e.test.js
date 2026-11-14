@@ -169,6 +169,12 @@ test('training: unsaved workout input survives a reload and is cleared after sav
   await page.waitForSelector('[data-f="weight"]');
   assert.equal(await page.locator('[data-f="weight"]').first().inputValue(), '55');
   assert.equal(await page.locator('[data-f="reps"]').first().inputValue(), '12');
+  // ✓ on a set starts the rest timer
+  await page.locator('[data-done-set]').first().click();
+  await page.waitForSelector('.rest-time strong');
+  assert.match(await page.locator('.rest-time strong').innerText(), /^1:(2|3)\d$/);
+  await page.click('[data-rest-skip]');
+  await page.waitForSelector('[data-rest-go]');
   await page.click('[data-save]');
   // the summary with the numbers of this workout
   await page.waitForSelector('.wo-sum-tiles');
@@ -178,6 +184,14 @@ test('training: unsaved workout input survives a reload and is cleared after sav
   await page.click('[data-done]');
   const set = db.prepare('SELECT weight, reps FROM workout_sets WHERE workout_id = (SELECT MAX(id) FROM workouts WHERE client_id = ?) ORDER BY id LIMIT 1').get(maxId);
   assert.deepEqual({ ...set }, { weight: 55, reps: 12 });
+  // the monthly recap opens as a story and closes with Escape
+  await page.waitForSelector('[data-recap]');
+  await page.click('[data-recap]');
+  await page.waitForSelector('.recap .rc-huge');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForSelector('.recap .rc-big');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.recap'));
   const left = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('sot-workout-')));
   assert.deepEqual(left, []);
   assert.deepEqual(errors, []);

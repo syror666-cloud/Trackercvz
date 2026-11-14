@@ -729,6 +729,63 @@ ein Linienbus|a city bus|un autobús|un autobus
 Linienbusse|city buses|autobuses|autobus
 ein Pottwal|a sperm whale|un cachalote|un capodoglio
 Pottwale|sperm whales|cachalotes|capodogli
+Pause starten|Start rest|Iniciar descanso|Avvia pausa
+Pause vorbei – nächster Satz!|Rest over – next set!|¡Descanso terminado, siguiente serie!|Pausa finita – prossima serie!
+nach jedem Satz automatisch|automatically after every set|automático tras cada serie|automatico dopo ogni serie
+Pause|Rest|Descanso|Pausa
+Monatsrückblick|Monthly recap|Resumen mensual|Riepilogo mensile
+Dein Monat bisher|Your month so far|Tu mes hasta ahora|Il tuo mese finora
+Dein Monatsrückblick|Your monthly recap|Tu resumen mensual|Il tuo riepilogo mensile
+Tippe rechts für weiter, links für zurück.|Tap right to continue, left to go back.|Toca a la derecha para seguir, a la izquierda para volver.|Tocca a destra per continuare, a sinistra per tornare.
+Du hast|You worked out|Has entrenado|Ti sei allenato
+trainiert|this month|este mes|questo mese
+Insgesamt bewegt|Moved in total|Movido en total|Sollevato in totale
+Deine Lieblingsübung|Your favourite exercise|Tu ejercicio favorito|Il tuo esercizio preferito
+neue Bestleistung|new personal best|nuevo récord personal|nuovo record personale
+neue Bestleistungen|new personal bests|nuevos récords personales|nuovi record personali
+Deine Schritte|Your steps|Tus pasos|I tuoi passi
+im Schnitt pro Nacht 😴|per night on average 😴|de media por noche 😴|in media a notte 😴
+Tage aktiv|days active|días activos|giorni attivi
+Trainings|Workouts|Entrenamientos|Allenamenti
+Bestleistungen|Personal bests|Récords|Record
+Ø Schritte|Avg. steps|Pasos medios|Passi medi
+Ø Schlaf (h)|Avg. sleep (h)|Sueño medio (h)|Sonno medio (h)
+aktive Tage|active days|días activos|giorni attivi
+Andere Monate|Other months|Otros meses|Altri mesi
+Noch keine Daten für einen Rückblick.|No data for a recap yet.|Aún no hay datos para un resumen.|Ancora nessun dato per un riepilogo.
+Trainings, Bestleistungen, Schritte – und welcher Typ du warst.|Workouts, personal bests, steps – and what type you were.|Entrenamientos, récords, pasos… y qué tipo fuiste.|Allenamenti, record, passi – e che tipo sei stato.
+MEIN MONAT|MY MONTH|MI MES|IL MIO MESE
+MEIN MONAT BISHER|MY MONTH SO FAR|MI MES HASTA AHORA|IL MIO MESE FINORA
+MEIN TYP|MY TYPE|MI TIPO|IL MIO TIPO
+Lieblingsübung|Favourite exercise|Ejercicio favorito|Esercizio preferito
+Januar|January|Enero|Gennaio
+Februar|February|Febrero|Febbraio
+März|March|Marzo|Marzo
+April|April|Abril|Aprile
+Mai|May|Mayo|Maggio
+Juni|June|Junio|Giugno
+Juli|July|Julio|Luglio
+August|August|Agosto|Agosto
+September|September|Septiembre|Settembre
+Oktober|October|Octubre|Ottobre
+November|November|Noviembre|Novembre
+Dezember|December|Diciembre|Dicembre
+Montag|Monday|Lunes|Lunedì
+Dienstag|Tuesday|Martes|Martedì
+Mittwoch|Wednesday|Miércoles|Mercoledì
+Donnerstag|Thursday|Jueves|Giovedì
+Freitag|Friday|Viernes|Venerdì
+Samstag|Saturday|Sábado|Sabato
+Sonntag|Sunday|Domingo|Domenica
+Der Rekordjäger|The Record Hunter|El cazarrécords|Il cacciatore di record
+Die Maschine|The Machine|La máquina|La macchina
+Der Frühaufsteher|The Early Bird|El madrugador|Il mattiniero
+Die Nachteule|The Night Owl|El búho nocturno|Il nottambulo
+Der Dauerläufer|The Walker|El caminante|Il camminatore
+Die Konstante|The Constant|El constante|Il costante
+Der Regenerationsprofi|The Recovery Pro|El experto en recuperación|Il re del recupero
+Der Schwerlastkran|The Heavy Lifter|La grúa|La gru
+Der Durchstarter|The Starter|El que arranca|Lo starter
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -815,6 +872,8 @@ noch nie|never|nunca|mai
     [/^📈 (\d+) % mehr Gewicht bewegt als beim letzten Mal$/, W(0, (m) => `📈 ${m[1]} % more weight moved than last time`, (m) => `📈 ${m[1]} % más peso movido que la última vez`, (m) => `📈 ${m[1]} % di peso in più rispetto all'ultima volta`)],
     [/^(\d+) % weniger als beim letzten Mal – jeder Tag zählt\.$/, W(0, (m) => `${m[1]} % less than last time – every day counts.`, (m) => `${m[1]} % menos que la última vez: cada día cuenta.`, (m) => `${m[1]} % in meno dell'ultima volta: ogni giorno conta.`)],
     [/^Training #(\d+) · (.+)$/, W(0, (m) => `Workout #${m[1]} · ${m[2]}`, (m) => `Entrenamiento #${m[1]} · ${m[2]}`, (m) => `Allenamento #${m[1]} · ${m[2]}`)],
+    [/^Dein (.+)-Rückblick ist da$/, W(0, (m) => `Your ${m[1]} recap is here`, (m) => `Tu resumen de ${m[1]} ya está aquí`, (m) => `Il tuo riepilogo di ${m[1]} è pronto`)],
+    [/^Dein Typ im (.+)$/, W(0, (m) => `Your type in ${m[1]}`, (m) => `Tu tipo en ${m[1]}`, (m) => `Il tuo tipo a ${m[1]}`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

@@ -194,6 +194,16 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-recap-rest', date: 'November 2026',
+      client: [
+        ['⏱', 'Pausen-Timer', 'Tipp im Training auf ✓ neben einem Satz: Die Pause läuft (60 s bis 3 min, ±15 s). Am Ende piept und vibriert die App – ist sie im Hintergrund, kommt eine Mitteilung.'],
+        ['🎬', 'Dein Monatsrückblick', 'Wie Wrapped, nur für dein Training: Trainings, bewegtes Gewicht, Lieblingsübung, Bestleistungen, Schritte, Schlaf und dein Typ des Monats – als Story zum Durchtippen und Teilen. Unter Training → „Monatsrückblick“ und Anfang jedes Monats auf der Startseite.'],
+      ],
+      coach: [
+        ['🎬', 'Monatsrückblick deiner Klienten', 'Im Trainingsplan eines Klienten findest du unten seinen Monatsrückblick. Klienten bekommen ihn Anfang jedes Monats auf der Startseite.'],
+      ],
+    },
+    {
       id: '2026-11-workout-summary', date: 'November 2026',
       client: [
         ['🏁', 'Zusammenfassung nach dem Training', 'Nach dem Speichern siehst du Dauer, bewegtes Gewicht, Sätze und neue Bestleistungen – und womit sich dein Gewicht vergleichen lässt (Kuh? Elefant? Linienbus?).'],
@@ -1335,6 +1345,7 @@
         <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p></div>
       </div>
       ${me.archivedAt ? `<div class="card pause-note" role="status"><span aria-hidden="true">⏸</span><span><strong>Coaching pausiert${me.archiveUntil ? ` bis ${esc(fmtDate(me.archiveUntil, { day: 'numeric', month: 'long' }))}` : ''}</strong><span class="muted small">Erinnerungen sind solange aus. Du kannst weiter eintragen und deinem Coach schreiben.</span></span></div>` : ''}
+      <div id="recap-card"></div>
       <div id="workout-resume"></div>
       <div id="push-prompt"></div>
       <div id="checkin-card"></div>
@@ -1610,6 +1621,7 @@
     drawToday();
     maybeShowPushPrompt(document.getElementById('push-prompt'));
     mountWorkoutResume(document.getElementById('workout-resume'));
+    mountRecapCard(document.getElementById('recap-card'));
     mountH2HHome(document.getElementById('h2h-home'));
     mountClientCheckin(document.getElementById('checkin-card'), async () => {
       const g = await api('GET', '/api/goals');
@@ -5641,6 +5653,556 @@
    * Training plan page. opts: { userId (coach only), base: hash of the page, coach: bool, clientName }.
    * Modes: setup (no plan yet) → edit → overview → workout; the history has its own hash (base + '/history').
    */
+  // ---- Rest timer between sets (kept on the device; a push rings if the app is in the background) ----
+  const REST_CHOICES = [60, 90, 120, 180];
+  const restStore = {
+    get(k, d) {
+      try {
+        const v = localStorage.getItem(k);
+        return v === null ? d : JSON.parse(v);
+      } catch {
+        return d;
+      }
+    },
+    set(k, v) {
+      try {
+        if (v === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, JSON.stringify(v));
+      } catch { /* ignore */ }
+    },
+  };
+  let restAudio = null;
+  function restBeep() {
+    try {
+      restAudio ||= new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = restAudio.currentTime;
+      [0, 0.22, 0.44].forEach((d, i) => {
+        const o = restAudio.createOscillator();
+        const g = restAudio.createGain();
+        o.frequency.value = i === 2 ? 1175 : 880;
+        g.gain.setValueAtTime(0.0001, t0 + d);
+        g.gain.exponentialRampToValueAtTime(0.25, t0 + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.18);
+        o.connect(g).connect(restAudio.destination);
+        o.start(t0 + d);
+        o.stop(t0 + d + 0.2);
+      });
+    } catch { /* no sound */ }
+  }
+  /** One timer per user; draws itself into `[data-rest-bar]` inside `root`. */
+  function createRestTimer(root) {
+    const key = `sot-rest-${me ? me.id : 0}`;
+    let dur = restStore.get('sot-rest-dur', 90);
+    let auto = restStore.get('sot-rest-auto', true);
+    let endAt = restStore.get(key, null);
+    let total = restStore.get(`${key}-total`, dur);
+    let tick = null;
+    const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    const serverStart = (sec) => api('POST', '/api/rest-timer', { seconds: Math.max(5, Math.round(sec)) }).catch(() => {});
+    const serverStop = () => api('DELETE', '/api/rest-timer').catch(() => {});
+    function save() {
+      restStore.set(key, endAt);
+      restStore.set(`${key}-total`, total);
+    }
+    function start(sec = dur) {
+      // unlock sound on this tap (iOS needs a user gesture)
+      try {
+        restAudio ||= new (window.AudioContext || window.webkitAudioContext)();
+        if (restAudio.state === 'suspended') restAudio.resume();
+      } catch { /* no sound */ }
+      total = sec;
+      endAt = Date.now() + sec * 1000;
+      save();
+      serverStart(sec);
+      run();
+    }
+    function stop(silent) {
+      endAt = null;
+      save();
+      clearInterval(tick);
+      tick = null;
+      if (!silent) serverStop();
+      paint();
+    }
+    function adjust(d) {
+      if (!endAt) return;
+      endAt = Math.max(Date.now() + 5000, endAt + d * 1000);
+      total = Math.max(total + d, 5);
+      save();
+      serverStart((endAt - Date.now()) / 1000);
+      paint();
+    }
+    function finish() {
+      endAt = null;
+      save();
+      clearInterval(tick);
+      tick = null;
+      if (document.visibilityState === 'visible') {
+        serverStop(); // we ring here, no push needed
+        restBeep();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
+        const bar = root.querySelector('[data-rest-bar]');
+        if (bar) {
+          bar.classList.add('rest-done');
+          setTimeout(() => bar.classList.remove('rest-done'), 2500);
+        }
+      }
+      paint(true);
+    }
+    function run() {
+      clearInterval(tick);
+      tick = setInterval(() => {
+        if (!endAt) return;
+        if (Date.now() >= endAt) finish();
+        else paint();
+      }, 250);
+      paint();
+    }
+    function paint(done) {
+      const bar = root.querySelector('[data-rest-bar]');
+      if (!bar) return;
+      if (endAt) {
+        const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+        const pct = Math.min(100, Math.max(0, 100 - (left / total) * 100));
+        if (!bar.querySelector('.rest-run')) {
+          bar.innerHTML = `<div class="rest-run">
+            <div class="rest-progress"><span></span></div>
+            <button type="button" class="rest-adj" data-rest-adj="-15" aria-label="15 Sekunden weniger">−15</button>
+            <div class="rest-time" role="timer" aria-live="off"><strong></strong><span>Pause</span></div>
+            <button type="button" class="rest-adj" data-rest-adj="15" aria-label="15 Sekunden mehr">+15</button>
+            <button type="button" class="rest-skip" data-rest-skip>Weiter</button>
+          </div>`;
+          bar.querySelectorAll('[data-rest-adj]').forEach((b) => b.addEventListener('click', () => adjust(Number(b.dataset.restAdj))));
+          bar.querySelector('[data-rest-skip]').addEventListener('click', () => stop());
+        }
+        bar.querySelector('.rest-time strong').textContent = fmt(left);
+        bar.querySelector('.rest-progress span').style.width = `${pct}%`;
+        return;
+      }
+      bar.innerHTML = `<div class="rest-idle">
+        <button type="button" class="rest-go" data-rest-go>⏱ ${done ? 'Pause vorbei – nächster Satz!' : 'Pause starten'}</button>
+        <div class="rest-choices" role="radiogroup" aria-label="Pausenlänge">${REST_CHOICES.map((s) => `<button type="button" role="radio" aria-checked="${s === dur}" data-rest-dur="${s}">${fmt(s)}</button>`).join('')}</div>
+        <label class="rest-auto"><input type="checkbox" data-rest-auto ${auto ? 'checked' : ''}> nach jedem Satz automatisch</label>
+      </div>`;
+      bar.querySelector('[data-rest-go]').addEventListener('click', () => start());
+      bar.querySelectorAll('[data-rest-dur]').forEach((b) => b.addEventListener('click', () => {
+        dur = Number(b.dataset.restDur);
+        restStore.set('sot-rest-dur', dur);
+        paint();
+      }));
+      bar.querySelector('[data-rest-auto]').addEventListener('change', (e) => {
+        auto = e.target.checked;
+        restStore.set('sot-rest-auto', auto);
+      });
+    }
+    if (endAt && endAt <= Date.now()) endAt = null;
+    if (endAt) run();
+    return {
+      paint: () => (endAt ? run() : paint()),
+      /** a set was just filled in */
+      setDone() {
+        if (auto) start();
+      },
+      stop: () => stop(),
+      dispose() {
+        clearInterval(tick);
+      },
+    };
+  }
+
+  // ---- Monthly recap ("Wrapped"): full-screen story ----
+  const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  const prevMonthOf = (m) => {
+    const [y, mo] = m.split('-').map(Number);
+    return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
+  };
+  const monthLabel = (m) => `${T(MONTH_NAMES[Number(m.slice(5, 7)) - 1])} ${m.slice(0, 4)}`;
+  const fmtHours = (min) => (min >= 60 ? `${Math.floor(min / 60)} Std. ${min % 60 ? `${min % 60} Min.` : ''}`.trim() : `${min} Min.`);
+
+  function recapSlides(r) {
+    const t = r.training;
+    const slides = [];
+    const count = (n, dec = 0, suffix = '') => `<span data-count="${n}" data-dec="${dec}" data-suffix="${esc(suffix)}">${esc(Number(n).toLocaleString(LOC(), { maximumFractionDigits: dec }))}${esc(suffix)}</span>`;
+    slides.push({ bg: 'rc-bg-1', html: `
+      <p class="rc-kicker">${r.partial ? 'Dein Monat bisher' : 'Dein Monatsrückblick'}</p>
+      <h1 class="rc-huge">${esc(T(r.monthName))}</h1>
+      <p class="rc-year">${r.year}</p>
+      <p class="rc-hint">Tippe rechts für weiter, links für zurück.</p>` });
+    if (t.workouts) {
+      const diff = t.workouts - t.prevWorkouts;
+      slides.push({ bg: 'rc-bg-2', html: `
+        <p class="rc-kicker">Du hast</p>
+        <p class="rc-big">${count(t.workouts)}×</p>
+        <p class="rc-lead">trainiert</p>
+        ${t.minutes ? `<p class="rc-sub">Das sind <strong>${esc(fmtHours(t.minutes))}</strong> Training.</p>` : ''}
+        ${t.prevWorkouts ? `<p class="rc-sub">${diff > 0 ? `${diff} mehr als im Vormonat 📈` : diff < 0 ? `${-diff} weniger als im Vormonat – nächsten Monat holst du's dir.` : 'Genauso oft wie im Vormonat – konstant!'}</p>` : ''}` });
+    }
+    if (t.volume) {
+      const thing = weightThing(t.volume);
+      const vs = t.prevVolume ? Math.round(((t.volume - t.prevVolume) / t.prevVolume) * 100) : null;
+      slides.push({ bg: 'rc-bg-3', html: `
+        <p class="rc-kicker">Insgesamt bewegt</p>
+        <p class="rc-big">${count(t.volume)}<small> kg</small></p>
+        ${thing ? `<p class="rc-emoji">${thing.emoji}</p><p class="rc-lead">So viel wie ${esc(thing.text)}</p>` : ''}
+        <p class="rc-sub">${t.sets.toLocaleString(LOC())} Sätze · ${t.reps.toLocaleString(LOC())} Wiederholungen${vs !== null && Math.abs(vs) <= 300 ? ` · ${vs >= 0 ? '+' : '−'}${Math.abs(vs)} % zum Vormonat` : ''}</p>` });
+    }
+    if (t.favourite) {
+      slides.push({ bg: 'rc-bg-4', html: `
+        <p class="rc-kicker">Deine Lieblingsübung</p>
+        <p class="rc-title">${esc(t.favourite.name)}</p>
+        <p class="rc-lead">${count(t.favourite.sets)} Sätze</p>
+        ${t.heaviest ? `<p class="rc-sub">Schwerstes Gewicht: <strong>${esc(num(t.heaviest.weight, 1))} kg</strong> bei ${esc(t.heaviest.name)}</p>` : ''}
+        ${t.favDay ? `<p class="rc-sub">Dein Trainingstag: <strong>${esc(T(t.favDay))}</strong></p>` : ''}` });
+    }
+    if (t.prCount) {
+      slides.push({ bg: 'rc-bg-5', html: `
+        <p class="rc-emoji rc-pop">🏆</p>
+        <p class="rc-big">${count(t.prCount)}</p>
+        <p class="rc-lead">${t.prCount === 1 ? 'neue Bestleistung' : 'neue Bestleistungen'}</p>
+        <ul class="rc-list">${t.prs.slice(0, 3).map((p) => `<li><span>${esc(p.name)}</span><strong>${esc(num(p.weight, 1))} kg</strong><em>+${esc(num(p.gain, 1))}</em></li>`).join('')}</ul>` });
+    }
+    if (r.steps) {
+      slides.push({ bg: 'rc-bg-6', html: `
+        <p class="rc-kicker">Deine Schritte</p>
+        <p class="rc-big">${count(r.steps.total)}</p>
+        <p class="rc-lead">Ø ${r.steps.avg.toLocaleString(LOC())} am Tag</p>
+        <p class="rc-sub">Bester Tag: <strong>${r.steps.best.steps.toLocaleString(LOC())}</strong> am ${esc(fmtDate(r.steps.best.date, { day: 'numeric', month: 'long' }))}</p>
+        ${r.steps.goalDays !== null ? `<p class="rc-sub">Schrittziel an <strong>${r.steps.goalDays}</strong> Tagen erreicht</p>` : ''}
+        <p class="rc-sub">≈ ${Math.round(r.steps.total * 0.00075).toLocaleString(LOC())} km zu Fuß 🗺️</p>` });
+    }
+    if (r.sleep || r.weight) {
+      const w = r.weight;
+      slides.push({ bg: 'rc-bg-7', html: `
+        ${r.sleep ? `<p class="rc-kicker">Schlaf</p><p class="rc-big">${count(r.sleep.avg, 1)}<small> h</small></p><p class="rc-lead">im Schnitt pro Nacht 😴</p>` : ''}
+        ${w ? `<div class="rc-split"><p class="rc-kicker">Gewicht</p><p class="rc-mid">${w.change > 0 ? '+' : w.change < 0 ? '−' : '±'}${esc(num(Math.abs(w.change), 1))} kg</p>
+          <p class="rc-sub">${esc(num(w.start, 1))} → ${esc(num(w.end, 1))} kg${w.target !== null && w.target !== undefined ? ` · Ziel ${esc(num(w.target, 1))} kg` : ''}</p></div>` : ''}` });
+    }
+    const c = r.consistency;
+    if (c.activeDays) {
+      slides.push({ bg: 'rc-bg-8', html: `
+        <p class="rc-kicker">Dranbleiben</p>
+        <p class="rc-big">${count(c.activeDays)}<small> / ${r.daysSoFar}</small></p>
+        <p class="rc-lead">Tage aktiv</p>
+        ${c.streak >= 2 ? `<p class="rc-sub">🔥 Längste Serie: <strong>${c.streak} Tage</strong> am Stück</p>` : ''}
+        ${c.caloriesAnswered ? `<p class="rc-sub">🍽 Ernährungsplan an <strong>${c.caloriesKept}</strong> von ${c.caloriesAnswered} Tagen eingehalten</p>` : ''}
+        ${r.h2hWins ? `<p class="rc-sub">⚔️ ${r.h2hWins} Head2Head ${r.h2hWins === 1 ? 'gewonnen' : 'gewonnen'}</p>` : ''}` });
+    }
+    slides.push({ bg: 'rc-bg-9', html: `
+      <p class="rc-kicker">Dein Typ im ${esc(T(r.monthName))}</p>
+      <p class="rc-emoji rc-pop rc-xl">${r.persona.emoji}</p>
+      <p class="rc-title">${esc(T(r.persona.title))}</p>
+      <p class="rc-lead">${esc(r.persona.text)}</p>` });
+    slides.push({ bg: 'rc-bg-10', final: true, html: `
+      <p class="rc-kicker">${esc(monthLabel(r.month))}</p>
+      <div class="rc-card">
+        <div><strong>${t.workouts}</strong><span>Trainings</span></div>
+        <div><strong>${fmtInt(t.volume)}</strong><span>kg bewegt</span></div>
+        <div><strong>${t.prCount}</strong><span>Bestleistungen</span></div>
+        <div><strong>${r.steps ? r.steps.avg.toLocaleString(LOC()) : '–'}</strong><span>Ø Schritte</span></div>
+        <div><strong>${r.sleep ? num(r.sleep.avg, 1) : '–'}</strong><span>Ø Schlaf (h)</span></div>
+        <div><strong>${c.activeDays}</strong><span>aktive Tage</span></div>
+      </div>
+      <p class="rc-persona">${r.persona.emoji} ${esc(T(r.persona.title))}</p>
+      <div class="rc-actions">
+        <button type="button" class="rc-btn rc-btn-primary" data-rc-share>Teilen</button>
+        <button type="button" class="rc-btn" data-rc-close>Schließen</button>
+      </div>
+      <div class="rc-months" data-rc-months></div>` });
+    return slides;
+  }
+
+  /** Story picture (1080×1920) of the month for Instagram & co. */
+  async function composeRecapPicture(r) {
+    try {
+      await Promise.all(['700 64px "Space Grotesk"', '700 30px Inter', '600 30px Inter'].map((f) => document.fonts.load(f)));
+    } catch { /* system fonts */ }
+    const W = 1080;
+    const H = 1920;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    const font = (w, s, fam) => `${w} ${Math.round(s)}px ${fam === 'display' ? '"Space Grotesk"' : 'Inter'}, system-ui, sans-serif`;
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#fd6e6e');
+    bg.addColorStop(0.45, '#0d3f5e');
+    bg.addColorStop(1, '#001a2b');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(182,223,237,0.14)';
+    ctx.lineWidth = 90;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(W * 0.85, H * 0.2, 380, -0.2, -0.2 + 86.04 / 17);
+    ctx.stroke();
+    drawLogo(ctx, 70, 80, 84);
+    ctx.fillStyle = '#fff';
+    ctx.font = font(700, 48, 'display');
+    ctx.fillText('StayOnTrack', 176, 138);
+    ctx.font = font(700, 34);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText(T(r.partial ? 'MEIN MONAT BISHER' : 'MEIN MONAT'), 70, 330);
+    ctx.fillStyle = '#fff';
+    ctx.font = font(700, 150, 'display');
+    let size = 150;
+    const title = T(r.monthName);
+    while (ctx.measureText(title).width > W - 140 && size > 60) ctx.font = font(700, (size -= 6), 'display');
+    ctx.fillText(title, 70, 480);
+    ctx.font = font(600, 44);
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText(String(r.year), 74, 550);
+    const t = r.training;
+    const cells = [
+      [String(t.workouts), 'Trainings'],
+      [fmtInt(t.volume), 'kg bewegt'],
+      [String(t.prCount), 'Bestleistungen'],
+      [r.steps ? r.steps.avg.toLocaleString(LOC()) : '–', 'Ø Schritte'],
+      [r.sleep ? num(r.sleep.avg, 1) : '–', 'Ø Schlaf (h)'],
+      [String(r.consistency.activeDays), 'aktive Tage'],
+    ];
+    const gx = 70;
+    const gy = 660;
+    const cw = (W - 140 - 30) / 2;
+    const ch = 230;
+    cells.forEach(([v, l], i) => {
+      const x = gx + (i % 2) * (cw + 30);
+      const y = gy + Math.floor(i / 2) * (ch + 30);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.beginPath();
+      ctx.roundRect(x, y, cw, ch, 36);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      let s2 = 96;
+      ctx.font = font(700, s2, 'display');
+      while (ctx.measureText(v).width > cw - 70 && s2 > 40) ctx.font = font(700, (s2 -= 4), 'display');
+      ctx.fillText(v, x + 36, y + 130);
+      ctx.fillStyle = '#b6dfed';
+      ctx.font = font(700, 30);
+      ctx.fillText(T(l).toUpperCase(), x + 36, y + 186);
+    });
+    const py = gy + 3 * (ch + 30) + 40;
+    ctx.fillStyle = 'rgba(0,26,43,0.55)';
+    ctx.beginPath();
+    ctx.roundRect(70, py, W - 140, 250, 40);
+    ctx.fill();
+    ctx.font = font(400, 110);
+    ctx.fillText(r.persona.emoji, 110, py + 160);
+    ctx.fillStyle = '#fd6e6e';
+    ctx.font = font(700, 30);
+    ctx.fillText(T('MEIN TYP'), 270, py + 95);
+    ctx.fillStyle = '#fff';
+    let s3 = 64;
+    ctx.font = font(700, s3, 'display');
+    const pt = T(r.persona.title);
+    while (ctx.measureText(pt).width > W - 140 - 240 && s3 > 30) ctx.font = font(700, (s3 -= 4), 'display');
+    ctx.fillText(pt, 270, py + 170);
+    if (t.favourite) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = font(600, 36);
+      ctx.fillText(`${T('Lieblingsübung')}: ${t.favourite.name}`, 70, H - 120);
+    }
+    return c;
+  }
+
+  async function openRecap(month, opts = {}) {
+    const q = opts.userId ? `&userId=${opts.userId}` : '';
+    let r;
+    try {
+      r = await api('GET', `/api/recap?month=${month}${q}`);
+    } catch (err) {
+      toast(err.message, true);
+      return;
+    }
+    if (!r.hasData) {
+      toast(`Für ${monthLabel(month)} gibt es noch keine Daten.`);
+      return;
+    }
+    try {
+      localStorage.setItem(`sot-recap-seen-${me.id}-${month}`, '1');
+    } catch { /* ignore */ }
+    const slides = recapSlides(r);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const el = document.createElement('div');
+    el.className = 'recap';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', `Monatsrückblick ${monthLabel(month)}`);
+    el.innerHTML = `
+      <div class="rc-bars">${slides.map(() => '<span><i></i></span>').join('')}</div>
+      <button type="button" class="rc-x" data-rc-close aria-label="Schließen">✕</button>
+      <div class="rc-stage"></div>
+      <button type="button" class="rc-nav rc-prev" aria-label="Zurück"></button>
+      <button type="button" class="rc-nav rc-next" aria-label="Weiter"></button>`;
+    document.body.append(el);
+    document.body.classList.add('recap-open');
+    const prevFocus = document.activeElement;
+    const stage = el.querySelector('.rc-stage');
+    const bars = [...el.querySelectorAll('.rc-bars i')];
+    const STEP = 6500;
+    let i = 0;
+    let started = 0;
+    let elapsed = 0;
+    let paused = false;
+    let raf = 0;
+
+    const onVis = () => pause(document.hidden);
+    function close() {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('visibilitychange', onVis);
+      document.body.classList.remove('recap-open');
+      el.classList.add('rc-leaving');
+      setTimeout(() => el.remove(), reduce ? 0 : 220);
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+    }
+    function countUp(root) {
+      root.querySelectorAll('[data-count]').forEach((n) => {
+        const target = Number(n.dataset.count);
+        const dec = Number(n.dataset.dec) || 0;
+        const suffix = n.dataset.suffix || '';
+        if (reduce || !target) return;
+        const t0 = performance.now();
+        const dur = 1100;
+        const stepFn = (now) => {
+          const p = Math.min(1, (now - t0) / dur);
+          const v = target * (1 - (1 - p) ** 3);
+          n.textContent = `${v.toLocaleString(LOC(), { minimumFractionDigits: p < 1 ? 0 : dec, maximumFractionDigits: dec })}${suffix}`;
+          if (p < 1 && el.isConnected) requestAnimationFrame(stepFn);
+        };
+        requestAnimationFrame(stepFn);
+      });
+    }
+    function show(n) {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      const s = slides[i];
+      el.className = `recap ${s.bg}`;
+      stage.innerHTML = `<div class="rc-slide">${s.html}</div>`;
+      bars.forEach((b, k) => {
+        b.style.width = k < i ? '100%' : '0%';
+      });
+      elapsed = 0;
+      started = performance.now();
+      countUp(stage);
+      if (s.final) wireFinal();
+      const focusable = stage.querySelector('button');
+      (focusable || el.querySelector('.rc-x')).focus({ preventScroll: true });
+    }
+    function loop(now) {
+      if (!el.isConnected) return;
+      const s = slides[i];
+      if (!paused && !s.final) {
+        const p = Math.min(1, (elapsed + (now - started)) / STEP);
+        bars[i].style.width = `${p * 100}%`;
+        if (p >= 1) show(i + 1);
+      } else if (s.final) {
+        bars[i].style.width = '100%';
+      }
+      raf = requestAnimationFrame(loop);
+    }
+    function pause(on) {
+      if (on === paused) return;
+      if (on) elapsed += performance.now() - started;
+      else started = performance.now();
+      paused = on;
+    }
+    function wireFinal() {
+      stage.querySelector('[data-rc-close]').addEventListener('click', close);
+      stage.querySelector('[data-rc-share]').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        try {
+          const canvas = await composeRecapPicture(r);
+          const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
+          const file = new File([blob], `stayontrack-${r.month}.jpg`, { type: 'image/jpeg' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: `StayOnTrack · ${monthLabel(r.month)}` }).catch(() => {});
+          } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            document.body.append(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            toast('Bild gespeichert – teile es aus deinen Fotos.');
+          }
+        } catch (err) {
+          toast(err.message, true);
+        }
+        btn.disabled = false;
+      });
+      const box = stage.querySelector('[data-rc-months]');
+      api('GET', `/api/recap/months${opts.userId ? `?userId=${opts.userId}` : ''}`).then(({ months }) => {
+        const others = months.filter((m) => m !== r.month).slice(0, 6);
+        if (!others.length || !box.isConnected) return;
+        box.innerHTML = `<p>Andere Monate</p>${others.map((m) => `<button type="button" data-rc-month="${m}">${esc(monthLabel(m))}</button>`).join('')}`;
+        box.querySelectorAll('[data-rc-month]').forEach((b) => b.addEventListener('click', () => {
+          close();
+          openRecap(b.dataset.rcMonth, opts);
+        }));
+      }).catch(() => {});
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowRight') show(i + 1);
+      else if (e.key === 'ArrowLeft') show(i - 1);
+      else if (e.key === ' ') {
+        e.preventDefault();
+        pause(!paused);
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    el.querySelector('.rc-x').addEventListener('click', close);
+    el.querySelector('.rc-prev').addEventListener('click', () => show(i - 1));
+    el.querySelector('.rc-next').addEventListener('click', () => {
+      if (slides[i].final) return;
+      show(i + 1);
+    });
+    // hold to pause
+    let holdTimer = null;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button:not(.rc-nav)')) return;
+      holdTimer = setTimeout(() => pause(true), 180);
+    });
+    const release = () => {
+      clearTimeout(holdTimer);
+      pause(false);
+    };
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointercancel', release);
+    document.addEventListener('visibilitychange', onVis);
+    show(0);
+    raf = requestAnimationFrame(loop);
+  }
+
+  /** Tracker home: the new monthly recap, in the first days of a month. */
+  async function mountRecapCard(root) {
+    if (!root || !me || me.role !== 'client') return;
+    const today = todayStr();
+    const last = prevMonthOf(today.slice(0, 7));
+    let seen = false;
+    try {
+      seen = Boolean(localStorage.getItem(`sot-recap-seen-${me.id}-${last}`));
+    } catch { /* ignore */ }
+    if (seen || Number(today.slice(8, 10)) > 10) return;
+    let months = [];
+    try {
+      ({ months } = await api('GET', '/api/recap/months'));
+    } catch {
+      return;
+    }
+    if (!months.includes(last) || !root.isConnected) return;
+    root.innerHTML = `<button type="button" class="card recap-card">
+      <span class="recap-card-art" aria-hidden="true">🎬</span>
+      <span><strong>Dein ${esc(T(MONTH_NAMES[Number(last.slice(5, 7)) - 1]))}-Rückblick ist da</strong><span class="muted small">Trainings, Bestleistungen, Schritte – und welcher Typ du warst.</span></span>
+      <span class="att-chev" aria-hidden="true">›</span></button>`;
+    root.querySelector('button').addEventListener('click', () => {
+      root.innerHTML = '';
+      openRecap(last);
+    });
+  }
+
   // ---- End of a workout: summary, and a share picture (photo + overlay) made on the device ----
   const T = (s) => (window.I18N ? I18N.t(s) : s);
   const LOC = () => (window.I18N ? I18N.locale : 'de-DE');
@@ -6045,6 +6607,8 @@
     let setupDays = data.plan ? data.plan.daysPerWeek : 3;
     let workoutDay = null;
     let restored = null; // a started workout that survived the app being closed
+    let rest = null; // rest timer while a workout is open
+    onCleanup(() => rest && rest.dispose());
     const draftKey = workoutDraftKey(opts.userId);
     const pending = readWorkoutDraft(draftKey);
     if (pending && data.plan) {
@@ -6067,6 +6631,10 @@
 
     function draw() {
       setUnsaved(mode === 'edit' || mode === 'workout');
+      if (mode !== 'workout' && rest) {
+        rest.dispose();
+        rest = null;
+      }
       if (mode === 'setup') return drawSetup();
       if (mode === 'edit') return drawEdit();
       if (mode === 'workout') return drawWorkout();
@@ -6233,7 +6801,22 @@
           </section>`;
         }).join('')}</div>
         <a class="btn btn-secondary btn-block history-link" href="${opts.base}/history">
-          <span aria-hidden="true">📈</span> Trainingshistorie</a>`;
+          <span aria-hidden="true">📈</span> Trainingshistorie</a>
+        <button type="button" class="btn btn-secondary btn-block recap-link" data-recap><span aria-hidden="true">🎬</span> Monatsrückblick</button>`;
+      root.querySelector('[data-recap]').addEventListener('click', async () => {
+        try {
+          const { months } = await api('GET', `/api/recap/months${query}`);
+          if (!months.length) {
+            toast('Noch keine Daten für einen Rückblick.');
+            return;
+          }
+          const last = prevMonthOf(todayStr().slice(0, 7));
+          const month = Number(todayStr().slice(8, 10)) <= 7 && months.includes(last) ? last : months[0];
+          openRecap(month, { userId: opts.userId });
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
       root.querySelector('[data-edit]').addEventListener('click', () => {
         draft = { split: p.split, days: JSON.parse(JSON.stringify(p.days)) };
         mode = 'edit';
@@ -6264,6 +6847,8 @@
       let woDate = draft && draft.date && draft.date <= todayStr() ? draft.date : todayStr();
       let touched = Boolean(draft);
       const startedAt = (draft && draft.startedAt) || Date.now(); // for the duration in the summary
+      if (rest) rest.dispose();
+      rest = opts.coach ? null : createRestTimer(root);
       // every change is kept on the device right away, so closing the app loses nothing
       const keep = () => {
         touched = true;
@@ -6282,26 +6867,40 @@
               <div class="row-between wo-head"><h2>${esc(r.name)} ${infoBtn(r.name)}</h2><span class="badge">Ziel ${esc(r.target)}</span></div>
               <p class="small muted wo-last">${r.last ? `Letztes Mal (${esc(fmtDate(r.last.date, { day: 'numeric', month: 'short' }))}): ${r.last.sets.map(fmtSet).join(' · ')}` : 'Erstes Mal – trag dein Startgewicht ein.'}</p>
               <div class="wo-sets">
-                <div class="wo-set wo-set-head" aria-hidden="true"><span>Satz</span><span>Gewicht</span><span>Wdh.</span></div>
-                ${r.sets.map((s, j) => `<div class="wo-set" data-s="${j}"><span class="wo-num">${j + 1}</span>
+                <div class="wo-set wo-set-head${rest ? ' with-done' : ''}" aria-hidden="true"><span>Satz</span><span>Gewicht</span><span>Wdh.</span>${rest ? '<span></span>' : ''}</div>
+                ${r.sets.map((s, j) => `<div class="wo-set${rest ? ' with-done' : ''}${s.done ? ' is-done' : ''}" data-s="${j}"><span class="wo-num">${j + 1}</span>
                   <div class="input-unit"><input inputmode="decimal" value="${val(s.weight)}" aria-label="${esc(r.name)} Satz ${j + 1} Gewicht" data-f="weight"><span>kg</span></div>
-                  <div class="input-unit"><input inputmode="numeric" value="${val(s.reps)}" aria-label="${esc(r.name)} Satz ${j + 1} Wiederholungen" data-f="reps"><span>Wdh.</span></div></div>`).join('')}
+                  <div class="input-unit"><input inputmode="numeric" value="${val(s.reps)}" aria-label="${esc(r.name)} Satz ${j + 1} Wiederholungen" data-f="reps"><span>Wdh.</span></div>${rest ? `
+                  <button type="button" class="wo-done" data-done-set aria-pressed="${s.done ? 'true' : 'false'}" aria-label="${esc(r.name)} Satz ${j + 1} erledigt – Pause starten">✓</button>` : ''}</div>`).join('')}
               </div>
               <button type="button" class="btn-add" data-add-set><span aria-hidden="true">+</span> Satz</button>
             </section>`).join('')}</div>
-          <div class="save-bar">
+          <div class="save-bar wo-save-bar">
+            ${rest ? '<div class="rest-bar" data-rest-bar></div>' : ''}
             <button type="button" class="btn-secondary" data-back>Abbrechen</button>
             <button type="button" class="btn-primary" data-save>Training speichern</button>
           </div>`;
+        if (rest) rest.paint();
         root.querySelectorAll('[data-r]').forEach((el) => {
           const r = rows[Number(el.dataset.r)];
           el.querySelectorAll('[data-s]').forEach((sEl) => sEl.querySelectorAll('[data-f]').forEach((inp) => inp.addEventListener('input', () => {
             r.sets[Number(sEl.dataset.s)][inp.dataset.f] = inp.value;
             keep();
           })));
+          el.querySelectorAll('[data-done-set]').forEach((b) => b.addEventListener('click', () => {
+            const set = r.sets[Number(b.closest('[data-s]').dataset.s)];
+            set.done = !set.done;
+            b.setAttribute('aria-pressed', String(set.done));
+            b.closest('[data-s]').classList.toggle('is-done', set.done);
+            keep();
+            if (set.done) {
+              if (navigator.vibrate) navigator.vibrate(30);
+              rest.setDone();
+            }
+          }));
           el.querySelector('[data-add-set]').addEventListener('click', () => {
             const prev = r.sets[r.sets.length - 1] || { weight: null, reps: null };
-            r.sets.push({ ...prev });
+            r.sets.push({ weight: prev.weight, reps: prev.reps });
             keep();
             paint();
           });
@@ -6313,6 +6912,7 @@
         root.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => {
           if (touched && !confirm('Angefangenes Training verwerfen? Deine Eingaben gehen verloren.')) return;
           clearWorkoutDraft(draftKey);
+          if (rest) rest.stop();
           mode = 'overview';
           draw();
         }));
@@ -6332,6 +6932,7 @@
               })(),
             });
             clearWorkoutDraft(draftKey);
+            if (rest) rest.stop();
             mode = 'overview';
             draw();
             window.scrollTo(0, 0);
