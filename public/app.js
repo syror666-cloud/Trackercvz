@@ -2554,6 +2554,7 @@
         <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}</p></div>
         <button class="btn-primary" id="btn-new-client" type="button">+ Neuer Klient</button>
       </div>
+      ${clients.length ? '<div id="attention"></div>' : ''}
       ${clients.length ? coachDashboard(clients, queue, weightAutomation) : ''}
       ${clients.length ? `<div class="client-list">${cards}</div>` : `<div class="card empty-state">
         <p>Noch keine Klienten angelegt.</p>
@@ -2598,6 +2599,7 @@
     }).catch(() => {});
 
     mountInvites(document.getElementById('invites-card'));
+    mountAttention(document.getElementById('attention'));
     document.getElementById('btn-new-client').addEventListener('click', () => openNewClientDialog());
   }
 
@@ -2650,6 +2652,41 @@
         : 'Mit Adresse geht die Einladung direkt per Mail raus. Sonst bekommst du einen Link zum Teilen, z. B. per WhatsApp.';
     };
     f.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener('change', sync));
+  }
+
+  /** Who needs the coach most right now – ranked, each with the reasons. */
+  async function mountAttention(root) {
+    if (!root) return;
+    let data;
+    try {
+      data = await api('GET', '/api/attention');
+    } catch {
+      return;
+    }
+    const LEVEL = { high: ['Dringend', 'bad'], medium: ['Bald', 'warn'], low: ['Im Blick', ''] };
+    let showAll = false;
+    const draw = () => {
+      const list = showAll ? data.clients : data.clients.slice(0, 5);
+      root.innerHTML = `<section class="attention" aria-label="Braucht Aufmerksamkeit">
+        <div class="row-between todo-head"><h2>Braucht Aufmerksamkeit</h2>
+          <span class="muted small">${data.fine} von ${data.total} im grünen Bereich</span></div>
+        ${data.clients.length ? `<ol class="attention-list">${list.map((c) => `<li class="att-${c.level}">
+            <a href="#/client/${c.id}" class="att-row">
+              <span class="avatar att-av ${c.avatar ? 'has-img' : ''}">${c.avatar ? `<img src="${esc(c.avatar)}" alt="">` : `<span class="h2h-initial">${esc(c.displayName.trim()[0] || '?')}</span>`}</span>
+              <span class="att-main"><span class="att-name">${esc(c.displayName)} <span class="badge ${LEVEL[c.level][1]}">${LEVEL[c.level][0]}</span></span>
+                <span class="att-reasons">${c.reasons.slice(0, 3).map((r) => `<span class="att-reason r-${r.level}">${esc(r.text)}</span>`).join('')}${c.reasons.length > 3 ? `<span class="muted small">+ ${c.reasons.length - 3} weitere</span>` : ''}</span></span>
+              <span class="att-chev" aria-hidden="true">›</span>
+            </a></li>`).join('')}</ol>
+          ${data.clients.length > 5 ? `<button type="button" class="btn-ghost btn-sm" data-att-all>${showAll ? 'Weniger anzeigen' : `Alle ${data.clients.length} anzeigen`}</button>` : ''}`
+          : '<div class="card all-done"><strong>Alle im grünen Bereich.</strong> <span class="muted">Niemand fällt gerade aus dem Rahmen.</span></div>'}
+      </section>`;
+      const more = root.querySelector('[data-att-all]');
+      if (more) more.addEventListener('click', () => {
+        showAll = !showAll;
+        draw();
+      });
+    };
+    draw();
   }
 
   /** The invitation link: copy, share, or note that it went out by e-mail. */

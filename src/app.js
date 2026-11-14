@@ -22,6 +22,7 @@ const { reportRoutes } = require('./reports');
 const { googleHealth } = require('./google-health');
 const { legalHandler } = require('./legal');
 const { inviteRoutes } = require('./invites');
+const { attentionRoutes } = require('./attention');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
 
@@ -1291,7 +1292,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       }],
     );
   }
-  routes.push(...inviteRoutes({
+  routes.push(...attentionRoutes(deps), ...inviteRoutes({
     ...deps, mailer, appUrl, clientIp, validateUsername, validatePassword, startSession, setEmail: mail.setEmail,
   }), ...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
 
