@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-fridge-sound', date: 'November 2026',
+      client: [
+        ['🔊', 'Dein Kühlschrank brummt', 'Beim Öffnen ploppt die Tür und die Flaschen klirren, solange er offen ist, brummt er leise. Mit 🔊/🔇 neben dem Kühlschrank schaltest du den Ton aus.'],
+      ],
+      coach: [
+        ['🔊', 'Kühlschrank mit Ton', 'Der Kühlschrank in der Hall of Fame hat jetzt Tür-Sound und Brummen – abschaltbar mit 🔊/🔇.'],
+      ],
+    },
+    {
       id: '2026-11-checkin-dismiss', date: 'November 2026',
       client: [
         ['✓', 'Check-in wegklicken', 'Gelesen? Tipp beim Check-in auf „✓ Gelesen“ – dann verschwindet er vom Dashboard. Mit Anpassungen verschwindet er, sobald du sie annimmst.'],
@@ -7843,6 +7852,7 @@
         <span class="muted">${shop.free ? `${cans.length} ${cans.length === 1 ? 'Getränk' : 'Getränke'} · Testmodus: alles gratis` : `${cans.length} ${cans.length === 1 ? 'Dose' : 'Dosen'} · ${shop.balance.available} Token übrig`}</span>
         <span class="row" style="gap:6px">
           ${shop.free && cans.length ? '<button type="button" class="btn-ghost btn-sm" data-empty-fridge>Kühlschrank leeren</button>' : ''}
+          <button type="button" class="btn-ghost btn-sm" data-fridge-sound aria-pressed="${fridgeSoundOn()}" aria-label="Kühlschrank-Ton">${fridgeSoundOn() ? '🔊' : '🔇'}</button>
           ${reduce ? '' : '<button type="button" class="btn-ghost btn-sm" data-replay>↻ Nochmal reingleiten</button>'}
         </span>
       </div>`;
@@ -7856,19 +7866,237 @@
         toast(err.message, true);
       }
     });
+    // sound: the door opens 1.05 s into the animation, then the hum runs while the fridge is on screen
+    if (activeFridgeSound) activeFridgeSound.dispose(); // re-mounted (e.g. after emptying): only one hum
+    const sound = createFridgeSound();
+    activeFridgeSound = sound;
+    const DOOR_AT = reduce ? 0 : 1.05;
+    // the fridge left the screen without a page change (tab switch inside a view): stop humming
+    const watch = setInterval(() => {
+      if (!root.isConnected || !root.querySelector('[data-stage]')) {
+        clearInterval(watch);
+        sound.dispose();
+      }
+    }, 1000);
+    onCleanup(() => clearInterval(watch));
+    const unlock = () => sound.unlock();
+    document.addEventListener('pointerdown', unlock, { once: true });
+    const onVis = () => {
+      if (document.hidden) sound.stop();
+      else if (root.isConnected) sound.replay(0);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    onCleanup(() => {
+      sound.dispose();
+      document.removeEventListener('pointerdown', unlock);
+      document.removeEventListener('visibilitychange', onVis);
+    });
+    const soundBtn = root.querySelector('[data-fridge-sound]');
+    soundBtn.addEventListener('click', () => {
+      const on = !fridgeSoundOn();
+      try {
+        localStorage.setItem('sot-fridge-sound', on ? 'on' : 'off');
+      } catch { /* ignore */ }
+      soundBtn.textContent = on ? '🔊' : '🔇';
+      soundBtn.setAttribute('aria-pressed', String(on));
+      if (on) sound.replay(0);
+      else sound.stop();
+    });
     const replay = root.querySelector('[data-replay]');
     if (replay) replay.addEventListener('click', () => {
       const stage = root.querySelector('[data-stage]');
       stage.classList.remove('play');
       void stage.offsetWidth; // restart the animation
       stage.classList.add('play');
+      sound.replay(DOOR_AT);
     });
     // bring the whole fridge into view first, then start gliding in
     const stage = root.querySelector('[data-stage]');
     const r = stage.getBoundingClientRect();
     const hidden = r.top < 70 || r.bottom > innerHeight - (innerWidth <= 720 ? 90 : 10);
     if (hidden) stage.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-    setTimeout(() => stage.classList.add('play'), hidden && !reduce ? 450 : 0);
+    const startDelay = hidden && !reduce ? 450 : 0;
+    setTimeout(() => stage.classList.add('play'), startDelay);
+    sound.open(startDelay / 1000 + DOOR_AT);
+  }
+
+  // ---- Fridge sound: door pop when it opens, compressor hum while it is open (made with Web Audio, no files) ----
+  let fridgeAudio = null;
+  let activeFridgeSound = null;
+  const fridgeSoundOn = () => {
+    try {
+      return localStorage.getItem('sot-fridge-sound') !== 'off';
+    } catch {
+      return true;
+    }
+  };
+  function createFridgeSound() {
+    let ctx = null;
+    let master = null;
+    let hum = null;
+    let pendingOpen = null;
+    let disposed = false;
+    const ensure = () => {
+      if (disposed) return null;
+      try {
+        fridgeAudio ||= new (window.AudioContext || window.webkitAudioContext)();
+      } catch {
+        return null;
+      }
+      ctx = fridgeAudio;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      if (!master) {
+        master = ctx.createGain();
+        master.gain.value = 0.9;
+        master.connect(ctx.destination);
+      }
+      return ctx;
+    };
+    const noiseBuffer = (seconds, brown) => {
+      const len = Math.floor(ctx.sampleRate * seconds);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        if (brown) {
+          last = (last + 0.02 * w) / 1.02;
+          d[i] = last * 3.5;
+        } else d[i] = w;
+      }
+      return buf;
+    };
+    /** The rubber seal lets go (pop + air), a low thump, then bottles clinking. */
+    function doorOpen(at) {
+      const t = ctx.currentTime + at;
+      // suction pop
+      const pop = ctx.createBufferSource();
+      pop.buffer = noiseBuffer(0.35);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 1.2;
+      bp.frequency.setValueAtTime(1800, t);
+      bp.frequency.exponentialRampToValueAtTime(380, t + 0.25);
+      const pg = ctx.createGain();
+      pg.gain.setValueAtTime(0.0001, t);
+      pg.gain.exponentialRampToValueAtTime(0.5, t + 0.012);
+      pg.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      pop.connect(bp).connect(pg).connect(master);
+      pop.start(t);
+      pop.stop(t + 0.36);
+      // thump of the door
+      const th = ctx.createOscillator();
+      th.type = 'sine';
+      th.frequency.setValueAtTime(120, t);
+      th.frequency.exponentialRampToValueAtTime(55, t + 0.18);
+      const tg = ctx.createGain();
+      tg.gain.setValueAtTime(0.0001, t);
+      tg.gain.exponentialRampToValueAtTime(0.45, t + 0.01);
+      tg.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      th.connect(tg).connect(master);
+      th.start(t);
+      th.stop(t + 0.25);
+      // bottles in the door clink
+      [0.32, 0.41, 0.47, 0.6].forEach((dt, i) => {
+        const o = ctx.createOscillator();
+        o.type = 'triangle';
+        o.frequency.value = [2650, 3120, 2890, 3460][i];
+        const g = ctx.createGain();
+        const s = t + dt + Math.random() * 0.03;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(0.06 - i * 0.01, s + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.12);
+        o.connect(g).connect(master);
+        o.start(s);
+        o.stop(s + 0.14);
+      });
+    }
+    /** Compressor hum: 50 Hz with harmonics, a little rumble, slowly breathing. */
+    function startHum(at) {
+      if (hum) return;
+      const t = ctx.currentTime + at;
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, t);
+      out.gain.exponentialRampToValueAtTime(0.16, t + 1.2);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 420;
+      lp.connect(out).connect(master);
+      const nodes = [];
+      [[50, 'sawtooth', 0.22], [100, 'sine', 0.5], [150, 'sine', 0.16], [200, 'sine', 0.06]].forEach(([f, type, v]) => {
+        const o = ctx.createOscillator();
+        o.type = type;
+        o.frequency.value = f;
+        o.detune.value = Math.random() * 6 - 3;
+        const g = ctx.createGain();
+        g.gain.value = v;
+        o.connect(g).connect(lp);
+        o.start(t);
+        nodes.push(o);
+      });
+      const rumble = ctx.createBufferSource();
+      rumble.buffer = noiseBuffer(3, true);
+      rumble.loop = true;
+      const rg = ctx.createGain();
+      rg.gain.value = 0.35;
+      rumble.connect(rg).connect(lp);
+      rumble.start(t);
+      nodes.push(rumble);
+      // slow wobble, like a real compressor
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.35;
+      const lg = ctx.createGain();
+      lg.gain.value = 0.035;
+      lfo.connect(lg).connect(out.gain);
+      lfo.start(t);
+      nodes.push(lfo);
+      hum = { out, nodes };
+    }
+    function stopHum(fade = 0.5) {
+      if (!hum || !ctx) return;
+      const { out, nodes } = hum;
+      hum = null;
+      const t = ctx.currentTime;
+      out.gain.cancelScheduledValues(t);
+      out.gain.setValueAtTime(Math.max(out.gain.value, 0.0001), t);
+      out.gain.exponentialRampToValueAtTime(0.0001, t + fade);
+      nodes.forEach((n) => {
+        try {
+          n.stop(t + fade + 0.05);
+        } catch { /* already stopped */ }
+      });
+    }
+    const api = {
+      /** door opens after `delay` seconds; the hum follows and runs until stop() */
+      open(delay = 0) {
+        if (!fridgeSoundOn() || !ensure()) return;
+        if (ctx.state !== 'running') {
+          // no sound allowed yet (no tap on the page so far): start on the first tap
+          pendingOpen = () => api.open(0);
+          return;
+        }
+        doorOpen(delay);
+        startHum(delay + 0.15);
+      },
+      replay(delay = 0) {
+        if (!fridgeSoundOn() || !ensure()) return;
+        doorOpen(delay);
+        if (!hum) startHum(delay + 0.15);
+      },
+      stop: () => stopHum(),
+      unlock() {
+        if (!pendingOpen) return;
+        const go = pendingOpen;
+        pendingOpen = null;
+        if (ensure()) ctx.resume().then(go).catch(() => {});
+      },
+      dispose() {
+        disposed = true;
+        pendingOpen = null;
+        stopHum(0.3);
+      },
+    };
+    return api;
   }
 
   /**

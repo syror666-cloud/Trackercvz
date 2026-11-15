@@ -816,6 +816,7 @@ Essen eintragen – suchen oder scannen|Log food – search or scan|Registrar co
 ✓ Verstanden|✓ Got it|✓ Entendido|✓ Capito
 Coach schreiben|Message coach|Escribir al coach|Scrivi al coach
 ⏭ Diese Woche kein Check-in|⏭ No check-in this week|⏭ Sin check-in esta semana|⏭ Nessun check-in questa settimana
+Kühlschrank-Ton|Fridge sound|Sonido de la nevera|Suono del frigo
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
