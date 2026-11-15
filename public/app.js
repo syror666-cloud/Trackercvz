@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-google-manual', date: 'November 2026',
+      client: [
+        ['✍️', 'Deine Schritte zählen', 'Trägst du Schritte oder Schlaf für einen Tag selbst ein, überschreibt Google Health diesen Wert nicht mehr. Alle anderen Tage gleicht Google weiter automatisch ab.'],
+      ],
+      coach: [
+        ['✍️', 'Google Health respektiert Korrekturen', 'Ändert ein Klient Schritte oder Schlaf eines Tages selbst, bleibt sein Wert stehen; der Abgleich alle 2 Stunden läuft für alle anderen Tage weiter.'],
+      ],
+    },
+    {
       id: '2026-11-recap-rest', date: 'November 2026',
       client: [
         ['⏱', 'Pausen-Timer', 'Tipp im Training auf ✓ neben einem Satz: Die Pause läuft (60 s bis 3 min, ±15 s). Am Ende piept und vibriert die App – ist sie im Hintergrund, kommt eine Mitteilung.'],

@@ -208,12 +208,14 @@ function googleHealth({ db, HttpError, requireUser, targetClient, localDate, not
       for (const [date, n] of steps) {
         if (n <= 0 || n > 200000) continue;
         const e = q.entry.get(userId, date);
+        if (e && e.steps_manual) continue; // the client entered this day's steps themselves
         if (!e || e.steps !== n) q.upsertSteps.run(userId, date, n);
         result.steps++;
       }
       for (const [date, h] of sleep) {
         if (h <= 0 || h > 24) continue;
         const e = q.entry.get(userId, date);
+        if (e && e.sleep_manual) continue; // entered by hand
         if (!e || e.sleep !== h) q.upsertSleep.run(userId, date, h);
         result.sleep++;
       }

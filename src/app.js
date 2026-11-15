@@ -147,6 +147,8 @@ function entryRow(r) {
     weight: r.weight,
     steps: r.steps,
     sleep: r.sleep,
+    stepsManual: Boolean(r.steps_manual),
+    sleepManual: Boolean(r.sleep_manual),
     note: r.note,
     caloriesOk: r.calories_ok === null || r.calories_ok === undefined ? null : Boolean(r.calories_ok),
     calories: r.calories ?? null,
@@ -1271,6 +1273,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         u.id, date, merged.weight, merged.steps, merged.sleep, merged.note,
         merged.calories_ok, merged.calories, merged.training
       );
+      // steps or sleep changed by hand: from now on Google Health leaves that day's value alone
+      const changed = (k) => incoming[k] !== undefined && incoming[k] !== (existing[k] ?? null);
+      if (changed('steps')) db.prepare('UPDATE entries SET steps_manual = 1 WHERE user_id = ? AND date = ?').run(u.id, date);
+      if (changed('sleep')) db.prepare('UPDATE entries SET sleep_manual = 1 WHERE user_id = ? AND date = ?').run(u.id, date);
       // corrected values can cost medals: take back what was bought with tokens that no longer exist
       return { entry: entryRow(q.entry.get(u.id, date)), revoked: u.role === 'client' ? shop.reconcileFor(u.id) : [] };
     }],

@@ -124,6 +124,15 @@ test('google health: connect with PKCE, steps and sleep land in the tracker, tok
   const r = await max('POST', '/api/google/sync');
   assert.equal(r.status, 200);
   assert.deepEqual({ ...db.prepare('SELECT weight, steps FROM entries WHERE user_id = ? AND date = ?').get(id, today()) }, { weight: 80, steps: 4321 });
+  // the form sends unchanged Google steps along: that is not a manual entry
+  await max('PUT', `/api/entries/${today()}`, { weight: 81, steps: 4321, sleep: 7.2 });
+  assert.equal(db.prepare('SELECT steps_manual FROM entries WHERE user_id = ? AND date = ?').get(id, today()).steps_manual, 0);
+  // the client types own steps: Google keeps syncing, but leaves that day's steps alone
+  await max('PUT', `/api/entries/${today()}`, { steps: 9000 });
+  db.prepare('UPDATE entries SET steps = 1 WHERE user_id = ? AND date = ?').run(id, daysAgo(1)); // not by hand
+  await max('POST', '/api/google/sync');
+  assert.deepEqual({ ...e(today()) }, { steps: 9000, sleep: 7.2 });
+  assert.equal(e(daysAgo(1)).steps, 11234);
   assert.equal((await coach('GET', '/api/clients')).data.clients[0].googleLinked, true);
   assert.equal((await coach('GET', `/api/google?userId=${id}`)).data.connected, true);
   // a state can't be reused

@@ -438,6 +438,8 @@ function migrate(db) {
   addColumns(db, 'users', [['archived_at', 'TEXT'], ['archive_until', 'TEXT'], ['archive_note', 'TEXT']]);
   // training: how long a workout took (from the app's timer), for the summary and the share picture
   addColumns(db, 'workouts', [['duration_min', 'INTEGER']]);
+  // a value the client typed in themselves is never overwritten by Google Health again
+  addColumns(db, 'entries', [['steps_manual', 'INTEGER NOT NULL DEFAULT 0'], ['sleep_manual', 'INTEGER NOT NULL DEFAULT 0']]);
   if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health
   db.exec('DROP TABLE IF EXISTS health_tokens');
