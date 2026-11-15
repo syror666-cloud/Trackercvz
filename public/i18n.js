@@ -786,6 +786,32 @@ Die Konstante|The Constant|El constante|Il costante
 Der Regenerationsprofi|The Recovery Pro|El experto en recuperación|Il re del recupero
 Der Schwerlastkran|The Heavy Lifter|La grúa|La gru
 Der Durchstarter|The Starter|El que arranca|Lo starter
+Dashboard|Dashboard|Inicio|Dashboard
+Strategie|Strategy|Estrategia|Strategia
+Mehr|More|Más|Altro
+Kalorien heute|Calories today|Calorías hoy|Calorie oggi
+kcal frei|kcal left|kcal libres|kcal libere
+kcal drüber|kcal over|kcal de más|kcal in più
+＋ Essen eintragen|＋ Log food|＋ Registrar comida|＋ Registra cibo
+Essen eintragen|Log food|Registrar comida|Registra cibo
+Ziele|Goals|Objetivos|Obiettivi
+Dein Plan|Your plan|Tu plan|Il tuo piano
+Alles Weitere|Everything else|Todo lo demás|Tutto il resto
+Chat mit deinem Coach|Chat with your coach|Chat con tu coach|Chat con il tuo coach
+Was du heute gegessen hast|What you ate today|Lo que has comido hoy|Cosa hai mangiato oggi
+Deine Gewichte im Verlauf|Your weights over time|Tus pesos a lo largo del tiempo|I tuoi pesi nel tempo
+Dein Monat als Story|Your month as a story|Tu mes como historia|Il tuo mese come storia
+Medaillen und Kühlschrank|Medals and fridge|Medallas y nevera|Medaglie e frigo
+Fordere andere heraus|Challenge others|Desafía a otros|Sfida gli altri
+Konto & Profil|Account & profile|Cuenta y perfil|Account e profilo
+Name, Bild, E-Mail, Passwort|Name, picture, e-mail, password|Nombre, foto, correo, contraseña|Nome, foto, e-mail, password
+Mitteilungen, Google Health, Darstellung, Daten|Notifications, Google Health, appearance, data|Notificaciones, Google Health, apariencia, datos|Notifiche, Google Health, aspetto, dati
+Noch keine Ziele.|No goals yet.|Aún no hay objetivos.|Ancora nessun obiettivo.
+Dein Coach legt sie beim nächsten Check-in mit dir fest.|Your coach sets them with you at the next check-in.|Tu coach los fijará contigo en el próximo check-in.|Il tuo coach li definirà con te al prossimo check-in.
+pro Tag|per day|al día|al giorno
+pro Nacht|per night|por noche|a notte
+pro Woche|per week|por semana|a settimana
+Essen eintragen – suchen oder scannen|Log food – search or scan|Registrar comida: buscar o escanear|Registra cibo – cerca o scansiona
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -874,6 +900,9 @@ noch nie|never|nunca|mai
     [/^Training #(\d+) · (.+)$/, W(0, (m) => `Workout #${m[1]} · ${m[2]}`, (m) => `Entrenamiento #${m[1]} · ${m[2]}`, (m) => `Allenamento #${m[1]} · ${m[2]}`)],
     [/^Dein (.+)-Rückblick ist da$/, W(0, (m) => `Your ${m[1]} recap is here`, (m) => `Tu resumen de ${m[1]} ya está aquí`, (m) => `Il tuo riepilogo di ${m[1]} è pronto`)],
     [/^Dein Typ im (.+)$/, W(0, (m) => `Your type in ${m[1]}`, (m) => `Tu tipo en ${m[1]}`, (m) => `Il tuo tipo a ${m[1]}`)],
+    [/^(\d[\d.]*) gegessen · Ziel (.+)$/, W(0, (m) => `${m[1]} eaten · goal ${m[2]}`, (m) => `${m[1]} comidas · objetivo ${m[2]}`, (m) => `${m[1]} mangiate · obiettivo ${m[2]}`)],
+    [/^Ø 7 Tage: (.+)$/, W(0, (m) => `7-day avg: ${m[1]}`, (m) => `Media 7 días: ${m[1]}`, (m) => `Media 7 giorni: ${m[1]}`)],
+    [/^Aktuell (.+) kg · noch (.+) kg$/, W(0, (m) => `Now ${m[1]} kg · ${m[2]} kg to go`, (m) => `Ahora ${m[1]} kg · faltan ${m[2]} kg`, (m) => `Ora ${m[1]} kg · mancano ${m[2]} kg`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

@@ -98,6 +98,26 @@ test('client: food diary – search a food and add it', { skip }, async () => {
   assert.deepEqual(errors, []);
 });
 
+test('client: ＋ in the tab bar – search a food, pick the meal, calories on the dashboard', { skip }, async () => {
+  const { page, errors } = await loginAs('max', 'maxpass123', { width: 390, height: 844 });
+  await page.waitForSelector('#kcal-card:not([hidden])');
+  await page.click('[data-quick-add]');
+  await page.fill('dialog input[name=q]', 'Skyr');
+  await page.locator('dialog .add-food-list li[data-i]').first().click();
+  await page.fill('#fa-amount', '200');
+  await page.selectOption('#fa-meal', 'abend');
+  await page.click('dialog [type=submit]');
+  await page.waitForFunction(() => /^[1-9]/.test(document.querySelector('#kcal-card .kcal-card-side p')?.textContent || ''));
+  const row = db.prepare("SELECT meal, amount FROM food_log WHERE client_id = (SELECT id FROM users WHERE username = 'max') ORDER BY id DESC LIMIT 1").get();
+  assert.deepEqual({ ...row }, { meal: 'abend', amount: 200 });
+  // strategy and more
+  await page.click('.nav a[href="#/strategy"]');
+  await page.waitForSelector('.tabs a[href="#/strategy/plan"]');
+  await page.click('.nav a[href="#/more"]');
+  await page.waitForSelector('.more-list a[href="#/chat"]');
+  assert.deepEqual(errors, []);
+});
+
 test('coach: test fridge – buy for free, celebration, sold out', { skip }, async () => {
   const { page, errors } = await loginAs('coach', 'coachpass123');
   await page.goto(`${base}/#/account/fame/shop`);

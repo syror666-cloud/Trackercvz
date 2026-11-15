@@ -194,6 +194,18 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-new-nav', date: 'November 2026',
+      client: [
+        ['🧭', 'Neue Navigation', 'Unten findest du jetzt Dashboard, Training, ＋, Strategie und Mehr. Nachrichten, Tagebuch, Hall of Fame und Einstellungen liegen unter „Mehr“.'],
+        ['＋', 'Essen in Sekunden eintragen', 'Tipp auf das ＋ in der Mitte: Lebensmittel suchen oder Barcode scannen, Menge wählen, Mahlzeit zuordnen – fertig.'],
+        ['🔥', 'Kalorien auf einen Blick', 'Das Dashboard zeigt oben, wie viele Kalorien du heute noch frei hast – samt Eiweiß, Kohlenhydraten und Fett.'],
+        ['🎯', 'Strategie', 'Deine Ziele (Gewicht, Schritte, Schlaf, Kalorien, Makros) und dein Ernährungsplan an einem Ort – mit deinem Fortschritt dazu.'],
+      ],
+      coach: [
+        ['🧭', 'Neue Navigation für Klienten', 'Klienten haben jetzt Dashboard · Training · ＋ · Strategie · Mehr. Der Ernährungsplan liegt bei ihnen unter „Strategie“, das Essen-Eintragen hinter dem ＋. Deine Ansicht bleibt gleich.'],
+      ],
+    },
+    {
       id: '2026-11-google-manual', date: 'November 2026',
       client: [
         ['✍️', 'Deine Schritte zählen', 'Trägst du Schritte oder Schlaf für einen Tag selbst ein, überschreibt Google Health diesen Wert nicht mehr. Alle anderen Tage gleicht Google weiter automatisch ab.'],
@@ -617,7 +629,10 @@
     if (location.hash === '#/chat') return renderClientChat();
     const settings = location.hash.match(/^#\/settings(?:\/(.+))?$/);
     if (settings) return renderClientSettings(settings[1]);
-    if (location.hash === '#/nutrition') return renderClientNutrition();
+    if (location.hash === '#/nutrition') return location.replace('#/strategy/plan');
+    if (location.hash === '#/strategy') return renderStrategy();
+    if (location.hash === '#/strategy/plan') return renderClientNutrition();
+    if (location.hash === '#/more') return renderMore();
     if (location.hash === '#/nutrition/diary') return renderFoodDiary();
     if (location.hash === '#/training' || location.hash === '#/training/history') return renderClientTraining(location.hash === '#/training/history');
     return renderClientHome();
@@ -627,23 +642,33 @@
     const links =
       me.role === 'coach'
         ? [['#/', 'Klienten', false], ['#/messages', 'Nachrichten', true], ['#/checkin', 'Check-in', false], ['#/admin', 'Admin', false]]
-        : [['#/', 'Tracker', false], ['#/training', 'Training', false], ['#/nutrition', 'Ernährung', false], ['#/chat', 'Nachrichten', true], ['#/settings', 'Einstellungen', false]];
+        : [['#/', 'Dashboard', false], ['#/training', 'Training', false], ['#/strategy', 'Strategie', false], ['#/more', 'Mehr', true]];
     let current =
       me.role === 'coach'
         ? location.hash.startsWith('#/checkin') ? '#/checkin' : location.hash.startsWith('#/messages') ? '#/messages' : location.hash === '#/admin' ? '#/admin' : '#/'
         : location.hash.startsWith('#/training') ? '#/training' : location.hash.startsWith('#/nutrition') ? '#/nutrition' : location.hash.startsWith('#/settings') ? '#/settings' : location.hash === '#/chat' ? '#/chat' : '#/';
     if (location.hash.startsWith('#/account')) current = null; // the account page lives in the profile menu
-    nav.innerHTML = links
-      .map(
-        ([href, label, badge]) =>
-          `<a href="${href}"${href === current ? ' aria-current="page"' : ''}><span class="nav-icon">${NAV_ICONS[label] || ''}${badge ? '<span class="count" data-unread hidden></span>' : ''}</span><span class="nav-label">${label}</span></a>`
-      )
-      .join('');
+    if (me.role === 'client') {
+      // Dashboard · Training · ＋ · Strategie · Mehr
+      const h = location.hash || '#/';
+      current = h === '#/' || h === '' ? '#/' : h.startsWith('#/training') ? '#/training'
+        : h.startsWith('#/strategy') || h === '#/nutrition' ? '#/strategy' : '#/more';
+    }
+    const link = ([href, label, badge]) =>
+      `<a href="${href}"${href === current ? ' aria-current="page"' : ''}><span class="nav-icon">${NAV_ICONS[label] || ''}${badge ? '<span class="count" data-unread hidden></span>' : ''}</span><span class="nav-label">${label}</span></a>`;
+    nav.innerHTML = me.role === 'client'
+      ? `${links.slice(0, 2).map(link).join('')}<button type="button" class="nav-plus" data-quick-add aria-label="Essen eintragen – suchen oder scannen"><span aria-hidden="true">＋</span></button>${links.slice(2).map(link).join('')}`
+      : links.map(link).join('');
+    const plus = nav.querySelector('[data-quick-add]');
+    if (plus) plus.addEventListener('click', () => quickAddFood());
   }
 
   const svgIcon = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const NAV_ICONS = {
     Tracker: svgIcon('<path d="M3 12h4l3-7 4 14 3-7h4"/>'),
+    Dashboard: svgIcon('<rect x="4" y="4" width="7" height="9" rx="1.5"/><rect x="13" y="4" width="7" height="5" rx="1.5"/><rect x="13" y="11" width="7" height="9" rx="1.5"/><rect x="4" y="15" width="7" height="5" rx="1.5"/>'),
+    Strategie: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="7" r="3.3"/><circle cx="6.5" cy="16.5" r="3.3"/><circle cx="17.5" cy="16.5" r="3.3"/></svg>',
+    Mehr: svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="8" cy="12" r=".6" fill="currentColor"/><circle cx="12" cy="12" r=".6" fill="currentColor"/><circle cx="16" cy="12" r=".6" fill="currentColor"/>'),
     Training: svgIcon('<path d="M6.5 7v10M3.5 9.5v5M17.5 7v10M20.5 9.5v5M6.5 12h11"/>'),
     Ernährung: svgIcon('<path d="M7 3v7a2 2 0 0 0 4 0V3M9 10v11M17 3c-1.7 1.3-2.5 3.6-2.5 6.5 0 2 .8 3 2.5 3.5V21"/>'),
     Nachrichten: svgIcon('<path d="M4 5h16v11H9l-5 4z"/>'),
@@ -671,7 +696,7 @@
     if (!me) return;
     try {
       const { unread } = await api('GET', '/api/messages/unread');
-      nav.querySelectorAll('[data-unread]').forEach((b) => {
+      document.querySelectorAll('[data-unread]').forEach((b) => {
         b.textContent = unread > 99 ? '99+' : unread;
         b.hidden = !unread;
       });
@@ -1354,6 +1379,7 @@
         <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p></div>
       </div>
       ${me.archivedAt ? `<div class="card pause-note" role="status"><span aria-hidden="true">⏸</span><span><strong>Coaching pausiert${me.archiveUntil ? ` bis ${esc(fmtDate(me.archiveUntil, { day: 'numeric', month: 'long' }))}` : ''}</strong><span class="muted small">Erinnerungen sind solange aus. Du kannst weiter eintragen und deinem Coach schreiben.</span></span></div>` : ''}
+      <section class="card kcal-card" id="kcal-card" hidden aria-label="Kalorien heute"></section>
       <div id="recap-card"></div>
       <div id="workout-resume"></div>
       <div id="push-prompt"></div>
@@ -1631,6 +1657,7 @@
     maybeShowPushPrompt(document.getElementById('push-prompt'));
     mountWorkoutResume(document.getElementById('workout-resume'));
     mountRecapCard(document.getElementById('recap-card'));
+    mountKcalCard(document.getElementById('kcal-card'));
     mountH2HHome(document.getElementById('h2h-home'));
     mountClientCheckin(document.getElementById('checkin-card'), async () => {
       const g = await api('GET', '/api/goals');
@@ -3067,7 +3094,7 @@
         <h2>Willkommen, ${first}!</h2>
         <p class="muted">Schön, dass du da bist. So funktioniert StayOnTrack:</p>
         <ul class="tour-list">
-          <li><span aria-hidden="true">📈</span><div><b>Tracker</b><span>Jeden Tag kurz Gewicht, Schritte und Schlaf eintragen – dauert 20 Sekunden.</span></div></li>
+          <li><span aria-hidden="true">📈</span><div><b>Dashboard</b><span>Jeden Tag kurz Gewicht, Schritte und Schlaf eintragen – dauert 20 Sekunden. Mit ＋ trägst du Essen ein.</span></div></li>
           <li><span aria-hidden="true">🍽</span><div><b>Ernährung</b><span>Dein Plan vom Coach und ein Tagebuch mit Barcode-Scanner.</span></div></li>
           <li><span aria-hidden="true">🏋️</span><div><b>Training</b><span>Dein Trainingsplan mit Gewichten und Bestleistungen.</span></div></li>
           <li><span aria-hidden="true">📋</span><div><b>Wöchentlicher Check-in</b><span>Dein Coach schaut sich deine Woche an und gibt dir Feedback.</span></div></li>
@@ -3921,7 +3948,7 @@
     setView(`
       <div class="page-head"><div>${eyebrow('Von deinem Coach')}<h1>Ernährung</h1>
         <p class="muted">${plan.meals.length ? 'Du kannst einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – dein Coach entscheidet.' : 'Dein Coach stellt dir einen Plan zusammen, der zu dir passt.'}</p></div></div>
-      ${nutritionTabs('plan')}
+      ${strategyTabs('plan')}
       ${plan.meals.length ? '<p class="pdf-row"><a class="btn btn-secondary btn-sm" href="/api/nutrition/pdf" download>Plan als PDF</a></p>' : ''}
       ${plan.meals.length ? `
       <div class="nutrition-grid">
@@ -4187,102 +4214,189 @@
   const DIARY_MEALS = [['fruehstueck', 'Frühstück'], ['mittag', 'Mittagessen'], ['abend', 'Abendessen'], ['snack', 'Snacks']];
   const AMOUNT_CHIPS = [50, 100, 150, 200, 250];
 
-  function nutritionTabs(active) {
-    return `<nav class="tabs" aria-label="Ernährung">
-      <a href="#/nutrition" ${active === 'plan' ? 'aria-current="page"' : ''}>Plan</a>
-      <a href="#/nutrition/diary" ${active === 'diary' ? 'aria-current="page"' : ''}>Tagebuch</a>
-    </nav>`;
-  }
-
   async function renderFoodDiary() {
     setView(LOADING);
     const saved = sessionStorage.getItem('diaryDate');
     const date = saved && saved <= todayStr() ? saved : todayStr();
     setView(`
-      <div class="page-head"><div>${eyebrow('Was du isst')}<h1>Ernährung</h1></div></div>
-      ${nutritionTabs('diary')}
+      <div class="page-head"><div>${eyebrow('Was du isst')}<h1>Ernährungstagebuch</h1></div>
+        <button type="button" class="btn-primary" data-diary-quick>＋ Essen eintragen</button></div>
       <div id="diary"></div>`);
     mountDiary(document.getElementById('diary'), { date, readOnly: false });
+    app.querySelector('[data-diary-quick]').addEventListener('click', () => quickAddFood());
   }
 
-  /** Diary of one day. readOnly + clientId for the coach. */
-  async function mountDiary(root, { date, readOnly, clientId }) {
-    const q = clientId ? `&userId=${clientId}` : '';
+  // ---- Client: Dashboard calories, Strategy (goals + nutrition plan), "More" ----
+
+  /** Dashboard: how much is left to eat today, straight from the food diary. */
+  async function mountKcalCard(root) {
+    if (!root) return;
     let day;
-    const load = async (d) => {
-      date = d;
-      if (!readOnly) try { sessionStorage.setItem('diaryDate', d); } catch { /* private mode */ }
-      root.setAttribute('aria-busy', 'true');
+    const load = async () => {
       try {
-        day = await api('GET', `/api/foodlog?date=${d}${q}`);
-      } catch (err) {
-        root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+        day = await api('GET', `/api/foodlog?date=${todayStr()}`);
+      } catch {
+        root.hidden = true;
         return;
       }
-      root.removeAttribute('aria-busy');
+      if (!root.isConnected) return;
       draw();
     };
-    const afterChange = (r) => {
-      day = r.day;
-      if (r.revoked && r.revoked.length) toast(`${r.revoked.length} Dose(n) zurückgegeben – die Medaillen dafür gibt es nicht mehr.`, true);
-      draw();
-    };
-
     function draw() {
       const t = day.totals;
       const tg = day.targets;
-      const kcalTarget = tg.kcal || (tg.kcalMin && tg.kcalMax ? Math.round((tg.kcalMin + tg.kcalMax) / 2) : null);
-      const left = kcalTarget ? kcalTarget - t.kcal : null;
-      const ringPct = kcalTarget ? Math.min(1, t.kcal / kcalTarget) : 0;
-      const over = tg.kcalMax ? t.kcal > tg.kcalMax : kcalTarget ? t.kcal > kcalTarget * 1.1 : false;
-      const R = 52;
+      const target = tg.kcal || (tg.kcalMin && tg.kcalMax ? Math.round((tg.kcalMin + tg.kcalMax) / 2) : null);
+      const left = target ? target - t.kcal : null;
+      const over = tg.kcalMax ? t.kcal > tg.kcalMax : target ? t.kcal > target * 1.1 : false;
+      const pct = target ? Math.min(1, t.kcal / target) : 0;
+      const R = 46;
       const C = 2 * Math.PI * R;
-      const isToday = date === todayStr();
-      const label = isToday ? 'Heute' : date === addDays(todayStr(), -1) ? 'Gestern' : fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' });
-      const meals = DIARY_MEALS.map(([key, name]) => {
-        const items = day.items.filter((i) => i.meal === key);
-        const kcal = items.reduce((a, i) => a + i.kcal, 0);
-        return `<section class="card diary-meal" data-meal="${key}">
-          <div class="row-between meal-head"><h2>${name}</h2><span class="muted small">${items.length ? `${num(kcal)} kcal` : ''}</span></div>
-          ${items.length ? `<ul class="diary-items">${items.map((i) => `<li>
-            <${readOnly ? 'div' : 'button type="button"'} class="diary-item" data-item="${i.id}">
-              <span class="di-main"><span class="item-name">${esc(i.name)}</span>
-                <span class="muted small di-sub">${i.brand ? `${esc(i.brand)} · ` : ''}${esc(fmtAmount(i.amount, i.unit))} ${macroInline(i)}</span></span>
-              <span class="di-kcal">${num(i.kcal)}<small> kcal</small></span>
-            </${readOnly ? 'div' : 'button'}></li>`).join('')}</ul>` : `<p class="muted small diary-empty">${readOnly ? 'Nichts eingetragen.' : 'Noch nichts eingetragen.'}</p>`}
-          ${readOnly ? '' : `<div class="row diary-add"><button type="button" class="btn-secondary btn-sm" data-add="${key}">+ Lebensmittel</button>
-            <button type="button" class="btn-ghost btn-sm" data-scan="${key}"><span aria-hidden="true">▥</span> Scannen</button></div>`}
-        </section>`;
-      }).join('');
+      root.hidden = false;
       root.innerHTML = `
-        <div class="diary-date">
-          <button type="button" class="icon-btn" data-day="-1" aria-label="Vorheriger Tag">‹</button>
-          <strong>${esc(label)}</strong>
-          <button type="button" class="icon-btn" data-day="1" aria-label="Nächster Tag" ${isToday ? 'disabled' : ''}>›</button>
+        <div class="kcal-card-main">
+          <div class="kcal-ring ${over ? 'over' : ''}" role="img" aria-label="${num(t.kcal)} kcal gegessen${target ? ` von ${num(target)}` : ''}">
+            <svg viewBox="0 0 108 108" aria-hidden="true"><circle cx="54" cy="54" r="${R}" class="kr-track"/>
+              <circle cx="54" cy="54" r="${R}" class="kr-fill" stroke-dasharray="${(C * pct).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 54 54)"/></svg>
+            <div class="kr-text"><strong>${target ? num(Math.abs(left)) : num(t.kcal)}</strong><span>${target ? (left >= 0 ? 'kcal frei' : 'kcal drüber') : 'kcal'}</span></div>
+          </div>
+          <div class="kcal-card-side">
+            <h2>Kalorien heute</h2>
+            <p class="small muted">${num(t.kcal)} gegessen${target ? ` · Ziel ${tg.kcalMin && tg.kcalMax ? esc(fmtKcal(tg.kcalMin, tg.kcalMax)) : `${num(target)} kcal`}` : ' · noch kein Kalorienziel'}</p>
+            ${macroBars(t, tg)}
+          </div>
         </div>
-        <div class="diary-grid">
-          <section class="card diary-summary">
-            <div class="kcal-ring ${over ? 'over' : ''}" role="img" aria-label="${num(t.kcal)} kcal gegessen${kcalTarget ? ` von ${num(kcalTarget)}` : ''}">
-              <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="${R}" class="kr-track"/>
-                <circle cx="60" cy="60" r="${R}" class="kr-fill" stroke-dasharray="${(C * ringPct).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/></svg>
-              <div class="kr-text"><strong>${num(t.kcal)}</strong><span>kcal</span></div>
-            </div>
-            <div class="diary-sum-side">
-              <p class="kcal-left ${over ? 'bad' : ''}">${kcalTarget ? (left >= 0 ? `Noch <strong>${num(left)}</strong> kcal` : `<strong>${num(-left)}</strong> kcal drüber`) : 'Noch kein Kalorienziel'}</p>
-              ${tg.kcalMin && tg.kcalMax ? `<p class="muted small">Ziel ${esc(fmtKcal(tg.kcalMin, tg.kcalMax))}</p>` : ''}
-              ${macroBars(t, tg)}
-            </div>
-          </section>
-          <div class="stack diary-meals">${meals}</div>
-        </div>
-        ${readOnly ? '' : '<p class="muted small diary-note">Die Kalorien des Tages landen automatisch im Tracker. Produktdaten beim Scannen: Open Food Facts.</p>'}`;
-      root.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => load(addDays(date, Number(b.dataset.day)))));
-      if (readOnly) return;
-      root.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => openAddFood(b.dataset.add)));
-      root.querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => scanAndAdd(b.dataset.scan)));
-      root.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => openEditItem(day.items.find((i) => i.id === Number(b.dataset.item)))));
+        <div class="row kcal-card-actions">
+          <button type="button" class="btn-primary btn-sm" data-kcal-add>＋ Essen eintragen</button>
+          <a class="btn btn-secondary btn-sm" href="#/nutrition/diary">Tagebuch</a>
+        </div>`;
+      root.querySelector('[data-kcal-add]').addEventListener('click', () => quickAddFood());
     }
+    const onChange = () => load();
+    document.addEventListener('foodlog-changed', onChange);
+    onCleanup(() => document.removeEventListener('foodlog-changed', onChange));
+    await load();
+  }
 
+  function strategyTabs(active) {
+    return `<nav class="tabs" aria-label="Strategie">
+      <a href="#/strategy" ${active === 'goals' ? 'aria-current="page"' : ''}>Ziele</a>
+      <a href="#/strategy/plan" ${active === 'plan' ? 'aria-current="page"' : ''}>Ernährungsplan</a>
+    </nav>`;
+  }
+
+  /** Strategy → goals: what the coach set, and where the client stands. */
+  async function renderStrategy() {
+    setView(LOADING);
+    const [{ goals, history }, { entries }, plan, training] = await Promise.all([
+      api('GET', '/api/goals'),
+      api('GET', '/api/entries'),
+      api('GET', '/api/nutrition').catch(() => null),
+      api('GET', '/api/training').catch(() => null),
+    ]);
+    const today = todayStr();
+    const last7 = entries.filter((e) => e.date > addDays(today, -7));
+    const avgOf = (k) => {
+      const xs = last7.filter((e) => e[k] !== null && e[k] !== undefined).map((e) => e[k]);
+      return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+    };
+    const weights = entries.filter((e) => e.weight !== null);
+    const current = weights.length ? weights[weights.length - 1].weight : null;
+    const start = weights.length ? weights[0].weight : null;
+    const bar = (p, cls = '') => `<div class="goal-bar ${cls}"><span style="width:${Math.round(Math.max(0, Math.min(1, p)) * 100)}%"></span></div>`;
+    const tiles = [];
+    if (goals.targetWeight !== null && goals.targetWeight !== undefined) {
+      const diff = current !== null ? current - goals.targetWeight : null;
+      const prog = start !== null && current !== null && start !== goals.targetWeight ? (start - current) / (start - goals.targetWeight) : 0;
+      tiles.push(`<section class="card goal-tile">
+        <p class="goal-label">⚖️ Gewicht</p>
+        <p class="goal-value">${num(goals.targetWeight, 1)} <small>kg</small></p>
+        ${bar(prog)}
+        <p class="small muted">${current === null ? 'Noch kein Gewicht eingetragen' : Math.abs(diff) < 0.05 ? `Ziel erreicht – aktuell ${num(current, 1)} kg 🎉` : `Aktuell ${num(current, 1)} kg · noch ${num(Math.abs(diff), 1)} kg`}</p>
+      </section>`);
+    }
+    if (goals.stepsGoal) {
+      const a = avgOf('steps');
+      tiles.push(`<section class="card goal-tile">
+        <p class="goal-label">👟 Schritte</p>
+        <p class="goal-value">${num(goals.stepsGoal)} <small>pro Tag</small></p>
+        ${bar(a === null ? 0 : a / goals.stepsGoal, a !== null && a >= goals.stepsGoal ? 'good' : '')}
+        <p class="small muted">${a === null ? 'Noch keine Schritte diese Woche' : `Ø 7 Tage: ${num(Math.round(a))}`}</p>
+      </section>`);
+    }
+    if (goals.sleepGoal) {
+      const a = avgOf('sleep');
+      tiles.push(`<section class="card goal-tile">
+        <p class="goal-label">😴 Schlaf</p>
+        <p class="goal-value">${esc(fmtSleep(goals.sleepGoal))} <small>pro Nacht</small></p>
+        ${bar(a === null ? 0 : a / goals.sleepGoal, a !== null && a >= goals.sleepGoal ? 'good' : '')}
+        <p class="small muted">${a === null ? 'Noch kein Schlaf diese Woche' : `Ø 7 Tage: ${esc(fmtSleep(a))}`}</p>
+      </section>`);
+    }
+    if (hasKcal(goals)) {
+      const answered = last7.filter((e) => e.caloriesOk !== null && e.caloriesOk !== undefined);
+      const kept = answered.filter((e) => e.caloriesOk).length;
+      const mg = plan && plan.macroGoals;
+      tiles.push(`<section class="card goal-tile">
+        <p class="goal-label">🍽 Kalorien</p>
+        <p class="goal-value">${esc(fmtKcal(goals.caloriesMin, goals.caloriesMax))}</p>
+        ${answered.length ? bar(kept / answered.length, kept / answered.length >= 0.7 ? 'good' : '') : ''}
+        <p class="small muted">${answered.length ? `Diese Woche an ${kept} von ${answered.length} Tagen eingehalten` : 'Pro Tag'}</p>
+        ${mg && (mg.protein || mg.carbs || mg.fat) ? `<div class="goal-macros">${mg.protein ? `<span><strong>${mg.protein} g</strong> Eiweiß</span>` : ''}${mg.carbs ? `<span><strong>${mg.carbs} g</strong> Kohlenh.</span>` : ''}${mg.fat ? `<span><strong>${mg.fat} g</strong> Fett</span>` : ''}</div>` : ''}
+      </section>`);
+    }
+    if (training && training.plan) {
+      tiles.push(`<a class="card goal-tile goal-link" href="#/training">
+        <p class="goal-label">🏋️ Training</p>
+        <p class="goal-value">${training.plan.daysPerWeek}× <small>pro Woche</small></p>
+        <p class="small muted">${esc(training.plan.splitName)} · zum Trainingsplan ›</p>
+      </a>`);
+    }
+    const changed = history && history.length ? history[history.length - 1].changedAt : null;
+    setView(`
+      <div class="page-head"><div>${eyebrow('Dein Plan')}<h1>Strategie</h1>
+        <p class="muted">Die Ziele legt dein Coach mit dir fest${changed ? ` – zuletzt angepasst am ${esc(fmtDate(changed.slice(0, 10), { day: 'numeric', month: 'long' }))}` : ''}.</p></div></div>
+      ${strategyTabs('goals')}
+      ${tiles.length ? `<div class="goal-grid">${tiles.join('')}</div>` : '<div class="card empty-state"><p>Noch keine Ziele.</p><p>Dein Coach legt sie beim nächsten Check-in mit dir fest.</p></div>'}`);
+  }
+
+  /** "More": everything that isn't in the tab bar. */
+  function renderMore() {
+    const row = (href, icon, label, sub, extra = '') => `<a class="more-row" href="${href}" ${extra}><span class="more-icon" aria-hidden="true">${icon}</span>
+      <span class="more-text"><strong>${label}</strong>${sub ? `<span class="muted small">${sub}</span>` : ''}</span>${href === '#/chat' ? '<span class="count" data-unread hidden></span>' : ''}<span class="att-chev" aria-hidden="true">›</span></a>`;
+    setView(`
+      <div class="page-head"><div>${eyebrow('Alles Weitere')}<h1>Mehr</h1></div></div>
+      <div class="card more-list">
+        ${row('#/chat', '💬', 'Nachrichten', 'Chat mit deinem Coach')}
+        ${row('#/nutrition/diary', '📒', 'Ernährungstagebuch', 'Was du heute gegessen hast')}
+        ${row('#/training/history', '📈', 'Trainingshistorie', 'Deine Gewichte im Verlauf')}
+        <button type="button" class="more-row" data-more-recap><span class="more-icon" aria-hidden="true">🎬</span><span class="more-text"><strong>Monatsrückblick</strong><span class="muted small">Dein Monat als Story</span></span><span class="att-chev" aria-hidden="true">›</span></button>
+      </div>
+      <div class="card more-list">
+        ${row('#/account/fame', '🏆', 'Hall of Fame', 'Medaillen und Kühlschrank')}
+        ${row('#/account/h2h', '⚔️', 'Head2Head', 'Fordere andere heraus')}
+      </div>
+      <div class="card more-list">
+        ${row('#/account', '👤', 'Konto & Profil', 'Name, Bild, E-Mail, Passwort')}
+        ${row('#/settings', '⚙️', 'Einstellungen', 'Mitteilungen, Google Health, Darstellung, Daten')}
+      </div>`);
+    refreshUnread();
+    app.querySelector('[data-more-recap]').addEventListener('click', async () => {
+      try {
+        const { months } = await api('GET', '/api/recap/months');
+        if (!months.length) {
+          toast('Noch keine Daten für einen Rückblick.');
+          return;
+        }
+        const last = prevMonthOf(todayStr().slice(0, 7));
+        openRecap(Number(todayStr().slice(8, 10)) <= 7 && months.includes(last) ? last : months[0]);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  /** Search, scan or type in a food and add it to a meal of a day (diary and the ＋ button share this). */
+  function createFoodAdder(ctx) {
     async function scanAndAdd(meal) {
       const code = await scanBarcode();
       if (!code) return;
@@ -4329,10 +4443,11 @@
     }
 
     /** Step 1: search the database, recent foods, scan or type in. */
-    async function openAddFood(meal) {
+    async function openAddFood(meal, quick) {
       const mealName = DIARY_MEALS.find(([k]) => k === meal)[1];
       openDialog(`
-        <h2>${esc(mealName)}</h2>
+        <h2>${quick ? 'Essen eintragen' : esc(mealName)}</h2>
+        ${quick ? `<p class="muted small" style="margin-top:-8px">${esc(fmtDate(ctx.getDate(), { weekday: 'long', day: 'numeric', month: 'long' }))} · die Mahlzeit wählst du im nächsten Schritt</p>` : ''}
         <div class="add-food-top">
           <input type="search" name="q" autocomplete="off" placeholder="Lebensmittel oder Marke suchen…" aria-label="Lebensmittel oder Marke suchen">
           <button type="button" class="btn-secondary" data-scan-here><span aria-hidden="true">▥</span> Scannen</button>
@@ -4432,10 +4547,10 @@
       async (form) => {
         const amount = parseNum(form.amount.value);
         if (!amount || Number.isNaN(amount) || amount <= 0) throw new Error('Bitte eine Menge angeben.');
-        const body = { date, meal: form.meal.value, amount };
+        const body = { date: ctx.getDate(), meal: form.meal.value, amount };
         if (f.source === 'db') body.foodId = f.id;
         else Object.assign(body, { name: f.name, brand: f.brand, barcode: f.barcode, unit: f.unit, kcal: f.kcal, protein: f.protein, carbs: f.carbs, fat: f.fat });
-        afterChange(await api('POST', '/api/foodlog', body));
+        ctx.onSaved(await api('POST', '/api/foodlog', body));
         savedHud('Eingetragen', `${fmtAmount(amount, f.unit)} ${f.name}`);
       });
       const form = dialog.querySelector('form');
@@ -4489,6 +4604,115 @@
         const f = { source: 'custom', name: form.name.value.trim(), brand: form.brand.value.trim() || null, barcode: pre.barcode || null, unit: form.unit.value, kcal, protein: mac('protein'), carbs: mac('carbs'), fat: mac('fat') };
         setTimeout(() => openAmount(meal, f), 0);
       });
+    }
+
+    return { openAddFood, scanAndAdd };
+  }
+
+  /** Meal that fits the time of day – the default for the ＋ button. */
+  function mealForNow() {
+    const h = new Date().getHours();
+    return h < 11 ? 'fruehstueck' : h < 15 ? 'mittag' : h >= 17 && h < 22 ? 'abend' : 'snack';
+  }
+
+  /** ＋ in the tab bar: search or scan a food for today, pick the meal, done. */
+  function quickAddFood(scan) {
+    const adder = createFoodAdder({
+      getDate: () => todayStr(),
+      onSaved: (r) => {
+        document.dispatchEvent(new CustomEvent('foodlog-changed', { detail: r }));
+        if (r.revoked && r.revoked.length) toast(`${r.revoked.length} Dose(n) zurückgegeben – die Medaillen dafür gibt es nicht mehr.`, true);
+      },
+    });
+    if (scan) adder.scanAndAdd(mealForNow());
+    else adder.openAddFood(mealForNow(), true);
+  }
+
+  /** Diary of one day. readOnly + clientId for the coach. */
+  async function mountDiary(root, { date, readOnly, clientId }) {
+    const q = clientId ? `&userId=${clientId}` : '';
+    let day;
+    const load = async (d) => {
+      date = d;
+      if (!readOnly) try { sessionStorage.setItem('diaryDate', d); } catch { /* private mode */ }
+      root.setAttribute('aria-busy', 'true');
+      try {
+        day = await api('GET', `/api/foodlog?date=${d}${q}`);
+      } catch (err) {
+        root.innerHTML = `<div class="card empty-state">${esc(err.message)}</div>`;
+        return;
+      }
+      root.removeAttribute('aria-busy');
+      draw();
+    };
+    const afterChange = (r) => {
+      day = r.day;
+      if (r.revoked && r.revoked.length) toast(`${r.revoked.length} Dose(n) zurückgegeben – die Medaillen dafür gibt es nicht mehr.`, true);
+      draw();
+    };
+
+    function draw() {
+      const t = day.totals;
+      const tg = day.targets;
+      const kcalTarget = tg.kcal || (tg.kcalMin && tg.kcalMax ? Math.round((tg.kcalMin + tg.kcalMax) / 2) : null);
+      const left = kcalTarget ? kcalTarget - t.kcal : null;
+      const ringPct = kcalTarget ? Math.min(1, t.kcal / kcalTarget) : 0;
+      const over = tg.kcalMax ? t.kcal > tg.kcalMax : kcalTarget ? t.kcal > kcalTarget * 1.1 : false;
+      const R = 52;
+      const C = 2 * Math.PI * R;
+      const isToday = date === todayStr();
+      const label = isToday ? 'Heute' : date === addDays(todayStr(), -1) ? 'Gestern' : fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' });
+      const meals = DIARY_MEALS.map(([key, name]) => {
+        const items = day.items.filter((i) => i.meal === key);
+        const kcal = items.reduce((a, i) => a + i.kcal, 0);
+        return `<section class="card diary-meal" data-meal="${key}">
+          <div class="row-between meal-head"><h2>${name}</h2><span class="muted small">${items.length ? `${num(kcal)} kcal` : ''}</span></div>
+          ${items.length ? `<ul class="diary-items">${items.map((i) => `<li>
+            <${readOnly ? 'div' : 'button type="button"'} class="diary-item" data-item="${i.id}">
+              <span class="di-main"><span class="item-name">${esc(i.name)}</span>
+                <span class="muted small di-sub">${i.brand ? `${esc(i.brand)} · ` : ''}${esc(fmtAmount(i.amount, i.unit))} ${macroInline(i)}</span></span>
+              <span class="di-kcal">${num(i.kcal)}<small> kcal</small></span>
+            </${readOnly ? 'div' : 'button'}></li>`).join('')}</ul>` : `<p class="muted small diary-empty">${readOnly ? 'Nichts eingetragen.' : 'Noch nichts eingetragen.'}</p>`}
+          ${readOnly ? '' : `<div class="row diary-add"><button type="button" class="btn-secondary btn-sm" data-add="${key}">+ Lebensmittel</button>
+            <button type="button" class="btn-ghost btn-sm" data-scan="${key}"><span aria-hidden="true">▥</span> Scannen</button></div>`}
+        </section>`;
+      }).join('');
+      root.innerHTML = `
+        <div class="diary-date">
+          <button type="button" class="icon-btn" data-day="-1" aria-label="Vorheriger Tag">‹</button>
+          <strong>${esc(label)}</strong>
+          <button type="button" class="icon-btn" data-day="1" aria-label="Nächster Tag" ${isToday ? 'disabled' : ''}>›</button>
+        </div>
+        <div class="diary-grid">
+          <section class="card diary-summary">
+            <div class="kcal-ring ${over ? 'over' : ''}" role="img" aria-label="${num(t.kcal)} kcal gegessen${kcalTarget ? ` von ${num(kcalTarget)}` : ''}">
+              <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="${R}" class="kr-track"/>
+                <circle cx="60" cy="60" r="${R}" class="kr-fill" stroke-dasharray="${(C * ringPct).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/></svg>
+              <div class="kr-text"><strong>${num(t.kcal)}</strong><span>kcal</span></div>
+            </div>
+            <div class="diary-sum-side">
+              <p class="kcal-left ${over ? 'bad' : ''}">${kcalTarget ? (left >= 0 ? `Noch <strong>${num(left)}</strong> kcal` : `<strong>${num(-left)}</strong> kcal drüber`) : 'Noch kein Kalorienziel'}</p>
+              ${tg.kcalMin && tg.kcalMax ? `<p class="muted small">Ziel ${esc(fmtKcal(tg.kcalMin, tg.kcalMax))}</p>` : ''}
+              ${macroBars(t, tg)}
+            </div>
+          </section>
+          <div class="stack diary-meals">${meals}</div>
+        </div>
+        ${readOnly ? '' : '<p class="muted small diary-note">Die Kalorien des Tages landen automatisch im Dashboard. Produktdaten beim Scannen: Open Food Facts.</p>'}`;
+      root.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => load(addDays(date, Number(b.dataset.day)))));
+      if (readOnly) return;
+      root.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => openAddFood(b.dataset.add)));
+      root.querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => scanAndAdd(b.dataset.scan)));
+      root.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => openEditItem(day.items.find((i) => i.id === Number(b.dataset.item)))));
+    }
+
+    const { openAddFood, scanAndAdd } = createFoodAdder({ getDate: () => date, onSaved: (r) => afterChange(r) });
+    if (!readOnly) {
+      const onQuick = (e) => {
+        if (root.isConnected && date === todayStr() && e.detail && e.detail.day) afterChange(e.detail);
+      };
+      document.addEventListener('foodlog-changed', onQuick);
+      onCleanup(() => document.removeEventListener('foodlog-changed', onQuick));
     }
 
     function openEditItem(i) {
@@ -4639,7 +4863,7 @@
           </form>
           <section class="card coach-diary"><h3 style="margin-bottom:8px">Ernährungstagebuch</h3><div id="coach-diary"></div></section>
           <section class="card"><h3 style="margin-bottom:8px">So funktioniert's</h3>
-            <p class="small muted">Du legst Mahlzeiten und Mengen fest. ${esc(client.displayName)} sieht den Plan unter „Ernährung“ und kann einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – du bekommst dann eine Push-Nachricht. Ändern kannst nur du.</p>
+            <p class="small muted">Du legst Mahlzeiten und Mengen fest. ${esc(client.displayName)} sieht den Plan unter „Strategie → Ernährungsplan“ und kann einzelne Lebensmittel oder ganze Mahlzeiten zum Tausch anfragen – du bekommst dann eine Push-Nachricht. Ändern kannst nur du.</p>
             <p class="small muted">Lebensmittel fehlt? Einfach den Namen eintippen und „neu anlegen“ – oder im <a href="#/admin">Admin-Tool</a> pflegen.</p>
           </section>
           ${history.length ? `<section class="card"><h3 style="margin-bottom:8px">Erledigte Tauschwünsche</h3>${history.map(requestLine).join('')}<p class="small muted" style="margin:8px 0 0">Verschwinden nach einem Tag.</p></section>` : ''}

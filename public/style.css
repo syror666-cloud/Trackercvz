@@ -2714,3 +2714,48 @@ body.recap-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .recap, .recap::before, .rc-slide, .rc-slide > *, .rc-pop { animation: none !important; }
 }
+
+/* ---- client tab bar: Dashboard · Training · ＋ · Strategie · Mehr ---- */
+.nav-plus {
+  flex: 0 0 auto; align-self: center; width: 40px; height: 40px; margin: 0 6px; border-radius: 50%;
+  border: 0; background: var(--text); color: var(--surface); display: grid; place-items: center;
+  font-size: 1.35rem; line-height: 1; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 41, 65, 0.25);
+  transition: transform 0.15s var(--ease-spring, ease);
+}
+.nav-plus:active { transform: scale(0.92); }
+@media (max-width: 720px) {
+  .nav-plus { width: 54px; height: 54px; font-size: 1.7rem; margin: -2px 4px 0; }
+}
+
+/* ---- Dashboard: calories left today ---- */
+.kcal-card { margin-bottom: 14px; }
+.kcal-card-main { display: flex; gap: 18px; align-items: center; }
+.kcal-card .kcal-ring { width: 118px; height: 118px; flex-shrink: 0; }
+.kcal-card .kr-text strong { font-size: 1.55rem; }
+.kcal-card-side { flex: 1; min-width: 0; }
+.kcal-card-side h2 { margin: 0 0 2px; }
+.kcal-card-side p { margin: 0 0 8px; }
+.kcal-card-actions { gap: 8px; margin-top: 12px; }
+.kcal-card-actions > * { flex: 1; justify-content: center; }
+
+/* ---- Strategy: goals ---- */
+.goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.goal-tile { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.goal-tile p { margin: 0; }
+.goal-label { font-weight: 700; color: var(--muted); font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.goal-value { font: 700 2rem/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.goal-value small { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+.goal-bar { height: 8px; border-radius: 8px; background: var(--line); overflow: hidden; }
+.goal-bar span { display: block; height: 100%; background: var(--accent); border-radius: 8px; }
+.goal-bar.good span { background: var(--good); }
+.goal-macros { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 4px; font-size: 0.85rem; color: var(--muted); }
+.goal-macros strong { color: var(--text); }
+.goal-link { text-decoration: none; color: inherit; }
+
+/* ---- More ---- */
+.more-list { padding: 4px 0; margin-bottom: 14px; }
+.more-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 18px; min-height: 58px; text-decoration: none; color: inherit; background: none; border: 0; text-align: left; font: inherit; cursor: pointer; }
+.more-row + .more-row { border-top: 1px solid var(--line); }
+.more-icon { font-size: 1.3rem; width: 28px; text-align: center; }
+.more-text { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+@media (min-width: 721px) { .kcal-card-actions > * { flex: 0 1 220px; } }
