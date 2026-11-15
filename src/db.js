@@ -427,6 +427,8 @@ function migrate(db) {
            WHERE calories_goal IS NOT NULL AND calories_min IS NULL`);
 
   addColumns(db, 'checkins', [['highlights', "TEXT NOT NULL DEFAULT '[]'"]]);
+  // kind 'skipped': the coach set the week's check-in aside (too little data); dismissed_at: the client clicked it away
+  addColumns(db, 'checkins', [['kind', "TEXT NOT NULL DEFAULT 'checkin'"], ['dismissed_at', 'TEXT']]);
   addColumns(db, 'users', [['last_seen_at', 'TEXT'], ['category', 'TEXT'], ['avatar', 'TEXT'], ['avatar_updated', 'TEXT'], ['seen_release', 'TEXT'], ['prefs', 'TEXT']]);
   addColumns(db, 'users', [['email', 'TEXT'], ['email_verified', 'INTEGER NOT NULL DEFAULT 0'], ['h2h_visible', 'INTEGER NOT NULL DEFAULT 0'], ['showcase', "TEXT NOT NULL DEFAULT '[]'"]]);
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email COLLATE NOCASE) WHERE email IS NOT NULL');

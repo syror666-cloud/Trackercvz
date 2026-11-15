@@ -505,6 +505,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       seenAt: ci.seen_at,
       repliedAt: ci.replied_at,
       acceptedAt: ci.accepted_at,
+      kind: ci.kind || 'checkin',
+      dismissedAt: ci.dismissed_at || null,
     };
   }
 
@@ -903,6 +905,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
             lastEntry: c.last_entry,
             lastCheckin: last ? checkinRow(last) : null,
             doneThisWeek: Boolean(last && last.created_at >= periodStart),
+            skippedThisWeek: Boolean(last && last.created_at >= periodStart && last.kind === 'skipped'),
           };
         }),
       };
@@ -977,6 +980,31 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const mailStatus = reports ? reports.autoCheckinMail(id) : 'disabled';
       ctx.res.statusCode = 201;
       return { checkin: checkinRow(q.checkin.get(id)), mail: mailStatus };
+    }],
+
+    // The coach sets this week's check-in aside, e.g. because the client has hardly tracked. The client is told why.
+    ['POST', /^\/api\/checkins\/skip$/, async (ctx) => {
+      const coach = requireCoach(ctx);
+      const c = targetClient(ctx);
+      const message = textField((await readBody(ctx.req)).message, { name: 'Nachricht', max: 2000 });
+      if (!message) throw new HttpError(400, 'Bitte kurz schreiben, warum es diese Woche keinen Check-in gibt');
+      const current = JSON.stringify(goalsRow(q.goals.get(c.id)));
+      const id = Number(db.prepare(`INSERT INTO checkins (client_id, coach_id, message, proposal, previous, highlights, status, kind)
+        VALUES (?, ?, ?, '{}', ?, '[]', 'accepted', 'skipped')`).run(c.id, coach.id, message, current).lastInsertRowid);
+      notifier
+        .sendToUsers([c.id], { title: 'Diese Woche kein Check-in', body: 'Dein Coach hat dir geschrieben, warum – und was du tun kannst.', url: '/#/' })
+        .catch((err) => console.error(err));
+      ctx.res.statusCode = 201;
+      return { checkin: checkinRow(q.checkin.get(id)) };
+    }],
+
+    // The client has read it and clicks the card away.
+    ['POST', /^\/api\/checkins\/(\d+)\/dismiss$/, async (ctx, [, id]) => {
+      const u = requireUser(ctx);
+      const ci = q.checkin.get(Number(id));
+      if (!ci || u.role !== 'client' || ci.client_id !== u.id) throw new HttpError(404, 'Check-in nicht gefunden');
+      db.prepare("UPDATE checkins SET dismissed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), seen_at = COALESCE(seen_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')) WHERE id = ?").run(ci.id);
+      return { checkin: checkinRow(q.checkin.get(ci.id)) };
     }],
 
     ['POST', /^\/api\/checkins\/(\d+)\/accept$/, async (ctx, [, id]) => {

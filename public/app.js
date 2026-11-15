@@ -194,6 +194,17 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-checkin-dismiss', date: 'November 2026',
+      client: [
+        ['✓', 'Check-in wegklicken', 'Gelesen? Tipp beim Check-in auf „✓ Gelesen“ – dann verschwindet er vom Dashboard. Mit Anpassungen verschwindet er, sobald du sie annimmst.'],
+        ['🧹', 'Aufgeräumte Kalorienkarte', 'Essen trägst du jetzt über das ＋ unten ein, das Tagebuch findest du unter „Mehr“.'],
+      ],
+      coach: [
+        ['⏭', 'Check-in aussetzen', 'Zu wenig getrackt? Im Check-in unten „Check-in diese Woche aussetzen“: Dein Klient bekommt eine kurze Nachricht mit dem Grund (Vorschlag schon ausgefüllt), die Woche zählt bei dir als erledigt. Bei weniger als 4 getrackten Tagen ist der Bereich schon aufgeklappt.'],
+        ['✓', 'Gelesen-Bestätigung', 'Beim letzten Check-in siehst du jetzt, ob dein Klient ihn bestätigt hat.'],
+      ],
+    },
+    {
       id: '2026-11-new-nav', date: 'November 2026',
       client: [
         ['🧭', 'Neue Navigation', 'Unten findest du jetzt Dashboard, Training, ＋, Strategie und Mehr. Nachrichten, Tagebuch, Hall of Fame und Einstellungen liegen unter „Mehr“.'],
@@ -1678,9 +1689,34 @@
     }
     const ci = checkins[0];
     const recent = ci && Date.now() - Date.parse(ci.createdAt) < 8 * 86400000;
-    // Once the client has accepted the changes, the check-in is done and the card disappears.
-    if (!ci || ci.status === 'accepted' || !(recent || (ci.status === 'open' && ci.changes.length))) {
+    const skipped = ci && ci.kind === 'skipped';
+    // Gone once clicked away, once the changes are accepted, or when it is old.
+    if (!ci || ci.dismissedAt || (!skipped && ci.status === 'accepted') || !(recent || (!skipped && ci.status === 'open' && ci.changes.length))) {
       root.innerHTML = '';
+      return;
+    }
+    const dismiss = async (btn) => {
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/checkins/${ci.id}/dismiss`);
+        const card = root.querySelector('.checkin-card');
+        if (card) card.classList.add('leaving');
+        setTimeout(() => (root.innerHTML = ''), 250);
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, true);
+      }
+    };
+    if (skipped) {
+      const d = new Date(ci.createdAt).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), { weekday: 'long', day: '2-digit', month: '2-digit' });
+      root.innerHTML = `
+        <section class="card checkin-card checkin-skipped">
+          <div class="row-between"><h2>⏭ Diese Woche kein Check-in</h2><span class="badge">${esc(d)}</span></div>
+          <p class="checkin-msg">${esc(ci.message)}</p>
+          <div class="row" style="margin-top:12px"><button type="button" class="btn-primary" data-dismiss>✓ Verstanden</button>
+            <a class="btn btn-ghost" href="#/chat">Coach schreiben</a></div>
+        </section>`;
+      root.querySelector('[data-dismiss]').addEventListener('click', (e) => dismiss(e.currentTarget));
       return;
     }
     const date = new Date(ci.createdAt).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE'), { weekday: 'long', day: '2-digit', month: '2-digit' });
@@ -1703,7 +1739,7 @@
         ${changesHtml}
         ${state}
         <div class="row" style="margin-top:12px">
-          ${hasChanges && ci.status === 'open' ? '<button type="button" class="btn-primary" data-accept>✓ Anpassungen annehmen</button>' : ''}
+          ${hasChanges && ci.status === 'open' ? '<button type="button" class="btn-primary" data-accept>✓ Anpassungen annehmen</button>' : '<button type="button" class="btn-primary" data-dismiss>✓ Gelesen</button>'}
           <button type="button" class="btn-secondary" data-reply>${ci.repliedAt ? 'Nochmal antworten' : 'Antworten'}</button>
           <a class="btn btn-ghost" href="/api/checkins/${ci.id}/pdf" download>Als PDF</a>
         </div>
@@ -1716,6 +1752,8 @@
       </section>`;
 
     const form = root.querySelector('.reply-form');
+    const dismissBtn = root.querySelector('[data-dismiss]');
+    if (dismissBtn) dismissBtn.addEventListener('click', () => dismiss(dismissBtn));
     root.querySelector('[data-reply]').addEventListener('click', () => {
       form.hidden = false;
       form.body.focus();
@@ -3284,7 +3322,7 @@
         ${clients
           .map(
             (c, i) => `<a href="#/checkin/${c.id}" class="queue-item ${c.doneThisWeek ? 'done' : ''}"${c.id === selected.id ? ' aria-current="page"' : ''}>
-              <span class="queue-num">${c.doneThisWeek ? '✓' : i + 1}</span><span>${esc(c.displayName)}</span>${c.category ? `<i class="cat-dot cat-${c.category}" title="${CATEGORIES[c.category]}"></i>` : ''}</a>`
+              <span class="queue-num">${c.skippedThisWeek ? '⏭' : c.doneThisWeek ? '✓' : i + 1}</span><span>${esc(c.displayName)}</span>${c.category ? `<i class="cat-dot cat-${c.category}" title="${CATEGORIES[c.category]}"></i>` : ''}</a>`
           )
           .join('')}
       </nav>
@@ -3335,8 +3373,8 @@
     const last = rv.checkins[0];
     const lastHtml = last
       ? `<div class="small muted">Letzter Check-in: ${esc(new Date(last.createdAt).toLocaleDateString((window.I18N ? I18N.locale : 'de-DE')))} ·
-          ${last.status === 'accepted' ? '<span class="good">Anpassungen angenommen</span>' : last.changes.length ? '<span class="warn">Anpassungen noch offen</span>' : 'ohne Anpassungen'}
-          ${last.seenAt ? ' · gelesen' : ' · noch nicht gelesen'}</div>`
+          ${last.kind === 'skipped' ? '⏭ ausgesetzt' : last.status === 'accepted' ? '<span class="good">Anpassungen angenommen</span>' : last.changes.length ? '<span class="warn">Anpassungen noch offen</span>' : 'ohne Anpassungen'}
+          ${last.dismissedAt ? ' · bestätigt ✓' : last.seenAt ? ' · gelesen' : ' · noch nicht gelesen'}</div>`
       : '<div class="small muted">Erster Check-in für diesen Klienten.</div>';
     const msgsHtml = rv.clientMessages.length
       ? `<div class="client-msgs"><div class="small muted" style="margin-bottom:6px">Nachrichten von ${esc(rv.client.displayName)} seit dem letzten Check-in</div>
@@ -3417,6 +3455,12 @@
           <button class="btn-primary btn-block" type="submit">Check-in senden${nextOpen ? ' & weiter →' : ''}</button>
           ${nextOpen ? `<a class="btn btn-ghost btn-block" href="#/checkin/${nextOpen.id}">Überspringen → ${esc(nextOpen.displayName)}</a>` : ''}
           <p class="error" hidden></p>
+          <details class="skip-box" ${cur.daysLogged < 4 ? 'open' : ''}>
+            <summary>⏭ Check-in diese Woche aussetzen${cur.daysLogged < 4 ? ` <span class="badge warn">erst ${cur.daysLogged}/7 Tage getrackt</span>` : ''}</summary>
+            <p class="small muted">Zu wenig Daten für ein sinnvolles Feedback? ${esc(rv.client.displayName.split(' ')[0])} bekommt statt des Check-ins diese Nachricht – die Woche zählt bei dir als erledigt.</p>
+            <textarea name="skipMessage" maxlength="2000" rows="4">Hi ${esc(rv.client.displayName.split(' ')[0])}, diese Woche gibt es noch keinen Check-in: Du hast erst an ${cur.daysLogged} von 7 Tagen eingetragen – das reicht mir nicht für ein ehrliches Feedback. Trag bitte jeden Tag Gewicht, Schritte und Schlaf ein, dann schauen wir nächste Woche gemeinsam drauf 💪</textarea>
+            <button type="button" class="btn-secondary btn-block" data-skip-checkin>Aussetzen & ${esc(rv.client.displayName.split(' ')[0])} informieren</button>
+          </details>
           <p class="hint">Der Check-in erscheint oben in der Übersicht des Klienten (nicht im Chat). Er kann die Anpassungen mit einem Klick annehmen – nur seine Antwort landet im Chat.</p>
         </form>
       </div>`;
@@ -3480,6 +3524,23 @@
         : 'Keine Änderungen am Plan – nur Feedback.';
     };
     form.addEventListener('input', showChanges);
+    form.querySelector('[data-skip-checkin]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const msg = form.skipMessage.value.trim();
+      if (!msg) {
+        toast('Bitte kurz schreiben, warum es keinen Check-in gibt.', true);
+        return;
+      }
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/checkins/skip?userId=${selected.id}`, { message: msg });
+        toast(`Check-in für ${rv.client.displayName} ausgesetzt – Nachricht ist raus`);
+        location.hash = nextOpen ? `#/checkin/${nextOpen.id}` : '#/checkin/done';
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, true);
+      }
+    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = form.querySelector('.error');
@@ -4265,11 +4326,7 @@
             ${macroBars(t, tg)}
           </div>
         </div>
-        <div class="row kcal-card-actions">
-          <button type="button" class="btn-primary btn-sm" data-kcal-add>＋ Essen eintragen</button>
-          <a class="btn btn-secondary btn-sm" href="#/nutrition/diary">Tagebuch</a>
-        </div>`;
-      root.querySelector('[data-kcal-add]').addEventListener('click', () => quickAddFood());
+`;
     }
     const onChange = () => load();
     document.addEventListener('foodlog-changed', onChange);

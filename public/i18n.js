@@ -812,6 +812,10 @@ pro Tag|per day|al día|al giorno
 pro Nacht|per night|por noche|a notte
 pro Woche|per week|por semana|a settimana
 Essen eintragen – suchen oder scannen|Log food – search or scan|Registrar comida: buscar o escanear|Registra cibo – cerca o scansiona
+✓ Gelesen|✓ Read|✓ Leído|✓ Letto
+✓ Verstanden|✓ Got it|✓ Entendido|✓ Capito
+Coach schreiben|Message coach|Escribir al coach|Scrivi al coach
+⏭ Diese Woche kein Check-in|⏭ No check-in this week|⏭ Sin check-in esta semana|⏭ Nessun check-in questa settimana
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

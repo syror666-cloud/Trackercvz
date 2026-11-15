@@ -196,3 +196,43 @@ Top!'), (2, 2, '✅ Anpassungen angenommen:
   assert.equal(again.prepare('SELECT COUNT(*) AS n FROM messages').get().n, 1);
   again.close();
 });
+
+test('check-in: coach sets a week aside, client clicks check-ins away', async (t) => {
+  const { server, client } = await setup();
+  t.after(() => server.close());
+  const coach = client();
+  await coach('POST', '/api/login', { username: 'coach', password: 'coachpass123' });
+  const id = (await coach('POST', '/api/clients', { username: 'max', displayName: 'Max', password: 'maxpass123' })).data.client.id;
+  const max = client();
+  await max('POST', '/api/login', { username: 'max', password: 'maxpass123' });
+
+  // set aside: needs a message, only the coach may, counts as done this week
+  assert.equal((await coach('POST', `/api/checkins/skip?userId=${id}`, { message: ' ' })).status, 400);
+  assert.equal((await max('POST', `/api/checkins/skip?userId=${id}`, { message: 'x' })).status, 403);
+  const skip = await coach('POST', `/api/checkins/skip?userId=${id}`, { message: 'Erst 2 Tage getrackt – nächste Woche!' });
+  assert.equal(skip.status, 201);
+  assert.equal(skip.data.checkin.kind, 'skipped');
+  const q = (await coach('GET', '/api/checkins/queue')).data.clients.find((c) => c.id === id);
+  assert.equal(q.doneThisWeek, true);
+  assert.equal(q.skippedThisWeek, true);
+  let list = (await max('GET', '/api/checkins')).data.checkins;
+  assert.equal(list[0].kind, 'skipped');
+  assert.equal(list[0].message, 'Erst 2 Tage getrackt – nächste Woche!');
+
+  // the client clicks it away; only their own
+  const other = client();
+  await coach('POST', '/api/clients', { username: 'ben', displayName: 'Ben', password: 'benpass1234' });
+  await other('POST', '/api/login', { username: 'ben', password: 'benpass1234' });
+  assert.equal((await other('POST', `/api/checkins/${list[0].id}/dismiss`)).status, 404);
+  assert.equal((await max('POST', `/api/checkins/${list[0].id}/dismiss`)).status, 200);
+  list = (await max('GET', '/api/checkins')).data.checkins;
+  assert.ok(list[0].dismissedAt);
+
+  // a normal check-in without changes can be confirmed as read, too
+  await coach('POST', `/api/checkins?userId=${id}`, { message: 'Gute Woche!' });
+  list = (await max('GET', '/api/checkins')).data.checkins;
+  assert.equal(list[0].kind, 'checkin');
+  assert.equal(list[0].dismissedAt, null);
+  await max('POST', `/api/checkins/${list[0].id}/dismiss`);
+  assert.ok((await coach('GET', `/api/checkins?userId=${id}`)).data.checkins[0].dismissedAt);
+});
