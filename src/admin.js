@@ -205,8 +205,14 @@ function adminRoutes({ db, reminders, HttpError, readBody, textField, numberFiel
     const iso = (days) => new Date(now - days * DAY_MS).toISOString();
     const cfg = reminders.config();
     const evals = new Map(reminders.evaluate(cfg, today).map((e) => [e.id, e]));
+    const lastEntry = db.prepare('SELECT MAX(date) AS d FROM entries WHERE user_id = ?');
     const clients = q.activity.all(iso(7), iso(30), addDays(today, -7), addDays(today, -30), addDays(today, -7), addDays(today, -30)).map((r) => {
-      const ev = evals.get(r.id);
+      // paused (archived) clients get no reminders, so the reminder check doesn't list them
+      let ev = evals.get(r.id);
+      if (!ev) {
+        const d = lastEntry.get(r.id).d;
+        ev = { missing: d ? Math.max(0, daysBetween(d, today)) : null, lastEntry: d, state: 'archived', lastReminder: null, lastReminderResult: null };
+      }
       return {
         id: r.id,
         displayName: r.display_name,

@@ -194,6 +194,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-admin-fix', date: 'November 2026',
+      client: [],
+      coach: [
+        ['🔧', 'Admin-Bereich öffnet wieder', 'Bugfix: Mit pausierten Klienten ließ sich der Admin-Bereich nicht mehr öffnen. Pausierte Klienten stehen dort jetzt mit „⏸ pausiert“. Lädt eine Seite einmal nicht, siehst du künftig eine Fehlermeldung mit „Nochmal versuchen“ statt eines endlosen Ladekreises.'],
+      ],
+    },
+    {
       id: '2026-11-fridge-sound', date: 'November 2026',
       client: [
         ['🔊', 'Dein Kühlschrank brummt', 'Beim Öffnen ploppt die Tür und die Flaschen klirren, solange er offen ist, brummt er leise. Mit 🔊/🔇 neben dem Kühlschrank schaltest du den Ton aus.'],
@@ -726,6 +733,14 @@
   }
 
   window.addEventListener('hashchange', route);
+  // a page that fails to load shows the error instead of spinning forever
+  window.addEventListener('unhandledrejection', (e) => {
+    if (!me || !app.querySelector('.page-loading') || app.children.length !== 1) return;
+    const msg = e.reason && e.reason.message ? e.reason.message : 'Unbekannter Fehler';
+    app.innerHTML = `<div class="card empty-state" role="alert"><p><strong>Diese Seite konnte nicht geladen werden.</strong></p>
+      <p class="muted small">${esc(msg)}</p><p><button type="button" class="btn-secondary" data-retry>Nochmal versuchen</button></p></div>`;
+    app.querySelector('[data-retry]').addEventListener('click', () => route());
+  });
 
   // coach: delete a client who asked for it (banner on every tab of the client page)
   document.addEventListener('click', async (e) => {
@@ -5424,7 +5439,7 @@
 
   function drawActivity(ov) {
     const root = document.getElementById('activity');
-    const rows = ov.clients.slice().sort((a, b) => b.missingDays - a.missingDays);
+    const rows = ov.clients.slice().sort((a, b) => (b.missingDays ?? -1) - (a.missingDays ?? -1));
     const missingBadge = (c) => {
       const d = c.missingDays;
       const cls = d <= 1 ? 'good' : d === 2 ? 'warn' : 'bad';
@@ -5437,6 +5452,7 @@
       'sent-today': 'heute erinnert',
       'already-reminded': 'schon erinnert',
       'no-push': '<span class="muted">kein Push</span>',
+      archived: '<span class="muted">⏸ pausiert</span>',
     };
     root.innerHTML = `
       <div class="row-between" style="margin-bottom:8px"><h2>Aktivität &amp; Logins</h2><span class="muted small">${rows.length} Klienten</span></div>

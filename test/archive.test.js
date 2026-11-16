@@ -54,6 +54,11 @@ test('archive: paused clients leave the to-dos and come back on their date', asy
   assert.deepEqual((await call('GET', '/api/checkins/queue')).data.clients.map((c) => c.id), [ben]);
   assert.deepEqual(reminders.evaluate({ days: 1 }, today()).map((c) => c.id), [ben]);
   assert.deepEqual(reminders.weightEvaluate(today()).map((c) => c.id), [ben]);
+  // the admin panel still opens and lists the paused client as such
+  const ov = await call('GET', '/api/admin/overview');
+  assert.equal(ov.status, 200);
+  assert.equal(ov.data.clients.find((c) => c.id === anna).reminderState, 'archived');
+  assert.equal(ov.data.clients.find((c) => c.id === ben).reminderState !== 'archived', true);
 
   // the date comes: back automatically
   assert.deepEqual(wakeArchived(db, plus(6)), []);
