@@ -194,6 +194,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-push-only-open', date: 'November 2026',
+      client: [],
+      coach: [
+        ['🔕', 'Erinnerungen nur an die, die noch fehlen', 'Geplante Push-Nachrichten gehen auf Wunsch nur an Klienten, die heute noch nichts eingetragen haben – z. B. die Morgen-Erinnerung. Bei täglichen und wöchentlichen Nachrichten ist das jetzt eingeschaltet (auch bei deinen bestehenden) und lässt sich pro Nachricht umschalten. Von Google Health übertragene Werte zählen nicht als Eintrag.'],
+      ],
+    },
+    {
       id: '2026-11-admin-fix', date: 'November 2026',
       client: [],
       coach: [
@@ -5726,9 +5733,10 @@
           <div class="row-between"><strong>${esc(n.title)}</strong>
             <span class="badge ${n.active ? 'good' : ''}">${esc(n.scheduleText)}</span></div>
           <div class="small">${esc(n.body)}</div>
-          <div class="small muted">An: ${who} · ${state}${n.lastSentAt ? ` · Zuletzt ${esc(fmt(n.lastSentAt))}: ${esc(n.lastResult || '')}` : ''}</div>
+          <div class="small muted">An: ${who}${n.onlyOpen ? ' – nur wer heute noch nichts eingetragen hat' : ''} · ${state}${n.lastSentAt ? ` · Zuletzt ${esc(fmt(n.lastSentAt))}: ${esc(n.lastResult || '')}` : ''}</div>
           <div class="row notif-actions">
             <button type="button" class="btn-ghost btn-sm" data-send="${n.id}">Jetzt senden</button>
+            ${n.active ? `<label class="check small notif-only-open"><input type="checkbox" data-only-open="${n.id}" ${n.onlyOpen ? 'checked' : ''}> nur wer noch nicht eingetragen hat</label>` : ''}
             ${n.schedule !== 'once' ? `<button type="button" class="btn-ghost btn-sm" data-toggle="${n.id}" data-active="${n.active}">${n.active ? 'Pausieren' : 'Fortsetzen'}</button>` : ''}
             ${n.schedule === 'once' && n.active ? `<button type="button" class="btn-ghost btn-sm" data-toggle="${n.id}" data-active="true">Abbrechen</button>` : ''}
             <button type="button" class="btn-ghost btn-sm danger-text" data-del="${n.id}">Löschen</button>
@@ -5754,6 +5762,17 @@
       b.addEventListener('click', async () => {
         try {
           await api('PATCH', `/api/notifications/${b.dataset.toggle}`, { active: b.dataset.active !== 'true' });
+        } catch (err) {
+          toast(err.message, true);
+        }
+        reload();
+      })
+    );
+    root.querySelectorAll('[data-only-open]').forEach((b) =>
+      b.addEventListener('change', async () => {
+        try {
+          await api('PATCH', `/api/notifications/${b.dataset.onlyOpen}`, { onlyOpen: b.checked });
+          toast(b.checked ? 'Geht jetzt nur an Klienten, die noch nichts eingetragen haben' : 'Geht wieder an alle');
         } catch (err) {
           toast(err.message, true);
         }
@@ -5807,6 +5826,8 @@
            <input id="n-time" type="time" name="time" value="08:00">
          </div>
        </fieldset>
+       <label class="check"><input type="checkbox" name="onlyOpen"> Nur an Klienten, die heute noch nichts eingetragen haben</label>
+       <p class="hint" style="margin-top:2px">Ideal für Erinnerungen: Wer schon Gewicht, Training, Essen o. Ä. eingetragen hat, bekommt sie nicht. Werte, die Google Health automatisch überträgt, zählen nicht als Eintrag.</p>
        <div class="dialog-actions">
          <button type="button" class="btn-secondary" data-close>Abbrechen</button>
          <button type="submit" class="btn-primary">Speichern</button>
@@ -5819,6 +5840,7 @@
           audience: f.audience.value,
           recipientIds: [...f.querySelectorAll('[name=recipient]:checked')].map((x) => Number(x.value)),
           schedule,
+          onlyOpen: f.onlyOpen.checked,
         };
         if (schedule === 'once' && f.when.value === 'later') {
           if (!f.sendAt.value) throw new Error('Bitte Datum und Uhrzeit wählen.');
@@ -5832,8 +5854,14 @@
       }
     );
     const f = dialog.querySelector('form');
+    let lastSchedule = null;
     const sync = () => {
       const sch = f.schedule.value;
+      // recurring messages are usually reminders: suggest the condition when switching to daily/weekly
+      if (sch !== lastSchedule) {
+        f.onlyOpen.checked = sch !== 'once';
+        lastSchedule = sch;
+      }
       f.querySelector('[data-once]').hidden = sch !== 'once';
       f.querySelector('[data-weekdays]').hidden = sch !== 'weekly';
       f.querySelector('[data-time]').hidden = sch === 'once';

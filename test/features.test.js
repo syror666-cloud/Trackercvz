@@ -9,7 +9,7 @@ const { openDb, createUser } = require('../src/db');
 const { createApp } = require('../src/app');
 const { createNotifier } = require('../src/notify');
 const { generateVapidKeys, vapidAuthorization, encryptPayload, isAllowedEndpoint } = require('../src/push');
-const { nextRecurringRun, zonedToUtc } = require('../src/schedule');
+const { nextRecurringRun, zonedToUtc, localDate } = require('../src/schedule');
 
 const hmac = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
 
@@ -197,6 +197,27 @@ test('push consent, coach notifications and chat push', async (t) => {
   const chatPush = JSON.parse(decrypt(Buffer.from(sent[2].opts.body), sub.ecdh, sub.auth));
   assert.equal(chatPush.body, 'Du hast eine neue Nachricht von deinem Coach');
   assert.ok(!JSON.stringify(chatPush).includes('Super Woche'), 'the message text must not be in the notification');
+
+  // "Only who hasn't tracked yet today": Google-only values don't count, an own entry does.
+  const today = localDate(Date.now(), 'Europe/Berlin');
+  const reminder = (await coach('POST', '/api/notifications', {
+    title: 'Morgens wiegen', body: 'Ab auf die Waage!', audience: 'all', schedule: 'daily', time: '07:30', onlyOpen: true,
+  })).data.notification;
+  assert.equal(reminder.onlyOpen, true);
+  db.prepare('INSERT INTO entries (user_id, date, steps) VALUES (?, ?, ?)').run(annaId, today, 1200); // Google Health sync
+  let before = sent.length;
+  await coach('POST', `/api/notifications/${reminder.id}/send`);
+  assert.equal(sent.length, before + 1, 'Google-only steps are no own entry: still reminded');
+  await anna('PUT', `/api/entries/${today}`, { weight: 61.5 });
+  before = sent.length;
+  const skippedRun = (await coach('POST', `/api/notifications/${reminder.id}/send`)).data.notification;
+  assert.equal(sent.length, before, 'already tracked today: no reminder');
+  assert.match(skippedRun.lastResult, /alle haben heute schon eingetragen/);
+  // switched off again: goes to everyone
+  assert.equal((await coach('PATCH', `/api/notifications/${reminder.id}`, { onlyOpen: false })).data.notification.onlyOpen, false);
+  await coach('POST', `/api/notifications/${reminder.id}/send`);
+  assert.equal(sent.length, before + 1);
+  await coach('DELETE', `/api/notifications/${reminder.id}`);
 
   // Expired subscriptions (410) are removed.
   db.prepare("UPDATE push_subscriptions SET endpoint = 'https://fcm.googleapis.com/gone' WHERE user_id = ?").run(annaId);

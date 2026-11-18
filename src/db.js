@@ -442,6 +442,10 @@ function migrate(db) {
   addColumns(db, 'workouts', [['duration_min', 'INTEGER']]);
   // a value the client typed in themselves is never overwritten by Google Health again
   addColumns(db, 'entries', [['steps_manual', 'INTEGER NOT NULL DEFAULT 0'], ['sleep_manual', 'INTEGER NOT NULL DEFAULT 0']]);
+  // planned push messages can go only to clients who haven't tracked yet today; existing daily/weekly ones switch it on
+  const hadOnlyOpen = db.prepare("SELECT 1 FROM pragma_table_info('notifications') WHERE name = 'only_open'").get();
+  addColumns(db, 'notifications', [['only_open', 'INTEGER NOT NULL DEFAULT 0']]);
+  if (!hadOnlyOpen) db.exec("UPDATE notifications SET only_open = 1 WHERE schedule IN ('daily', 'weekly')");
   if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health
   db.exec('DROP TABLE IF EXISTS health_tokens');

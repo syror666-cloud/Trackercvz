@@ -817,6 +817,11 @@ Essen eintragen – suchen oder scannen|Log food – search or scan|Registrar co
 Coach schreiben|Message coach|Escribir al coach|Scrivi al coach
 ⏭ Diese Woche kein Check-in|⏭ No check-in this week|⏭ Sin check-in esta semana|⏭ Nessun check-in questa settimana
 Kühlschrank-Ton|Fridge sound|Sonido de la nevera|Suono del frigo
+Nur an Klienten, die heute noch nichts eingetragen haben|Only to clients who haven't logged anything today|Solo a clientes que hoy aún no han registrado nada|Solo ai clienti che oggi non hanno ancora registrato nulla
+Ideal für Erinnerungen: Wer schon Gewicht, Training, Essen o. Ä. eingetragen hat, bekommt sie nicht. Werte, die Google Health automatisch überträgt, zählen nicht als Eintrag.|Ideal for reminders: anyone who already logged weight, training, food etc. won't get it. Values synced by Google Health don't count as an entry.|Ideal para recordatorios: quien ya registró peso, entrenamiento, comida, etc. no lo recibe. Los valores que sincroniza Google Health no cuentan.|Ideale per i promemoria: chi ha già registrato peso, allenamento, cibo ecc. non lo riceve. I valori sincronizzati da Google Health non contano.
+nur wer noch nicht eingetragen hat|only who hasn't logged yet|solo quien aún no registró|solo chi non ha ancora registrato
+Geht wieder an alle|Goes to everyone again|Vuelve a ir a todos|Va di nuovo a tutti
+Geht jetzt nur an Klienten, die noch nichts eingetragen haben|Now only goes to clients who haven't logged anything|Ahora solo va a clientes que aún no registraron nada|Ora va solo ai clienti che non hanno ancora registrato nulla
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

@@ -1,7 +1,13 @@
 'use strict';
 
 const { generateVapidKeys, sendPush } = require('./push');
-const { nextRecurringRun } = require('./schedule');
+const { nextRecurringRun, localDate } = require('./schedule');
+
+// "Already tracked today": something the client entered themselves – values Google Health filled in don't count.
+const TRACKED_TODAY = `SELECT 1 FROM entries WHERE user_id = ? AND date = ? AND (
+  weight IS NOT NULL OR note IS NOT NULL OR training IS NOT NULL OR calories_ok IS NOT NULL OR calories IS NOT NULL
+  OR steps_manual = 1 OR sleep_manual = 1)
+  UNION ALL SELECT 1 FROM food_log WHERE client_id = ? AND date = ? LIMIT 1`;
 
 /**
  * Delivers push messages to users' registered devices and runs scheduled coach notifications.
@@ -89,28 +95,34 @@ function createNotifier(db, { subject, timezone = 'Europe/Berlin', fetchImpl } =
   }
 
   /** Clients a coach notification goes to: only those who agreed to push messages. */
-  function recipientsOf(n) {
-    if (n.audience === 'all') return q.consentingClients.all().map((r) => r.id);
-    return JSON.parse(n.recipient_ids).filter((id) => {
-      const c = q.consentOf.get(id);
-      return c && c.status === 'granted';
-    });
+  function recipientsOf(n, now = Date.now()) {
+    const ids = n.audience === 'all'
+      ? q.consentingClients.all().map((r) => r.id)
+      : JSON.parse(n.recipient_ids).filter((id) => {
+        const c = q.consentOf.get(id);
+        return c && c.status === 'granted';
+      });
+    if (!n.only_open) return ids;
+    // "only who hasn't tracked yet": skip everyone who already entered something today
+    const today = localDate(now, timezone);
+    const tracked = db.prepare(TRACKED_TODAY);
+    return ids.filter((id) => !tracked.get(id, today, id, today));
   }
 
-  function describeResult(recipients, r) {
-    if (!recipients.length) return 'Keine Empfänger mit Zustimmung';
+  function describeResult(recipients, r, n) {
+    if (!recipients.length) return n && n.only_open ? 'Niemand offen – alle haben heute schon eingetragen' : 'Keine Empfänger mit Zustimmung';
     if (!r.devices) return `${recipients.length} Empfänger, aber keine aktiven Geräte`;
     return `An ${r.delivered} von ${r.devices} Geräten zugestellt`;
   }
 
   async function runNotification(n, now = Date.now()) {
-    const recipients = recipientsOf(n);
+    const recipients = recipientsOf(n, now);
     const r = await sendToUsers(recipients, { title: n.title, body: n.body, url: '/' });
     const recurring = n.schedule !== 'once';
     const next = recurring
       ? nextRecurringRun({ schedule: n.schedule, time: n.time, weekdays: JSON.parse(n.weekdays) }, now, timezone)
       : null;
-    q.afterRun.run(now, describeResult(recipients, r), next, recurring ? n.active : 0, n.id);
+    q.afterRun.run(now, describeResult(recipients, r, n), next, recurring ? n.active : 0, n.id);
     return r;
   }
 
@@ -133,7 +145,7 @@ function createNotifier(db, { subject, timezone = 'Europe/Berlin', fetchImpl } =
     const recipients = recipientsOf(n);
     const r = await sendToUsers(recipients, { title: n.title, body: n.body, url: '/' });
     db.prepare('UPDATE notifications SET last_sent_at = ?, last_result = ? WHERE id = ?').run(
-      Date.now(), describeResult(recipients, r), n.id
+      Date.now(), describeResult(recipients, r, n), n.id
     );
     return r;
   }

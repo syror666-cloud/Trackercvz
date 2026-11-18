@@ -366,8 +366,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     notifications: db.prepare('SELECT * FROM notifications ORDER BY active DESC, COALESCE(next_run_at, last_sent_at) DESC, id DESC'),
     notification: db.prepare('SELECT * FROM notifications WHERE id = ?'),
     insertNotification: db.prepare(
-      `INSERT INTO notifications (title, body, audience, recipient_ids, schedule, time, weekdays, next_run_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO notifications (title, body, audience, recipient_ids, schedule, time, weekdays, next_run_at, only_open)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ),
     setNotificationActive: db.prepare('UPDATE notifications SET active = ?, next_run_at = ? WHERE id = ?'),
     deleteNotification: db.prepare('DELETE FROM notifications WHERE id = ?'),
@@ -465,6 +465,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       time: n.time,
       weekdays,
       active: Boolean(n.active),
+      onlyOpen: Boolean(n.only_open),
       nextRunAt: n.active && n.next_run_at ? new Date(n.next_run_at).toISOString() : null,
       lastSentAt: n.last_sent_at ? new Date(n.last_sent_at).toISOString() : null,
       lastResult: n.last_result,
@@ -1208,7 +1209,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       }
 
       const id = Number(
-        q.insertNotification.run(title, text, b.audience, JSON.stringify(recipients), b.schedule, time, JSON.stringify(weekdays), nextRun)
+        q.insertNotification.run(title, text, b.audience, JSON.stringify(recipients), b.schedule, time, JSON.stringify(weekdays), nextRun, b.onlyOpen === true ? 1 : 0)
           .lastInsertRowid
       );
       if (b.schedule === 'once' && !b.sendAt) await notifier.runDue();
@@ -1220,7 +1221,12 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       requireCoach(ctx);
       const n = q.notification.get(Number(id));
       if (!n) throw new HttpError(404, 'Nicht gefunden');
-      const { active } = await readBody(ctx.req);
+      const { active, onlyOpen } = await readBody(ctx.req);
+      if (onlyOpen !== undefined) {
+        if (typeof onlyOpen !== 'boolean') throw new HttpError(400, 'Ungültiger Wert');
+        db.prepare('UPDATE notifications SET only_open = ? WHERE id = ?').run(onlyOpen ? 1 : 0, n.id);
+        if (active === undefined) return { notification: notificationRow(q.notification.get(n.id)) };
+      }
       if (typeof active !== 'boolean') throw new HttpError(400, 'Ungültiger Status');
       if (n.schedule === 'once' && active && (!n.next_run_at || n.last_sent_at)) {
         throw new HttpError(400, 'Einmalige Nachrichten können nach dem Senden nicht erneut aktiviert werden');
