@@ -2822,3 +2822,211 @@ dialog.thanks-dialog { width: min(480px, calc(100vw - 24px)); padding: 0; border
 @keyframes ob-in { from { opacity: 0; transform: translate(-50%, -8px); } }
 .msg.pending { opacity: 0.65; }
 @media (prefers-reduced-motion: reduce) { .offline-bar { animation: none; } }
+
+/* ==========================================================================
+   Design "Club" (new look, chosen per person; the classic look above stays untouched).
+   Midnight navy as the ground, studio beige as the noble colour (progress, member line,
+   coach messages), coral only for actions. Same layout, same order – only the dress changes.
+   ========================================================================== */
+:root { --sand: #a9834a; --sand-ink: #7f6136; --sand-soft: #ebdfca; }
+:root.design-club {
+  --bg: #f1e9dc;
+  --surface: #fbf8f2;
+  --surface-2: #f5eee3;
+  --ivory: #e8dcc6;
+  --text: #002941;
+  --steel: #2c4a5e;
+  --muted: #4d6070;          /* 5.3:1 on the sand ground */
+  --border: #e6dac6;
+  --line: #d8c9ae;
+  --field: #8c7d66;          /* 3.8:1 on the card */
+  --accent: #fd6e6e;
+  --accent-soft: #fbe1d9;
+  --accent-text: #002941;
+  --accent-display: #d94f4f;
+  --brass: #7f6136;
+  --btn-bg: #002941;
+  --btn-text: #f6efe3;
+  --sand: #a9834a;           /* graphics: 3.3:1 on the card */
+  --sand-ink: #7f6136;       /* text: 5.3:1 on the card */
+  --sand-soft: #ebdfca;
+  --r-card: 18px;
+  --r-btn: 12px;
+  --r-data: 22px;
+  --glass-fill: rgba(251, 248, 242, 0.72); --glass-strong: rgba(251, 248, 242, 0.82); --glass-pill: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 10px 34px rgba(60, 40, 10, 0.14);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root.design-club:not([data-theme="light"]) {
+    --bg: #061520;
+    --surface: #0b2232;
+    --surface-2: #102a3c;
+    --ivory: #14324a;
+    --text: #eef3f6;
+    --steel: #d3e0e8;
+    --muted: #9db3c2;
+    --border: #16344b;
+    --line: #24465f;
+    --field: #6a8aa0;
+    --accent: #fd6e6e;
+    --accent-soft: #3d2330;
+    --accent-text: #061520;
+    --accent-display: #ff8a80;
+    --brass: #dcc7a3;
+    --btn-bg: #fd6e6e;
+    --btn-text: #061520;
+    --sand: #dcc7a3;
+    --sand-ink: #dcc7a3;
+    --sand-soft: #283942;
+    --glass-fill: rgba(9, 30, 45, 0.66); --glass-strong: rgba(9, 30, 45, 0.8); --glass-pill: rgba(255, 255, 255, 0.1);
+    --glass-edge: rgba(255, 255, 255, 0.12); --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+:root.design-club[data-theme="dark"] {
+    --bg: #061520;
+    --surface: #0b2232;
+    --surface-2: #102a3c;
+    --ivory: #14324a;
+    --text: #eef3f6;
+    --steel: #d3e0e8;
+    --muted: #9db3c2;
+    --border: #16344b;
+    --line: #24465f;
+    --field: #6a8aa0;
+    --accent: #fd6e6e;
+    --accent-soft: #3d2330;
+    --accent-text: #061520;
+    --accent-display: #ff8a80;
+    --brass: #dcc7a3;
+    --btn-bg: #fd6e6e;
+    --btn-text: #061520;
+    --sand: #dcc7a3;
+    --sand-ink: #dcc7a3;
+    --sand-soft: #283942;
+    --glass-fill: rgba(9, 30, 45, 0.66); --glass-strong: rgba(9, 30, 45, 0.8); --glass-pill: rgba(255, 255, 255, 0.1);
+    --glass-edge: rgba(255, 255, 255, 0.12); --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+}
+
+/* ground: a soft light source top right, like the board mockups */
+html.design-club body {
+  background:
+    radial-gradient(90vmax 50vmax at 100% -10%, color-mix(in srgb, var(--sand) 14%, transparent), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+/* the blur sits on a pseudo layer: a backdrop-filter on the bar itself would trap the fixed tab bar inside it */
+html.design-club:not(.glass) .topbar { background: transparent; }
+html.design-club:not(.glass) .topbar::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+}
+html.design-club .brand img { border-radius: 10px; }
+
+/* surfaces: calmer, rounder, a hairline instead of hard contrast */
+html.design-club .card { box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(40, 28, 8, 0.04); }
+html.design-club input, html.design-club textarea, html.design-club select { border-radius: 10px; }
+html.design-club .btn-secondary, html.design-club .btn-danger { border-radius: var(--r-btn); }
+html.design-club h1 { letter-spacing: -0.035em; }
+
+/* beige: brand marks, progress, the coach's voice */
+html.design-club .eyebrow { color: var(--sand-ink); text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.72rem; }
+html.design-club .eyebrow::before { background: var(--sand); }
+html.design-club .nav a[aria-current="page"]::before { background: var(--sand); }
+html.design-club .tabs a[aria-current="page"] { border-bottom-color: var(--sand); }
+html.design-club .kr-fill { stroke: var(--sand); }
+html.design-club .kcal-ring.over .kr-fill { stroke: var(--bad); }
+html.design-club .progress span { background: var(--sand); }
+html.design-club .msg.theirs { background: var(--sand-soft); }
+html.design-club input:focus, html.design-club textarea:focus, html.design-club select:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sand) 35%, transparent); }
+
+/* coral: actions only */
+html.design-club .nav-plus { background: var(--accent); color: #061520; box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent); }
+
+/* membership: "Mitglied #017 · seit März 2026" – only in this design */
+.member-line { display: none; }
+html.design-club .member-line {
+  display: block; margin: 6px 0 0 !important; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+}
+html.design-club .member-line b { color: var(--sand-ink); font-weight: 600; }
+
+/* hidden switch that gives iPhones a haptic tick */
+.haptic-switch { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+
+/* ---- design choice & vote (both designs) ---- */
+.design-card { margin-bottom: 20px; }
+.dv-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.dv-option {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: left;
+  padding: 12px; min-height: 0; line-height: 1.3; white-space: normal;
+  background: var(--surface-2); color: var(--text); border: 1.5px solid var(--border); border-radius: 16px;
+}
+.dv-option:hover { border-color: var(--field); }
+.dv-option[aria-checked="true"] { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+.dv-text { display: flex; flex-direction: column; gap: 2px; }
+.dv-text strong { font: 400 1.02rem var(--font-display); letter-spacing: var(--track); }
+.dv-voted {
+  position: absolute; top: 18px; right: 18px; font: 600 0.68rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--text); color: var(--surface); padding: 5px 8px; border-radius: 99px;
+}
+.dv-preview { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 30px 12px; gap: 6px; padding: 10px; border-radius: 12px; height: 78px; }
+.dv-preview i { border-radius: 6px; }
+.dv-preview i:first-child { grid-column: 1 / 3; }
+.dv-preview b { grid-column: 1 / -1; border-radius: 4px; }
+.dv-classic { background: #edf5f8; }
+.dv-classic i { background: #ffffff; }
+.dv-classic i:nth-child(2) { background: #b6dfed; }
+.dv-classic i:nth-child(3) { grid-column: 1 / -1; display: none; }
+.dv-classic b { background: linear-gradient(90deg, #fd6e6e 60%, #c6d7e0 60%); }
+.dv-club { background: radial-gradient(120% 90% at 100% 0%, #1b3a4f, #061520 70%); }
+.dv-club i { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.dv-club i:nth-child(2) { background: #dcc7a3; }
+.dv-club i:nth-child(3) { display: none; }
+.dv-club b { background: linear-gradient(90deg, #dcc7a3 60%, rgba(255, 255, 255, 0.14) 60%); }
+.dv-actions { margin-top: 4px; }
+@media (max-width: 420px) { .dv-actions .btn-primary { width: 100%; } }
+
+/* ---- coach overview: vote result ---- */
+.design-votes { margin-bottom: 16px; }
+.dv-bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; margin: 16px 0 8px; background: var(--line); }
+.dv-bar span { display: block; height: 100%; transition: width var(--dur-slow, 380ms) var(--ease-out, ease); }
+.dv-bar-club, .dv-dot-club { background: #c29a5b; }
+.dv-bar-classic, .dv-dot-classic { background: #4f9cbb; }
+.dv-legend { color: var(--muted); }
+.dv-legend strong { color: var(--text); }
+.dv-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; flex: none; }
+.dv-comments { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.dv-comments summary { cursor: pointer; font-family: var(--font-display); }
+.dv-comments ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.dv-comments li { display: flex; gap: 8px; align-items: flex-start; }
+.dv-comments li .dv-dot { margin-top: 7px; }
+.dv-comments p { margin: 2px 0 0; overflow-wrap: anywhere; }
+
+/* ---- one-time announcement ---- */
+dialog.design-intro {
+  width: min(460px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 26px; overflow: hidden;
+  background: radial-gradient(120% 70% at 100% 0%, #1b3a4f 0%, #061520 60%); color: #eef3f6;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+dialog.design-intro::backdrop { background: rgba(3, 12, 18, 0.6); }
+.di-inner { padding: 26px 24px 22px; }
+.di-previews { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-bottom: 20px; }
+.di-previews .dv-preview { height: 92px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.di-arrow { color: #dcc7a3; font-size: 1.3rem; }
+.di-kicker { margin: 0 0 6px; font: 600 0.72rem/1 var(--font-body); letter-spacing: 0.16em; text-transform: uppercase; color: #dcc7a3; }
+.design-intro h2 { font-size: 1.7rem; line-height: 1.1; letter-spacing: -0.03em; margin-bottom: 10px; }
+.design-intro p { color: #c8d7e1; margin: 0 0 12px; }
+.design-intro .di-ask { background: rgba(220, 199, 163, 0.12); border: 1px solid rgba(220, 199, 163, 0.3); border-radius: 14px; padding: 12px 14px; color: #eef3f6; }
+.design-intro .di-ask strong { color: #dcc7a3; }
+.di-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.design-intro .btn-primary { background: #fd6e6e; color: #061520; border-radius: 12px; }
+.design-intro .btn-ghost { color: #c8d7e1; }
+@media (prefers-reduced-motion: no-preference) {
+  dialog.design-intro[open] { animation: di-in 420ms var(--ease-spring, ease) both; }
+  @keyframes di-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
+}
+html.design-club dialog:not(.design-intro) { border-radius: 22px; }
+html.design-club .today-ring { background: conic-gradient(var(--sand) calc(var(--p) * 1%), var(--border) 0); }

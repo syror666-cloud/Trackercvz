@@ -861,6 +861,40 @@ Keine Internetverbindung – bitte versuch es gleich nochmal.|No internet connec
 Wird gespeichert, sobald du wieder Netz hast – danach kannst du es ändern.|Will be saved once you're back online – you can change it after that.|Se guardará en cuanto vuelvas a tener conexión; después podrás cambiarlo.|Verrà salvato appena torni online – poi potrai modificarlo.
 📶 Offline gespeichert – geht automatisch raus, sobald du Netz hast. Bestleistungen prüfen wir dann.|📶 Saved offline – sent automatically once you're online. We'll check personal bests then.|📶 Guardado sin conexión: se envía automáticamente cuando vuelvas a tener red. Entonces comprobamos los récords.|📶 Salvato offline – inviato automaticamente appena torni online. Allora controlliamo i record.
 ⏳ wartet auf Netz|⏳ waiting for network|⏳ esperando conexión|⏳ in attesa di rete
+Abstimmung|Vote|Votación|Votazione
+Welches Design soll bleiben?|Which design should stay?|¿Qué diseño se queda?|Quale design deve restare?
+Design wählen|Choose design|Elegir diseño|Scegli il design
+Neues Design|New design|Diseño nuevo|Nuovo design
+Bisheriges Design|Current design|Diseño actual|Design attuale
+Soft Blue, Navy und Coral|Soft blue, navy and coral|Azul suave, navy y coral|Azzurro, navy e corallo
+Navy, Studio-Beige und Haptik|Navy, studio beige and haptics|Navy, beige del estudio y háptica|Navy, beige dello studio e aptica
+Tipp auf ein Design, um es sofort anzusehen. Dann stimm ab – deine Stimme kannst du jederzeit ändern.|Tap a design to see it right away. Then vote – you can change your vote any time.|Toca un diseño para verlo al instante. Luego vota – puedes cambiar tu voto cuando quieras.|Tocca un design per vederlo subito. Poi vota – puoi cambiare il voto quando vuoi.
+Deine Klienten stimmen gerade ab. Das Ergebnis siehst du in deiner Übersicht.|Your clients are voting right now. You'll see the result in your overview.|Tus clientes están votando. Verás el resultado en tu resumen.|I tuoi clienti stanno votando. Vedrai il risultato nella tua panoramica.
+Deine Stimme|Your vote|Tu voto|Il tuo voto
+Was gefällt dir, was fehlt?|What do you like, what's missing?|¿Qué te gusta, qué falta?|Cosa ti piace, cosa manca?
+Noch nicht abgestimmt|Not voted yet|Aún no has votado|Non hai ancora votato
+Stimme aktualisieren|Update vote|Actualizar voto|Aggiorna voto
+Danke für deine Stimme!|Thanks for your vote!|¡Gracias por tu voto!|Grazie per il tuo voto!
+Design-Abstimmung|Design vote|Votación de diseño|Voto sul design
+Neues Design vorn|New design ahead|Diseño nuevo por delante|Nuovo design in testa
+Bisheriges Design vorn|Current design ahead|Diseño actual por delante|Design attuale in testa
+Gleichstand|Tie|Empate|Parità
+Noch keine Stimmen|No votes yet|Aún no hay votos|Ancora nessun voto
+Kommentar|comment|comentario|commento
+Kommentare|comments|comentarios|commenti
+StayOnTrack hat ein neues Design|StayOnTrack has a new design|StayOnTrack tiene un diseño nuevo|StayOnTrack ha un nuovo design
+Tiefes Navy, Beige aus dem Studio und ein kurzes Vibrieren, wenn du einen Satz abhakst oder etwas speicherst. Alles ist an seinem gewohnten Platz.|Deep navy, beige from the studio and a short vibration when you tick off a set or save something. Everything is where it always was.|Navy profundo, beige del estudio y una breve vibración al marcar una serie o guardar algo. Todo sigue en su sitio.|Navy profondo, beige dello studio e una breve vibrazione quando spunti una serie o salvi qualcosa. Tutto è al solito posto.
+Du entscheidest mit:|You get a say:|Tú decides también:|Decidi anche tu:
+Deine Klienten entscheiden mit:|Your clients get a say:|Tus clientes deciden también:|I tuoi clienti decidono con te:
+Unter Einstellungen kannst du beide Designs ausprobieren und abstimmen, welches bleiben soll. Das bisherige Design gibt es weiterhin.|In Settings you can try both designs and vote for the one that should stay. The current design is still available.|En Ajustes puedes probar ambos diseños y votar cuál se queda. El diseño actual sigue disponible.|In Impostazioni puoi provare entrambi i design e votare quale resta. Il design attuale resta disponibile.
+Sie stimmen unter Einstellungen ab. Das Ergebnis und die Kommentare siehst du in deiner Übersicht. Das bisherige Design bleibt wählbar.|They vote in Settings. You'll see the result and comments in your overview. The current design stays available.|Votan en Ajustes. Verás el resultado y los comentarios en tu resumen. El diseño actual sigue disponible.|Votano in Impostazioni. Risultato e commenti li vedi nella tua panoramica. Il design attuale resta disponibile.
+Jetzt abstimmen|Vote now|Votar ahora|Vota ora
+Zum Design-Schalter|Go to design switch|Ir al selector de diseño|Vai al selettore del design
+Haptisches Feedback|Haptic feedback|Respuesta háptica|Feedback aptico
+Kurzes Vibrieren beim Abhaken eines Satzes, Speichern und wenn der Pausen-Timer abläuft.|A short vibration when you tick off a set, save, and when the rest timer ends.|Una breve vibración al marcar una serie, guardar y cuando termina el temporizador de descanso.|Una breve vibrazione quando spunti una serie, salvi e quando finisce il timer di recupero.
+Auf dem iPhone ist es in der Web-App ein leichtes Tippen.|On iPhone the web app gives a light tap.|En iPhone la web app da un toque ligero.|Su iPhone la web app dà un leggero tocco.
+Mitglied|Member|Miembro|Membro
+seit|since|desde|da
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -960,6 +994,9 @@ noch nie|never|nunca|mai
     [/^Der Code stimmt nicht\. Noch (\d+) (Versuch|Versuche)\.$/, W(0, (m) => `Wrong code. ${m[1]} ${m[1] === '1' ? 'try' : 'tries'} left.`, (m) => `Código incorrecto. Quedan ${m[1]} intentos.`, (m) => `Codice errato. Ancora ${m[1]} tentativi.`)],
     [/^📴 Offline(?: · Stand (\d{1,2}:\d{2}))?(?: · (\d+) (?:Eintrag wartet|Einträge warten) auf Netz)?$/, W(0, (m) => `📴 Offline${m[1] ? ` · as of ${m[1]}` : ''}${m[2] ? ` · ${m[2]} waiting for network` : ''}`, (m) => `📴 Sin conexión${m[1] ? ` · datos de las ${m[1]}` : ''}${m[2] ? ` · ${m[2]} pendientes` : ''}`, (m) => `📴 Offline${m[1] ? ` · dati delle ${m[1]}` : ''}${m[2] ? ` · ${m[2]} in attesa` : ''}`)],
     [/^✓ (\d+) Offline-Einträge? gespeichert$/, W(0, (m) => `✓ ${m[1]} offline ${m[1] === '1' ? 'entry' : 'entries'} saved`, (m) => `✓ ${m[1]} registros sin conexión guardados`, (m) => `✓ ${m[1]} voci offline salvate`)],
+    [/^✓ Du hast für „(.+)“ gestimmt$/, W(0, (m) => `✓ You voted for “${m[1]}”`, (m) => `✓ Votaste por «${m[1]}»`, (m) => `✓ Hai votato per «${m[1]}»`)],
+    [/^Für „(.+)“ stimmen$/, W(0, (m) => `Vote for “${m[1]}”`, (m) => `Votar por «${m[1]}»`, (m) => `Vota per «${m[1]}»`)],
+    [/^(\d+) von (\d+) haben abgestimmt$/, W(0, (m) => `${m[1]} of ${m[2]} have voted`, (m) => `${m[1]} de ${m[2]} han votado`, (m) => `${m[1]} di ${m[2]} hanno votato`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

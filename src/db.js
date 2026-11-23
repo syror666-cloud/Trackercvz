@@ -352,6 +352,14 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS feedback_open ON feedback (done_at, id);
 
+CREATE TABLE IF NOT EXISTS design_votes (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  choice     TEXT NOT NULL CHECK (choice IN ('club', 'classic')),
+  comment    TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 -- offline outbox: a write sent again (after a lost answer or from the phone's outbox) is answered from here
 CREATE TABLE IF NOT EXISTS idempotency (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -469,6 +477,7 @@ function migrate(db) {
   addColumns(db, 'notifications', [['only_open', 'INTEGER NOT NULL DEFAULT 0']]);
   // the thank-you screen with the wish box is shown once to every member
   addColumns(db, 'users', [['thanks_seen_at', 'TEXT']]);
+  addColumns(db, 'users', [['design_intro_at', 'TEXT']]);
   // two-factor sign-in (TOTP): encrypted secret, pending secret during setup, last used step, hashed recovery codes
   addColumns(db, 'users', [['totp_secret', 'TEXT'], ['totp_pending', 'TEXT'], ['totp_enabled_at', 'TEXT'], ['totp_last_counter', 'INTEGER'], ['recovery_codes', 'TEXT']]);
   if (!hadOnlyOpen) db.exec("UPDATE notifications SET only_open = 1 WHERE schedule IN ('daily', 'weekly')");

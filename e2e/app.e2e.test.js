@@ -65,9 +65,9 @@ async function loginAs(username, password, viewport = { width: 1200, height: 900
   return { page, errors };
 }
 async function dismissOverlays(page) {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     await page.waitForTimeout(500);
-    const close = page.locator('[data-wn-ok], .tour [data-skip], [data-thanks-later]');
+    const close = page.locator('[data-wn-ok], .tour [data-skip], [data-thanks-later], [data-design-later]');
     if (await close.count()) await close.first().click();
   }
 }
@@ -332,4 +332,46 @@ test('offline: the app opens without a connection, entries wait in the outbox an
   const left = await page.evaluate(async () => ({ outbox: localStorage.getItem('sot-outbox'), caches: (await caches.keys()).filter((k) => k.startsWith('sot-data')) }));
   assert.deepEqual(left, { outbox: null, caches: [] });
   assert.deepEqual(errors, []);
+});
+
+test('design: announcement, switch to the classic look, vote; the coach sees the result', { skip }, async () => {
+  createUser(db, { username: 'lena', displayName: 'Lena Lauf', password: 'lenapass123', role: 'client' });
+  db.prepare("UPDATE users SET onboarded_at = '2026-01-01T00:00:00Z' WHERE username = 'lena'").run();
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(base);
+  await page.fill('input[name=username]', 'lena');
+  await page.fill('input[name=password]', 'lenapass123');
+  await page.click('#login-form button[type=submit]');
+  await page.waitForSelector('#app:not([data-loading="1"])');
+  // the new look is on from the start; the announcement leads to the vote
+  for (let i = 0; i < 4 && !(await page.locator('dialog.design-intro').count()); i++) {
+    await page.waitForTimeout(500);
+    const close = page.locator('[data-wn-ok], .tour [data-skip], [data-thanks-later]');
+    if (await close.count()) await close.first().click();
+  }
+  assert.ok(await page.evaluate(() => document.documentElement.classList.contains('design-club')));
+  await page.click('[data-design-go]');
+  await page.waitForSelector('#design-card [data-design="classic"]');
+  assert.match(page.url(), /#\/settings/);
+  await page.click('#design-card [data-design="classic"]');
+  await page.waitForFunction(() => !document.documentElement.classList.contains('design-club'));
+  await page.fill('#dv-comment', 'Mir gefällt das alte Blau besser');
+  await page.click('#design-card [data-vote]');
+  await page.waitForSelector('#design-card .dv-voted');
+  // after a reload the classic look and the vote are still there, the announcement does not return
+  await page.reload();
+  await page.waitForSelector('#design-card .dv-voted');
+  assert.equal(await page.locator('dialog.design-intro').count(), 0);
+  assert.ok(!(await page.evaluate(() => document.documentElement.classList.contains('design-club'))));
+  await ctx.close();
+  const coach = await loginAs('coach', 'coachpass123');
+  await coach.page.waitForSelector('.design-votes');
+  const text = await coach.page.locator('.design-votes').innerText();
+  assert.match(text, /Bisheriges Design vorn/);
+  assert.match(text, /alte Blau/);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(coach.errors, []);
 });

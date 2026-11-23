@@ -25,6 +25,7 @@ const { inviteRoutes } = require('./invites');
 const { attentionRoutes } = require('./attention');
 const { recapRoutes } = require('./recap');
 const { feedbackRoutes } = require('./feedback');
+const { designVoteRoutes, DESIGN_CHOICES } = require('./design-vote');
 const { createTwoFactor } = require('./twofa');
 const { privacyRoutes } = require('./privacy');
 const { createReminders, adminRoutes } = require('./admin');
@@ -279,7 +280,7 @@ function describeProposal(previous, proposal) {
 }
 
 const avatarUrl = (u) => (u.avatar ? `/api/avatar/${u.id}?v=${encodeURIComponent(u.avatar_updated || '1')}` : null);
-const PREF_DEFAULTS = { lang: 'de', theme: 'system', glass: false, mailReports: true };
+const PREF_DEFAULTS = { lang: 'de', theme: 'system', glass: false, mailReports: true, design: 'club', haptics: true };
 const LANGS = ['de', 'en', 'es', 'it'];
 function prefsOf(u) {
   let p = {};
@@ -289,6 +290,8 @@ function prefsOf(u) {
     theme: ['system', 'light', 'dark'].includes(p.theme) ? p.theme : PREF_DEFAULTS.theme,
     glass: typeof p.glass === 'boolean' ? p.glass : PREF_DEFAULTS.glass,
     mailReports: typeof p.mailReports === 'boolean' ? p.mailReports : PREF_DEFAULTS.mailReports,
+    design: DESIGN_CHOICES.includes(p.design) ? p.design : PREF_DEFAULTS.design,
+    haptics: typeof p.haptics === 'boolean' ? p.haptics : PREF_DEFAULTS.haptics,
   };
 }
 const publicUser = (u) => ({
@@ -298,6 +301,8 @@ const publicUser = (u) => ({
   deletionRequestedAt: u.deletion_requested_at || null,
   archivedAt: u.archived_at || null, archiveUntil: u.archive_until || null,
   showThanks: u.role === 'client' && !u.thanks_seen_at && Boolean(u.onboarded_at),
+  showDesignIntro: !u.design_intro_at && (u.role === 'coach' || Boolean(u.onboarded_at)),
+  memberSince: u.created_at || null,
   twoFactor: Boolean(u.totp_enabled_at),
 });
 
@@ -769,6 +774,14 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       if (body.mailReports !== undefined) {
         if (typeof body.mailReports !== 'boolean') throw new HttpError(400, 'Berichte per E-Mail: ja oder nein');
         next.mailReports = body.mailReports;
+      }
+      if (body.design !== undefined) {
+        if (!DESIGN_CHOICES.includes(body.design)) throw new HttpError(400, 'Unbekanntes Design');
+        next.design = body.design;
+      }
+      if (body.haptics !== undefined) {
+        if (typeof body.haptics !== 'boolean') throw new HttpError(400, 'Haptisches Feedback: ja oder nein');
+        next.haptics = body.haptics;
       }
       q.setPrefs.run(JSON.stringify(next), u.id);
       return { prefs: next };
@@ -1470,7 +1483,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   }
   routes.push(...privacyRoutes({ ...deps, publicUser }), ...attentionRoutes(deps), ...inviteRoutes({
     ...deps, mailer, appUrl, clientIp, validateUsername, validatePassword, startSession, setEmail: mail.setEmail,
-  }), ...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...recapRoutes(deps), ...feedbackRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  }), ...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...recapRoutes(deps), ...feedbackRoutes(deps), ...designVoteRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
   if (telegram) routes.push(...telegram.routes(deps));
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.

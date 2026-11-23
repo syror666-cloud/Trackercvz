@@ -348,8 +348,30 @@
     if (typeof loadFoods === 'function') loadFoods().catch(() => {});
   }
 
+  // ---------- haptic feedback: Android vibrates in patterns; iPhone (Safari 18+) gets one light tick via a hidden switch ----------
+  const HAPTIC = { tap: 12, light: 8, success: [15, 30, 15, 30, 60], timer: [200, 100, 200, 100, 300], error: [20, 40, 20] };
+  const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let hapticSwitch = null;
+  function haptic(kind = 'tap') {
+    if (me && me.prefs && me.prefs.haptics === false) return;
+    try {
+      if (navigator.vibrate) { navigator.vibrate(HAPTIC[kind] || HAPTIC.tap); return; }
+      if (!IS_IOS) return;
+      if (!hapticSwitch) {
+        hapticSwitch = document.createElement('label');
+        hapticSwitch.setAttribute('aria-hidden', 'true');
+        hapticSwitch.className = 'haptic-switch';
+        hapticSwitch.innerHTML = '<input type="checkbox" switch tabindex="-1">';
+        hapticSwitch.addEventListener('click', (e) => e.stopPropagation());
+        document.body.appendChild(hapticSwitch);
+      }
+      hapticSwitch.click();
+    } catch { /* no haptics on this device */ }
+  }
+
   let toastTimer;
   function toast(msg, isError) {
+    if (isError) haptic('error');
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.className = isError ? 'toast error-toast' : 'toast';
@@ -433,6 +455,7 @@
   // ---------- "Gespeichert" confirmation in the middle of the screen ----------
   let hudTimer;
   function savedHud(text = 'Gespeichert', sub = '') {
+    haptic('tap');
     let hud = document.getElementById('saved-hud');
     if (!hud) {
       hud = document.createElement('div');
@@ -458,6 +481,17 @@
   // EVERY UPDATE: add a new entry at the TOP with a new id. People who missed several updates see all
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
+    {
+      id: '2026-11-design-club', date: 'November 2026',
+      client: [
+        ['🎨', 'Neues Design – stimm mit ab', 'Tiefes Navy, Beige aus dem Studio und Coral nur noch für Knöpfe. Alles ist an seinem gewohnten Platz. Unter Einstellungen kannst du zwischen neuem und bisherigem Design wechseln und abstimmen, welches bleiben soll.'],
+        ['📳', 'Haptisches Feedback', 'Ein kurzes Vibrieren beim Abhaken eines Satzes, beim Speichern und wenn der Pausen-Timer abläuft. Auf dem iPhone ist es ein leichtes Tippen. Abschalten kannst du es unter Einstellungen → Darstellung.'],
+      ],
+      coach: [
+        ['🎨', 'Neues Design mit Abstimmung', 'Navy und Studio-Beige als neuer Standard, das bisherige Design bleibt wählbar (Konto → Design wählen). Deine Klienten stimmen unter Einstellungen ab; Ergebnis und Kommentare siehst du in der Übersicht, neue Kommentare kommen als Push.'],
+        ['📳', 'Haptisches Feedback', 'Vibration bei Satz-Häkchen, Speichern, Fehlern und Timer-Ende (Android mit Mustern, iPhone als leichtes Tippen). Abschaltbar unter Darstellung.'],
+      ],
+    },
     {
       id: '2026-11-offline', date: 'November 2026',
       client: [
@@ -830,6 +864,8 @@
     if (me.role === 'client' && !me.onboarded) return startTour();
     // once: thank the member and ask for wishes – before the release notes
     if (me.role === 'client' && me.showThanks) await showThanks();
+    // once: the new design and the vote – whoever goes to vote sees the release notes next time
+    if (me.showDesignIntro && await showDesignIntro()) return;
     if (me.seenRelease === RELEASE) return;
     // everything since the last update this person saw (unknown / none: the last three updates)
     const seenAt = CHANGELOG.findIndex((r) => r.id === me.seenRelease);
@@ -1206,7 +1242,14 @@
         <section class="card" id="twofa-card"></section>
         ${me.role === 'coach' ? '<section class="card" id="prefs-card"></section>' : ''}
       </div>`);
-    if (me.role === 'coach') mountPrefsCard(document.getElementById('prefs-card'));
+    if (me.role === 'coach') {
+      const host = document.createElement('section');
+      host.className = 'card design-card';
+      host.id = 'design-card';
+      app.querySelector('.tabs').after(host);
+      mountDesignCard(host);
+      mountPrefsCard(document.getElementById('prefs-card'));
+    }
     mountEmailCard(document.getElementById('email-card'));
     mountTwoFactorCard(document.getElementById('twofa-card'));
     const pv = document.getElementById('profile-vitrine');
@@ -1940,7 +1983,8 @@
 
     setView(`
       <div class="page-head">
-        <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p></div>
+        <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p>
+          <p class="member-line"><span>Mitglied</span> <b>#${String(me.id).padStart(3, '0')}</b>${me.memberSince ? ` · <span>seit</span> ${esc(fmtDate(me.memberSince.slice(0, 10), { month: 'long', year: 'numeric' }))}` : ''}</p></div>
       </div>
       ${me.archivedAt ? `<div class="card pause-note" role="status"><span aria-hidden="true">⏸</span><span><strong>Coaching pausiert${me.archiveUntil ? ` bis ${esc(fmtDate(me.archiveUntil, { day: 'numeric', month: 'long' }))}` : ''}</strong><span class="muted small">Erinnerungen sind solange aus. Du kannst weiter eintragen und deinem Coach schreiben.</span></span></div>` : ''}
       <section class="card kcal-card" id="kcal-card" hidden aria-label="Kalorien heute"></section>
@@ -3050,12 +3094,14 @@
   async function renderClientSettings(sub) {
     setView(`
       <div class="page-head"><div>${eyebrow('Konto')}<h1>Einstellungen</h1></div></div>
+      <section class="card design-card" id="design-card"></section>
       <div class="settings-grid">
         <section class="card" id="google-card"></section>
         <section class="card" id="push-card"><p class="muted">Lade…</p></section>
         <section class="card" id="prefs-card"></section>
         <section class="card" id="data-card"></section>
       </div>`);
+    mountDesignCard(document.getElementById('design-card'));
     mountDataCard(document.getElementById('data-card'));
     mountGoogleCard(document.getElementById('google-card'));
     // back from Google: show the result once, then clean up the address
@@ -3327,6 +3373,7 @@
       </div>
       ${me.twoFactor ? '' : `<a class="card tfa-nudge" id="tfa-nudge" href="#/account"><span aria-hidden="true">🔐</span><span><strong>Schütze dein Coach-Konto mit Zwei-Faktor-Anmeldung</strong><span class="muted small">Dein Konto ist der Schlüssel zu allen Klientendaten. Mit Authy &amp; Co. in 2 Minuten eingerichtet.</span></span><span class="att-chev" aria-hidden="true">›</span></a>`}
       <div id="feedback-card"></div>
+      <div id="design-votes"></div>
       ${clients.length ? '<div id="attention"></div>' : ''}
       ${clients.length ? coachDashboard(clients, queue, weightAutomation) : ''}
       ${clients.length ? `<div class="client-list">${cards}</div>` : archived.length ? '<div class="card empty-state"><p>Alle Klienten sind gerade pausiert.</p></div>' : `<div class="card empty-state">
@@ -3375,6 +3422,7 @@
     mountInvites(document.getElementById('invites-card'));
     mountAttention(document.getElementById('attention'));
     mountFeedbackCard(document.getElementById('feedback-card'));
+    mountDesignVotes(document.getElementById('design-votes'));
     app.querySelectorAll('[data-unarchive]').forEach((b) => b.addEventListener('click', (e) => {
       e.preventDefault();
       unarchiveClient(Number(b.dataset.unarchive), b, () => renderCoachHome());
@@ -6770,7 +6818,7 @@
       if (document.visibilityState === 'visible') {
         serverStop(); // we ring here, no push needed
         restBeep();
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
+        haptic('timer');
         const bar = root.querySelector('[data-rest-bar]');
         if (bar) {
           bar.classList.add('rest-done');
@@ -7457,6 +7505,7 @@
   /** After saving a workout: the numbers, a fun comparison, and the share picture. */
   function openWorkoutSummary(s) {
     const pr = s.prs.length > 0;
+    haptic('success');
     const heads = pr ? ['Neue Bestleistung! 🏆'] : ['Training geschafft! 💪', 'Stark gemacht! 💪', 'Erledigt – stark! 🔥'];
     const head = heads[Math.floor(Math.random() * heads.length)];
     let compare = '';
@@ -7925,7 +7974,7 @@
             b.closest('[data-s]').classList.toggle('is-done', set.done);
             keep();
             if (set.done) {
-              if (navigator.vibrate) navigator.vibrate(30);
+              haptic('tap');
               rest.setDone();
             }
           }));
@@ -8234,6 +8283,138 @@
     return mountMedals(root, opts);
   }
 
+  // ---------- new design ("club": navy + studio beige) next to the existing one, and a vote on which stays ----------
+  const DESIGNS = [
+    ['classic', 'Bisheriges Design', 'Soft Blue, Navy und Coral'],
+    ['club', 'Neues Design', 'Navy, Studio-Beige und Haptik'],
+  ];
+  const designName = (k) => (k === 'classic' ? 'Bisheriges Design' : 'Neues Design');
+  const designPreview = (k) => `<span class="dv-preview dv-${k}" aria-hidden="true"><i></i><i></i><i></i><b></b></span>`;
+
+  /** Pick a look (applies at once). Clients also vote, with an optional comment. */
+  async function mountDesignCard(root) {
+    const client = me.role === 'client';
+    let vote = null;
+    if (client) {
+      try { vote = (await api('GET', '/api/design-vote')).vote; } catch { /* draw without */ }
+    }
+    let comment = vote ? vote.comment : '';
+    function draw() {
+      const cur = me.prefs && me.prefs.design === 'classic' ? 'classic' : 'club';
+      root.innerHTML = `
+        ${eyebrow(client ? 'Abstimmung' : 'Neues Design')}
+        <h2 style="margin-bottom:6px">${client ? 'Welches Design soll bleiben?' : 'Design wählen'}</h2>
+        <p class="muted small" style="margin-top:0">${client
+          ? 'Tipp auf ein Design, um es sofort anzusehen. Dann stimm ab – deine Stimme kannst du jederzeit ändern.'
+          : 'Deine Klienten stimmen gerade ab. Das Ergebnis siehst du in deiner Übersicht.'}</p>
+        <div class="dv-options" role="radiogroup" aria-label="Design">
+          ${DESIGNS.map(([k, l, d]) => `<button type="button" role="radio" class="dv-option" aria-checked="${cur === k}" data-design="${k}">
+            ${designPreview(k)}<span class="dv-text"><strong>${l}</strong><span class="muted small">${d}</span></span>
+            ${vote && vote.choice === k ? '<span class="dv-voted">Deine Stimme</span>' : ''}</button>`).join('')}
+        </div>
+        ${client ? `<div class="field" style="margin-top:14px"><label for="dv-comment">Was gefällt dir, was fehlt? <span class="muted">(optional)</span></label>
+          <textarea id="dv-comment" maxlength="500" rows="2" placeholder="z. B. „Das Beige ist super, aber die Schrift dürfte größer sein“">${esc(comment)}</textarea></div>
+          <div class="row-between dv-actions">
+            <span class="small ${vote ? '' : 'muted'}">${vote ? `✓ Du hast für „${designName(vote.choice)}“ gestimmt` : 'Noch nicht abgestimmt'}</span>
+            <button type="button" class="btn-primary" data-vote>${vote && vote.choice === cur ? 'Stimme aktualisieren' : `Für „${designName(cur)}“ stimmen`}</button>
+          </div>` : ''}`;
+      root.querySelectorAll('[data-design]').forEach((b) => b.addEventListener('click', async () => {
+        const design = b.dataset.design;
+        if (design === cur) return;
+        const prev = me.prefs;
+        const ta = root.querySelector('#dv-comment');
+        if (ta) comment = ta.value;
+        me.prefs = { ...prev, design };
+        applyPrefs(me.prefs);
+        haptic('tap');
+        draw();
+        try {
+          me.prefs = (await api('PATCH', '/api/me/prefs', { design })).prefs;
+        } catch (err) {
+          me.prefs = prev;
+          applyPrefs(prev);
+          draw();
+          toast(err.message, true);
+        }
+      }));
+      const vb = root.querySelector('[data-vote]');
+      if (vb) vb.addEventListener('click', async () => {
+        vb.disabled = true;
+        comment = root.querySelector('#dv-comment').value;
+        try {
+          vote = (await api('PUT', '/api/design-vote', { choice: cur, comment })).vote;
+          savedHud('Danke für deine Stimme!', designName(cur));
+          draw();
+        } catch (err) {
+          toast(err.message, true);
+          vb.disabled = false;
+        }
+      });
+    }
+    draw();
+  }
+
+  /** Coach overview: how the vote stands, with the comments. */
+  async function mountDesignVotes(root) {
+    if (!root) return;
+    let d;
+    try { d = await api('GET', '/api/design-votes'); } catch { return; }
+    const total = d.club + d.classic;
+    const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
+    const comments = d.items.filter((i) => i.comment);
+    root.innerHTML = `<section class="card design-votes">
+      <div class="row-between"><div>${eyebrow('Design-Abstimmung')}<h2>${total ? `${d.club > d.classic ? 'Neues Design vorn' : d.club < d.classic ? 'Bisheriges Design vorn' : 'Gleichstand'}` : 'Noch keine Stimmen'}</h2></div>
+        <span class="muted small">${total} von ${d.members} haben abgestimmt</span></div>
+      <div class="dv-bar" role="img" aria-label="Neues Design ${d.club}, bisheriges Design ${d.classic}">
+        <span class="dv-bar-club" style="width:${total ? pct(d.club) : 50}%"></span><span class="dv-bar-classic" style="width:${total ? pct(d.classic) : 50}%"></span>
+      </div>
+      <div class="row-between small dv-legend"><span><i class="dv-dot dv-dot-club"></i>Neues Design · <strong>${d.club}</strong> (${pct(d.club)} %)</span><span><i class="dv-dot dv-dot-classic"></i>Bisheriges Design · <strong>${d.classic}</strong> (${pct(d.classic)} %)</span></div>
+      ${comments.length ? `<details class="dv-comments"${comments.length <= 3 ? ' open' : ''}><summary>${comments.length} ${comments.length === 1 ? 'Kommentar' : 'Kommentare'}</summary><ul>
+        ${comments.slice(0, 30).map((c) => `<li><span class="dv-dot dv-dot-${c.choice}" aria-hidden="true"></span><div><strong>${esc(c.displayName)}</strong> <span class="muted small">${esc(designName(c.choice))}</span><p>${esc(c.comment)}</p></div></li>`).join('')}
+      </ul></details>` : ''}
+    </section>`;
+  }
+
+  /** Big one-time announcement: the new look is live, please vote in the settings. */
+  function showDesignIntro() {
+    const client = me.role === 'client';
+    return new Promise((resolve) => {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'design-intro';
+      dlg.setAttribute('aria-labelledby', 'di-title');
+      dlg.innerHTML = `<div class="di-inner">
+        <div class="di-previews" aria-hidden="true">${designPreview('classic')}<span class="di-arrow">→</span>${designPreview('club')}</div>
+        <p class="di-kicker">Neu</p>
+        <h2 id="di-title">StayOnTrack hat ein neues Design</h2>
+        <p>Tiefes Navy, Beige aus dem Studio und ein kurzes Vibrieren, wenn du einen Satz abhakst oder etwas speicherst. Alles ist an seinem gewohnten Platz.</p>
+        <p class="di-ask"><strong>${client ? 'Du entscheidest mit:' : 'Deine Klienten entscheiden mit:'}</strong> ${client
+          ? 'Unter Einstellungen kannst du beide Designs ausprobieren und abstimmen, welches bleiben soll. Das bisherige Design gibt es weiterhin.'
+          : 'Sie stimmen unter Einstellungen ab. Das Ergebnis und die Kommentare siehst du in deiner Übersicht. Das bisherige Design bleibt wählbar.'}</p>
+        <div class="di-actions">
+          <button type="button" class="btn-ghost" data-design-later>Später</button>
+          <button type="button" class="btn-primary" data-design-go>${client ? 'Jetzt abstimmen' : 'Zum Design-Schalter'}</button>
+        </div>
+      </div>`;
+      document.body.appendChild(dlg);
+      let done = false;
+      const finish = (go) => {
+        if (done) return;
+        done = true;
+        me.showDesignIntro = false;
+        api('POST', '/api/me/design-intro/seen').catch(() => {});
+        dlg.close();
+        dlg.remove();
+        if (go) location.hash = client ? '#/settings' : '#/account';
+        resolve(go);
+      };
+      dlg.querySelector('[data-design-later]').addEventListener('click', () => finish(false));
+      dlg.querySelector('[data-design-go]').addEventListener('click', () => finish(true));
+      dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(false); });
+      dlg.showModal();
+      haptic('success');
+    });
+  }
+
   // ---------- appearance & language (per person, cached for the next start) ----------
   const PREFS_KEY = 'sot-prefs';
   function applyPrefs(p) {
@@ -8242,8 +8423,11 @@
     if (p.theme === 'light' || p.theme === 'dark') root.dataset.theme = p.theme;
     else delete root.dataset.theme;
     root.classList.toggle('glass', Boolean(p.glass));
+    const club = p.design !== 'classic';
+    root.classList.toggle('design-club', club);
     const dark = p.theme === 'dark' || (p.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', dark ? '#002941' : '#ffffff'));
+    const bar = club ? (dark ? '#061520' : '#f1e9dc') : (dark ? '#002941' : '#ffffff');
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', bar));
     if (window.I18N) I18N.setLang(p.lang || 'de');
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* private mode */ }
   }
@@ -8251,7 +8435,7 @@
 
   const LANG_OPTIONS = [['de', 'Deutsch'], ['en', 'English'], ['es', 'Español'], ['it', 'Italiano']];
   function mountPrefsCard(root) {
-    const p = me.prefs || { lang: 'de', theme: 'system', glass: false };
+    const p = me.prefs || { lang: 'de', theme: 'system', glass: false, design: 'club', haptics: true };
     root.innerHTML = `
       <h2 style="margin-bottom:6px">Darstellung</h2>
       <p class="muted small" style="margin-top:0">Gilt für dein Konto auf allen Geräten.</p>
@@ -8271,6 +8455,11 @@
         <div><span class="pref-label">Liquid Glass</span>
           <p class="muted small">Gläserne, durchscheinende Leisten und Menüs – angelehnt an das aktuelle iOS-Design.</p></div>
         <label class="switch"><input type="checkbox" data-pref="glass" ${p.glass ? 'checked' : ''}><span></span><b>${p.glass ? 'An' : 'Aus'}</b></label>
+      </div>
+      <div class="pref-row pref-glass">
+        <div><span class="pref-label">Haptisches Feedback</span>
+          <p class="muted small">Kurzes Vibrieren beim Abhaken eines Satzes, Speichern und wenn der Pausen-Timer abläuft.${IS_IOS ? ' Auf dem iPhone ist es in der Web-App ein leichtes Tippen.' : ''}</p></div>
+        <label class="switch"><input type="checkbox" data-pref="haptics" ${p.haptics !== false ? 'checked' : ''}><span></span><b>${p.haptics !== false ? 'An' : 'Aus'}</b></label>
       </div>
       ${me.role === 'client' ? `<div class="pref-row pref-glass">
         <div><span class="pref-label">Berichte per E-Mail</span>
@@ -8295,6 +8484,10 @@
     }
     root.querySelectorAll('button[data-pref]').forEach((b) => b.addEventListener('click', () => save({ [b.dataset.pref]: b.dataset.val })));
     root.querySelector('input[data-pref="glass"]').addEventListener('change', (e) => save({ glass: e.target.checked }));
+    root.querySelector('input[data-pref="haptics"]').addEventListener('change', (e) => {
+      save({ haptics: e.target.checked });
+      if (e.target.checked) haptic('tap');
+    });
     const mr = root.querySelector('input[data-pref="mailReports"]');
     if (mr) mr.addEventListener('change', (e) => save({ mailReports: e.target.checked }));
   }
