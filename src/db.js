@@ -459,6 +459,8 @@ function migrate(db) {
   addColumns(db, 'notifications', [['only_open', 'INTEGER NOT NULL DEFAULT 0']]);
   // the thank-you screen with the wish box is shown once to every member
   addColumns(db, 'users', [['thanks_seen_at', 'TEXT']]);
+  // two-factor sign-in (TOTP): encrypted secret, pending secret during setup, last used step, hashed recovery codes
+  addColumns(db, 'users', [['totp_secret', 'TEXT'], ['totp_pending', 'TEXT'], ['totp_enabled_at', 'TEXT'], ['totp_last_counter', 'INTEGER'], ['recovery_codes', 'TEXT']]);
   if (!hadOnlyOpen) db.exec("UPDATE notifications SET only_open = 1 WHERE schedule IN ('daily', 'weekly')");
   if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health

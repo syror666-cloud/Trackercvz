@@ -7,7 +7,7 @@
  *  - DELETE /api/me/deletion-request  withdraw that request
  */
 
-const SECRET_COLUMNS = new Set(['password_hash', 'token_hash', 'refresh_token', 'p256dh', 'auth', 'verifier', 'state_hash', 'avatar', 'showcase']);
+const SECRET_COLUMNS = new Set(['totp_secret', 'totp_pending', 'totp_last_counter', 'recovery_codes', 'password_hash', 'token_hash', 'refresh_token', 'p256dh', 'auth', 'verifier', 'state_hash', 'avatar', 'showcase']);
 const clean = (row) => Object.fromEntries(Object.entries(row).filter(([k]) => !SECRET_COLUMNS.has(k)));
 
 function privacyRoutes({ db, HttpError, readBody, textField, requireUser, notifier, publicUser }) {

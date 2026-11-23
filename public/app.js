@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-2fa', date: 'November 2026',
+      client: [
+        ['🔐', 'Zwei-Faktor-Anmeldung', 'Unter Konto kannst du dein Konto zusätzlich mit einem Code aus Authy, Google Authenticator & Co. schützen – dann reicht ein gestohlenes Passwort allein nicht mehr.'],
+      ],
+      coach: [
+        ['🔐', 'Zwei-Faktor-Anmeldung', 'Konto → „Zwei-Faktor-Anmeldung“ → Einrichten: QR-Code mit Authy scannen, Code eingeben, Wiederherstellungscodes sicher aufbewahren. Für dein Coach-Konto dringend empfohlen. Auch „Passwort vergessen“ umgeht den Code nicht.'],
+      ],
+    },
+    {
       id: '2026-11-thanks-security', date: 'November 2026',
       client: [
         ['💙', 'Danke!', 'Ihr nutzt StayOnTrack richtig fleißig – danke dafür. Unter „Mehr“ kannst du jederzeit Wünsche und Ideen schicken, sie gehen direkt an deinen Coach.'],
@@ -898,10 +907,12 @@
           <p class="muted small">Ändere dein Passwort regelmäßig und nutze es nirgendwo sonst.</p>
           <button type="button" class="btn-secondary" data-password>Passwort ändern</button>
         </section>
+        <section class="card" id="twofa-card"></section>
         ${me.role === 'coach' ? '<section class="card" id="prefs-card"></section>' : ''}
       </div>`);
     if (me.role === 'coach') mountPrefsCard(document.getElementById('prefs-card'));
     mountEmailCard(document.getElementById('email-card'));
+    mountTwoFactorCard(document.getElementById('twofa-card'));
     const pv = document.getElementById('profile-vitrine');
     if (pv) api('GET', '/api/achievements').then((d) => {
       pv.innerHTML = `${FAME_DEFS}<h2 style="margin-bottom:8px">Vitrine</h2>
@@ -1006,10 +1017,13 @@
     });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (form.dataset.step === 'code') return; // step 2 has its own handler
       const errEl = form.querySelector('.error');
       errEl.hidden = true;
       try {
-        me = (await api('POST', '/api/login', { username: form.username.value, password: form.password.value })).user;
+        const r = await api('POST', '/api/login', { username: form.username.value, password: form.password.value });
+        if (r.twoFactor) return showLoginCode(form, r.ticket);
+        me = r.user;
         whatsNewChecked = false; // another person may log in on this device
         applyPrefs(me.prefs);
         route();
@@ -1021,6 +1035,188 @@
     });
   }
 
+
+  // ---- Two-factor sign-in (Authy, Google Authenticator, …) ----
+  const AUTH_APPS = 'Authy, Google Authenticator, Microsoft Authenticator, 1Password oder die Passwörter-App auf dem iPhone';
+
+  /** Login step 2: the 6-digit code from the authenticator app (or a recovery code). */
+  function showLoginCode(form, ticket) {
+    form.innerHTML = `
+      <div class="login-logo" role="img" aria-label="StayOnTrack">${LOGO}<span class="login-wordmark">Stay<b>On</b>Track</span></div>
+      <h2 class="tfa-title">🔐 Bestätigungscode</h2>
+      <p class="muted small">Öffne deine Authenticator-App (z. B. Authy) und gib den 6-stelligen Code für StayOnTrack ein.</p>
+      <div class="field"><label for="tfa-code">Code</label>
+        <input id="tfa-code" name="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="9" placeholder="••• •••" required></div>
+      <button class="btn-primary btn-block" type="submit">Bestätigen</button>
+      <p class="error" hidden></p>
+      <p class="small"><button type="button" class="link-btn" data-tfa-recovery>Kein Zugriff auf die App? Wiederherstellungscode nutzen</button></p>
+      <p class="small"><button type="button" class="link-btn" data-tfa-back>← Zurück zur Anmeldung</button></p>`;
+    const input = form.code;
+    let recovery = false;
+    input.focus();
+    input.addEventListener('input', () => {
+      if (recovery) return;
+      const d = input.value.replace(/\D/g, '').slice(0, 6);
+      if (input.value !== d) input.value = d;
+      if (d.length === 6) form.requestSubmit();
+    });
+    form.querySelector('[data-tfa-recovery]').addEventListener('click', () => {
+      recovery = true;
+      input.value = '';
+      input.setAttribute('inputmode', 'text');
+      input.setAttribute('autocomplete', 'off');
+      input.placeholder = 'xxxx-xxxx';
+      form.querySelector('label[for=tfa-code]').textContent = 'Wiederherstellungscode';
+      input.focus();
+    });
+    form.querySelector('[data-tfa-back]').addEventListener('click', () => renderLogin());
+    form.dataset.step = 'code';
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const errEl = form.querySelector('.error');
+      errEl.hidden = true;
+      try {
+        const r = await api('POST', '/api/login/2fa', { ticket, code: input.value.trim() });
+        me = r.user;
+        whatsNewChecked = false;
+        applyPrefs(me.prefs);
+        route();
+        if (r.recoveryUsed !== undefined) setTimeout(() => toast(`Wiederherstellungscode verbraucht – noch ${r.recoveryUsed} übrig. Neue erstellst du unter Konto.`), 600);
+        setTimeout(maybeShowWhatsNew, 450);
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.hidden = false;
+        input.select();
+        if (/noch einmal mit Passwort/.test(err.message)) setTimeout(() => renderLogin(), 1800);
+      }
+    };
+  }
+
+  function recoveryCodesHtml(codes) {
+    return `<div class="tfa-codes" aria-label="Wiederherstellungscodes">${codes.map((c) => `<code>${esc(c)}</code>`).join('')}</div>
+      <p class="small muted">Jeder Code funktioniert genau einmal – falls dein Handy weg ist. Bewahre sie sicher auf (z. B. ausgedruckt oder im Passwort-Manager), nicht auf demselben Handy.</p>
+      <div class="row" style="gap:8px"><button type="button" class="btn-secondary btn-sm" data-tfa-copy>Kopieren</button>
+        <button type="button" class="btn-secondary btn-sm" data-tfa-download>Als Datei speichern</button></div>`;
+  }
+  function wireRecoveryButtons(root, codes) {
+    const text = `StayOnTrack – Wiederherstellungscodes (${me.username})\nJeder Code funktioniert einmal.\n\n${codes.join('\n')}\n`;
+    root.querySelector('[data-tfa-copy]').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('Kopiert');
+      } catch {
+        toast('Kopieren ging nicht – bitte abschreiben oder als Datei speichern.', true);
+      }
+    });
+    root.querySelector('[data-tfa-download]').addEventListener('click', () => {
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'stayontrack-wiederherstellungscodes.txt';
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    });
+  }
+
+  /** Account: switch two-factor sign-in on/off, new recovery codes. */
+  async function mountTwoFactorCard(root) {
+    if (!root) return;
+    let st;
+    try {
+      st = await api('GET', '/api/me/2fa');
+    } catch {
+      root.hidden = true;
+      return;
+    }
+    const draw = () => {
+      root.innerHTML = `
+        <div class="row-between"><h2>🔐 Zwei-Faktor-Anmeldung</h2><span class="badge ${st.enabled ? 'good' : me.role === 'coach' ? 'warn' : ''}">${st.enabled ? 'an' : 'aus'}</span></div>
+        <p class="muted small">${st.enabled
+          ? `Beim Anmelden fragt StayOnTrack zusätzlich nach dem Code aus deiner Authenticator-App. Seit ${esc(fmtDate(st.enabledAt.slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' }))} · noch ${st.recoveryLeft} Wiederherstellungscodes.`
+          : `Schützt dein Konto, selbst wenn jemand dein Passwort kennt: Beim Anmelden brauchst du zusätzlich einen Code aus einer App wie ${AUTH_APPS}.${me.role === 'coach' ? ' <strong>Für dein Coach-Konto dringend empfohlen</strong> – es ist der Schlüssel zu allen Klientendaten.' : ''}`}</p>
+        <div class="row" style="gap:8px">
+          ${st.enabled
+            ? '<button type="button" class="btn-secondary btn-sm" data-tfa-new>Neue Wiederherstellungscodes</button><button type="button" class="btn-ghost btn-sm danger-text" data-tfa-off>Ausschalten</button>'
+            : '<button type="button" class="btn-primary" data-tfa-on>Einrichten</button>'}
+        </div>`;
+      const on = root.querySelector('[data-tfa-on]');
+      if (on) on.addEventListener('click', setup);
+      const off = root.querySelector('[data-tfa-off]');
+      if (off) off.addEventListener('click', () => openDialog(`<h2>Zwei-Faktor-Anmeldung ausschalten</h2>
+          <p class="muted small" style="margin-top:-6px">Dein Konto ist danach nur noch durch das Passwort geschützt.</p>
+          <div class="field"><label for="tfo-pw">Passwort</label><input id="tfo-pw" name="password" type="password" autocomplete="current-password" required></div>
+          <div class="field"><label for="tfo-code">Code aus der App (oder Wiederherstellungscode)</label><input id="tfo-code" name="code" autocomplete="one-time-code" required></div>
+          <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-danger">Ausschalten</button></div>`,
+        async (f) => {
+          st = await api('POST', '/api/me/2fa/disable', { password: f.password.value, code: f.code.value.trim() });
+          me.twoFactor = false;
+          toast('Zwei-Faktor-Anmeldung ist aus');
+          draw();
+        }));
+      const neu = root.querySelector('[data-tfa-new]');
+      if (neu) neu.addEventListener('click', () => openDialog(`<h2>Neue Wiederherstellungscodes</h2>
+          <p class="muted small" style="margin-top:-6px">Die alten Codes funktionieren danach nicht mehr.</p>
+          <div class="field"><label for="tfr-pw">Passwort</label><input id="tfr-pw" name="password" type="password" autocomplete="current-password" required></div>
+          <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Erstellen</button></div>`,
+        async (f) => {
+          const r = await api('POST', '/api/me/2fa/recovery', { password: f.password.value });
+          st = r;
+          setTimeout(() => showCodes(r.recoveryCodes, 'Neue Wiederherstellungscodes'), 0);
+          draw();
+        }));
+    };
+
+    function showCodes(codes, title) {
+      openDialog(`<h2>${esc(title)}</h2>${recoveryCodesHtml(codes)}
+        <label class="check" style="margin-top:12px"><input type="checkbox" name="saved"> Ich habe die Codes sicher gespeichert</label>
+        <div class="dialog-actions"><button type="submit" class="btn-primary" disabled>Fertig</button></div>`, async () => {});
+      const f = dialog.querySelector('form');
+      wireRecoveryButtons(f, codes);
+      f.saved.addEventListener('change', () => (f.querySelector('[type=submit]').disabled = !f.saved.checked));
+      dialog.addEventListener('cancel', (e) => {
+        if (!f.saved.checked) e.preventDefault();
+      });
+    }
+
+    function setup() {
+      openDialog(`<h2>Zwei-Faktor-Anmeldung einrichten</h2>
+        <p class="muted small" style="margin-top:-6px">Zur Sicherheit noch einmal dein Passwort.</p>
+        <div class="field"><label for="tfs-pw">Passwort</label><input id="tfs-pw" name="password" type="password" autocomplete="current-password" required></div>
+        <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Weiter</button></div>`,
+      async (f) => {
+        const s = await api('POST', '/api/me/2fa/setup', { password: f.password.value });
+        setTimeout(() => scan(s), 0);
+      });
+    }
+
+    function scan(s) {
+      openDialog(`<h2>Mit Authy verbinden</h2>
+        <ol class="tfa-steps small">
+          <li>Öffne Authy (oder eine andere Authenticator-App) und tippe auf <strong>+</strong> / „Konto hinzufügen“.</li>
+          <li>Scanne diesen QR-Code – oder tipp den Schlüssel von Hand ein.</li>
+          <li>Gib den 6-stelligen Code ein, den die App für StayOnTrack anzeigt.</li>
+        </ol>
+        <img class="tfa-qr" src="${esc(s.qr)}" alt="QR-Code für die Authenticator-App" width="220" height="220">
+        <details class="tfa-manual"><summary class="small">QR-Code scannen geht nicht? Schlüssel anzeigen</summary>
+          <p class="small muted">Konto: <strong>StayOnTrack</strong> · Typ: zeitbasiert</p><code class="tfa-secret">${esc(s.secret)}</code>
+          <p class="small"><a href="${esc(s.otpauth)}">Auf diesem Handy direkt in der App öffnen</a></p></details>
+        <div class="field"><label for="tfs-code">Code aus der App</label>
+          <input id="tfs-code" name="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="••• •••" required></div>
+        <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Aktivieren</button></div>`,
+      async (f) => {
+        const r = await api('POST', '/api/me/2fa/enable', { code: f.code.value.replace(/\D/g, '') });
+        st = r;
+        me.twoFactor = true;
+        draw();
+        setTimeout(() => showCodes(r.recoveryCodes, '✅ Aktiv – deine Wiederherstellungscodes'), 0);
+        const nudge = document.getElementById('tfa-nudge');
+        if (nudge) nudge.remove();
+      });
+    }
+    draw();
+  }
 
   // ---------- e-mail: confirm, reset password ----------
   let authConfig = null;
@@ -1064,6 +1260,14 @@
       if (f.pw.value.length < 8) throw new Error('Das Passwort braucht mindestens 8 Zeichen.');
       if (f.pw.value !== f.pw2.value) throw new Error('Die beiden Passwörter stimmen nicht überein.');
       const r = await api('POST', '/api/password/reset', { login, code, password: f.pw.value });
+      if (r.twoFactor) {
+        // with two-factor sign-in a new password alone doesn't log in: password + code on the login page
+        setTimeout(() => {
+          renderLogin(r.username);
+          toast('Passwort geändert – melde dich jetzt mit dem neuen Passwort und deinem Code an.');
+        }, 0);
+        return;
+      }
       if (r.user) {
         me = r.user;
         whatsNewChecked = false;
@@ -2812,6 +3016,7 @@
         <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}${archived.length ? ` · ${archived.length} pausiert` : ''}</p></div>
         <button class="btn-primary" id="btn-new-client" type="button">+ Neuer Klient</button>
       </div>
+      ${me.twoFactor ? '' : `<a class="card tfa-nudge" id="tfa-nudge" href="#/account"><span aria-hidden="true">🔐</span><span><strong>Schütze dein Coach-Konto mit Zwei-Faktor-Anmeldung</strong><span class="muted small">Dein Konto ist der Schlüssel zu allen Klientendaten. Mit Authy &amp; Co. in 2 Minuten eingerichtet.</span></span><span class="att-chev" aria-hidden="true">›</span></a>`}
       <div id="feedback-card"></div>
       ${clients.length ? '<div id="attention"></div>' : ''}
       ${clients.length ? coachDashboard(clients, queue, weightAutomation) : ''}

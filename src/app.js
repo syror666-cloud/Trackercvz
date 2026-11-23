@@ -25,6 +25,7 @@ const { inviteRoutes } = require('./invites');
 const { attentionRoutes } = require('./attention');
 const { recapRoutes } = require('./recap');
 const { feedbackRoutes } = require('./feedback');
+const { createTwoFactor } = require('./twofa');
 const { privacyRoutes } = require('./privacy');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
@@ -287,6 +288,7 @@ const publicUser = (u) => ({
   deletionRequestedAt: u.deletion_requested_at || null,
   archivedAt: u.archived_at || null, archiveUntil: u.archive_until || null,
   showThanks: u.role === 'client' && !u.thanks_seen_at && Boolean(u.onboarded_at),
+  twoFactor: Boolean(u.totp_enabled_at),
 });
 
 /** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
@@ -636,8 +638,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
 
   mailer = mailer || createMailer({});
   let reports; // created further down, once nutrition exists
+  const twoFactor = createTwoFactor({ db });
   const mail = emailAuth({
-    db, HttpError, readBody, requireUser, requireCoach, clientIp, validatePassword, startSession,
+    db, HttpError, readBody, requireUser, requireCoach, clientIp, validatePassword, startSession, twoFactor,
     mailer, appUrl,
   });
 
@@ -656,10 +659,66 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
         recordLoginFailure(keys);
         throw new HttpError(401, 'Benutzername/E-Mail oder Passwort falsch');
       }
+      // two-factor sign-in: the password was right, now the code from the authenticator app
+      if (twoFactor.isEnabled(u.id)) return { twoFactor: true, ticket: twoFactor.ticketFor(u.id, keys) };
       loginAttempts.delete(`ip:${ip}`);
       loginAttempts.delete(`user:${name}`);
       loginAttempts.delete(`day:${name}`);
       return { user: startSession(ctx, u) };
+    }],
+
+    ['POST', /^\/api\/login\/2fa$/, async (ctx) => {
+      const { ticket, code } = await readBody(ctx.req);
+      if (typeof ticket !== 'string' || typeof code !== 'string') throw new HttpError(400, 'Bitte den Code eingeben');
+      const r = twoFactor.redeem(ticket, code.slice(0, 40));
+      if (r.error === 'expired') throw new HttpError(401, 'Die Anmeldung ist abgelaufen – bitte noch einmal mit Passwort anmelden.');
+      if (r.error) {
+        recordLoginFailure(r.keys);
+        checkLoginRate(r.keys);
+        throw new HttpError(401, r.left > 0 ? `Der Code stimmt nicht. Noch ${r.left} ${r.left === 1 ? 'Versuch' : 'Versuche'}.` : 'Zu viele falsche Codes – bitte noch einmal mit Passwort anmelden.');
+      }
+      for (const [k] of r.keys) loginAttempts.delete(k);
+      const u = q.userById.get(r.userId);
+      const out = { user: startSession(ctx, u) };
+      if (r.how === 'recovery') out.recoveryUsed = twoFactor.status(u.id).recoveryLeft;
+      return out;
+    }],
+
+    // ---- two-factor sign-in: set up, confirm, recovery codes, switch off ----
+    ['GET', /^\/api\/me\/2fa$/, async (ctx) => twoFactor.status(requireUser(ctx).id)],
+
+    ['POST', /^\/api\/me\/2fa\/setup$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { password } = await readBody(ctx.req);
+      if (typeof password !== 'string' || !verifyPassword(password, u.password_hash)) throw new HttpError(400, 'Passwort ist falsch');
+      if (twoFactor.isEnabled(u.id)) throw new HttpError(409, 'Die Zwei-Faktor-Anmeldung ist schon an');
+      return twoFactor.begin(u);
+    }],
+
+    ['POST', /^\/api\/me\/2fa\/enable$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { code } = await readBody(ctx.req);
+      const codes = twoFactor.confirm(u.id, typeof code === 'string' ? code : '');
+      if (!codes) throw new HttpError(400, 'Der Code stimmt nicht – prüfe, ob die Uhrzeit auf deinem Handy stimmt, und nimm den aktuellen Code.');
+      q.deleteUserSessions.run(u.id, u.tokenHash); // other devices sign in again, now with the code
+      return { ...twoFactor.status(u.id), recoveryCodes: codes };
+    }],
+
+    ['POST', /^\/api\/me\/2fa\/recovery$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { password } = await readBody(ctx.req);
+      if (typeof password !== 'string' || !verifyPassword(password, u.password_hash)) throw new HttpError(400, 'Passwort ist falsch');
+      if (!twoFactor.isEnabled(u.id)) throw new HttpError(409, 'Die Zwei-Faktor-Anmeldung ist aus');
+      return { ...twoFactor.status(u.id), recoveryCodes: twoFactor.regenerate(u.id) };
+    }],
+
+    ['POST', /^\/api\/me\/2fa\/disable$/, async (ctx) => {
+      const u = requireUser(ctx);
+      const { password, code } = await readBody(ctx.req);
+      if (typeof password !== 'string' || !verifyPassword(password, u.password_hash)) throw new HttpError(400, 'Passwort ist falsch');
+      if (!twoFactor.verify(u.id, typeof code === 'string' ? code : '')) throw new HttpError(400, 'Der Code stimmt nicht');
+      twoFactor.disable(u.id);
+      return twoFactor.status(u.id);
     }],
 
     ['POST', /^\/api\/logout$/, async (ctx) => {

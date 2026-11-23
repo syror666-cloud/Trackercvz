@@ -23,7 +23,7 @@ const VERIFY_MS = 7 * 24 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@<>()[\],;:"]{1,64}@[^\s@<>()[\],;:"]{1,253}\.[^\s@<>()[\],;:"]{2,63}$/;
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer, appUrl, clientIp, validatePassword, startSession, log = console }) {
+function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer, appUrl, clientIp, validatePassword, startSession, twoFactor = null, log = console }) {
   const enabled = Boolean(mailer && mailer.enabled && appUrl);
   const base = appUrl ? appUrl.replace(/\/+$/, '') : '';
   const q = {
@@ -214,6 +214,8 @@ function emailAuth({ db, HttpError, readBody, requireUser, requireCoach, mailer,
       q.useToken.run(Date.now(), t.token_hash);
       q.dropTokens.run(u.id, 'reset');
       q.dropSessions.run(u.id); // log out everywhere …
+      // with two-factor sign-in the code is still needed: no session from an e-mail alone
+      if (twoFactor && twoFactor.isEnabled(u.id)) return { ok: true, username: u.username, user: null, twoFactor: true };
       const user = startSession ? startSession(ctx, q.byId.get(u.id)) : null; // … and in here
       return { ok: true, username: u.username, user };
     }],

@@ -836,6 +836,25 @@ Dieses Passwort ist zu leicht zu erraten – bitte ein anderes wählen|This pass
 Wünsche & Ideen|Wishes & ideas|Deseos e ideas|Desideri e idee
 alles erledigt|all done|todo hecho|tutto fatto
 Antworten →|Reply →|Responder →|Rispondi →
+🔐 Zwei-Faktor-Anmeldung|🔐 Two-factor sign-in|🔐 Verificación en dos pasos|🔐 Accesso a due fattori
+Zwei-Faktor-Anmeldung einrichten|Set up two-factor sign-in|Configurar verificación en dos pasos|Configura l'accesso a due fattori
+Einrichten|Set up|Configurar|Configura
+Ausschalten|Switch off|Desactivar|Disattiva
+Aktivieren|Activate|Activar|Attiva
+Bestätigen|Confirm|Confirmar|Conferma
+Neue Wiederherstellungscodes|New recovery codes|Nuevos códigos de recuperación|Nuovi codici di recupero
+🔐 Bestätigungscode|🔐 Verification code|🔐 Código de verificación|🔐 Codice di verifica
+Öffne deine Authenticator-App (z. B. Authy) und gib den 6-stelligen Code für StayOnTrack ein.|Open your authenticator app (e.g. Authy) and enter the 6-digit code for StayOnTrack.|Abre tu app de autenticación (p. ej. Authy) e introduce el código de 6 dígitos de StayOnTrack.|Apri la tua app di autenticazione (es. Authy) e inserisci il codice a 6 cifre di StayOnTrack.
+Kein Zugriff auf die App? Wiederherstellungscode nutzen|No access to the app? Use a recovery code|¿Sin acceso a la app? Usa un código de recuperación|Nessun accesso all'app? Usa un codice di recupero
+← Zurück zur Anmeldung|← Back to sign-in|← Volver al inicio de sesión|← Torna all'accesso
+Wiederherstellungscode|Recovery code|Código de recuperación|Codice di recupero
+Ich habe die Codes sicher gespeichert|I have stored the codes safely|He guardado los códigos de forma segura|Ho salvato i codici in modo sicuro
+Kopieren|Copy|Copiar|Copia
+Als Datei speichern|Save as file|Guardar como archivo|Salva come file
+Mit Authy verbinden|Connect with Authy|Conectar con Authy|Collega con Authy
+Code aus der App|Code from the app|Código de la app|Codice dall'app
+Schütze dein Coach-Konto mit Zwei-Faktor-Anmeldung|Protect your coach account with two-factor sign-in|Protege tu cuenta de coach con verificación en dos pasos|Proteggi il tuo account coach con l'accesso a due fattori
+Der Code stimmt nicht|The code is wrong|El código no es correcto|Il codice non è corretto
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -932,6 +951,7 @@ noch nie|never|nunca|mai
     [/^Schrittziel an (\d+) von 7 Tagen erreicht$/, W(0, (m) => `Step goal reached on ${m[1]} of 7 days`, (m) => `Objetivo de pasos alcanzado ${m[1]} de 7 días`, (m) => `Obiettivo passi raggiunto ${m[1]} giorni su 7`)],
     [/^Schlafziel in (\d+) von 7 Nächten erreicht$/, W(0, (m) => `Sleep goal reached ${m[1]} of 7 nights`, (m) => `Objetivo de sueño alcanzado ${m[1]} de 7 noches`, (m) => `Obiettivo sonno raggiunto ${m[1]} notti su 7`)],
     [/^Danke, (.+)!$/, W(0, (m) => `Thank you, ${m[1]}!`, (m) => `¡Gracias, ${m[1]}!`, (m) => `Grazie, ${m[1]}!`)],
+    [/^Der Code stimmt nicht\. Noch (\d+) (Versuch|Versuche)\.$/, W(0, (m) => `Wrong code. ${m[1]} ${m[1] === '1' ? 'try' : 'tries'} left.`, (m) => `Código incorrecto. Quedan ${m[1]} intentos.`, (m) => `Codice errato. Ancora ${m[1]} tentativi.`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],
