@@ -352,6 +352,16 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS feedback_open ON feedback (done_at, id);
 
+-- offline outbox: a write sent again (after a lost answer or from the phone's outbox) is answered from here
+CREATE TABLE IF NOT EXISTS idempotency (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key        TEXT NOT NULL,
+  status     INTEGER NOT NULL,
+  body       TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
+
 CREATE TABLE IF NOT EXISTS invites (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash   TEXT NOT NULL UNIQUE,

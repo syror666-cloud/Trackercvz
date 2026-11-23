@@ -857,6 +857,10 @@ Schütze dein Coach-Konto mit Zwei-Faktor-Anmeldung|Protect your coach account w
 Der Code stimmt nicht|The code is wrong|El código no es correcto|Il codice non è corretto
 Einträge sind nur für die letzten 31 Tage möglich|Entries are only possible for the last 31 days|Solo se pueden hacer registros de los últimos 31 días|Le registrazioni sono possibili solo per gli ultimi 31 giorni
 Das ist kein gültiges Bild (JPG, PNG oder WebP)|This is not a valid picture (JPG, PNG or WebP)|No es una imagen válida (JPG, PNG o WebP)|Non è un'immagine valida (JPG, PNG o WebP)
+Keine Internetverbindung – bitte versuch es gleich nochmal.|No internet connection – please try again in a moment.|Sin conexión a internet: vuelve a intentarlo en un momento.|Nessuna connessione a internet – riprova tra poco.
+Wird gespeichert, sobald du wieder Netz hast – danach kannst du es ändern.|Will be saved once you're back online – you can change it after that.|Se guardará en cuanto vuelvas a tener conexión; después podrás cambiarlo.|Verrà salvato appena torni online – poi potrai modificarlo.
+📶 Offline gespeichert – geht automatisch raus, sobald du Netz hast. Bestleistungen prüfen wir dann.|📶 Saved offline – sent automatically once you're online. We'll check personal bests then.|📶 Guardado sin conexión: se envía automáticamente cuando vuelvas a tener red. Entonces comprobamos los récords.|📶 Salvato offline – inviato automaticamente appena torni online. Allora controlliamo i record.
+⏳ wartet auf Netz|⏳ waiting for network|⏳ esperando conexión|⏳ in attesa di rete
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -954,6 +958,8 @@ noch nie|never|nunca|mai
     [/^Schlafziel in (\d+) von 7 Nächten erreicht$/, W(0, (m) => `Sleep goal reached ${m[1]} of 7 nights`, (m) => `Objetivo de sueño alcanzado ${m[1]} de 7 noches`, (m) => `Obiettivo sonno raggiunto ${m[1]} notti su 7`)],
     [/^Danke, (.+)!$/, W(0, (m) => `Thank you, ${m[1]}!`, (m) => `¡Gracias, ${m[1]}!`, (m) => `Grazie, ${m[1]}!`)],
     [/^Der Code stimmt nicht\. Noch (\d+) (Versuch|Versuche)\.$/, W(0, (m) => `Wrong code. ${m[1]} ${m[1] === '1' ? 'try' : 'tries'} left.`, (m) => `Código incorrecto. Quedan ${m[1]} intentos.`, (m) => `Codice errato. Ancora ${m[1]} tentativi.`)],
+    [/^📴 Offline(?: · Stand (\d{1,2}:\d{2}))?(?: · (\d+) (?:Eintrag wartet|Einträge warten) auf Netz)?$/, W(0, (m) => `📴 Offline${m[1] ? ` · as of ${m[1]}` : ''}${m[2] ? ` · ${m[2]} waiting for network` : ''}`, (m) => `📴 Sin conexión${m[1] ? ` · datos de las ${m[1]}` : ''}${m[2] ? ` · ${m[2]} pendientes` : ''}`, (m) => `📴 Offline${m[1] ? ` · dati delle ${m[1]}` : ''}${m[2] ? ` · ${m[2]} in attesa` : ''}`)],
+    [/^✓ (\d+) Offline-Einträge? gespeichert$/, W(0, (m) => `✓ ${m[1]} offline ${m[1] === '1' ? 'entry' : 'entries'} saved`, (m) => `✓ ${m[1]} registros sin conexión guardados`, (m) => `✓ ${m[1]} voci offline salvate`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

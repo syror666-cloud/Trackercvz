@@ -63,13 +63,207 @@
     return Array.from(buf, (x) => chars[x % chars.length]).join('');
   }
 
+  // ---------- Offline: the last data stays readable, entries wait in an outbox until there is a connection ----------
+  // Only for clients (a coach's phone would otherwise hold everyone's health data). Data lives in the Cache API under
+  // the user's id; logout clears it together with the outbox.
+  const DATA_CACHE = 'sot-data-v1';
+  const OUTBOX_KEY = 'sot-outbox';
+  const OFFLINE_WRITES = [
+    ['PUT', /^\/api\/entries\/\d{4}-\d{2}-\d{2}$/],
+    ['PUT', /^\/api\/measurements\/\d+\/\d{4}-\d{2}-\d{2}$/],
+    ['POST', /^\/api\/foodlog$/],
+    ['POST', /^\/api\/training\/workouts$/],
+    ['POST', /^\/api\/messages$/],
+  ];
+  const NOT_CACHED = /^\/api\/(products|barcode|login|logout|password|invite|email|google|telegram|admin|ai|recap|me\/export|me\/2fa|thanks)/;
+  let offline = false;
+  let offlineAt = null; // time of the data shown while offline
+  const hasCaches = () => typeof caches !== 'undefined' && window.isSecureContext;
+  const cacheUrl = (uid, url) => `${location.origin}/__offline/${uid}${url}`;
+  const isClient = () => Boolean(me && me.role === 'client');
+
+  async function cacheGet(url, uid = me && me.id) {
+    if (!hasCaches() || !uid) return null;
+    try {
+      const hit = await (await caches.open(DATA_CACHE)).match(cacheUrl(uid, url));
+      return hit ? await hit.json() : null;
+    } catch {
+      return null;
+    }
+  }
+  async function cachePut(url, data, uid = me && me.id) {
+    if (!hasCaches() || !uid) return;
+    try {
+      await (await caches.open(DATA_CACHE)).put(cacheUrl(uid, url), new Response(JSON.stringify({ data, at: Date.now() }), { headers: { 'Content-Type': 'application/json' } }));
+    } catch { /* storage full or blocked */ }
+  }
+  /** Logout / another person logs in: nothing of the previous person stays on the device. */
+  async function clearOfflineData() {
+    try {
+      localStorage.removeItem(OUTBOX_KEY);
+    } catch { /* ignore */ }
+    if (hasCaches()) await caches.delete(DATA_CACHE).catch(() => {});
+  }
+  function outbox() {
+    try {
+      return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  }
+  function saveOutbox(list) {
+    try {
+      localStorage.setItem(OUTBOX_KEY, JSON.stringify(list));
+    } catch { /* full: nothing we can do */ }
+  }
+  const pendingCount = () => (me ? outbox().filter((o) => o.uid === me.id).length : 0);
+  const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''));
+  function offlineError() {
+    const err = new Error('Keine Internetverbindung – bitte versuch es gleich nochmal.');
+    err.offline = true;
+    return err;
+  }
+
+  function setOffline(on, at) {
+    offline = on;
+    if (at) offlineAt = at;
+    if (!on) offlineAt = null;
+    renderOfflineBar();
+  }
+  function renderOfflineBar() {
+    let bar = document.getElementById('offline-bar');
+    const pending = pendingCount();
+    if (!me || (!offline && !pending)) {
+      if (bar) bar.remove();
+      document.body.classList.remove('is-offline');
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'offline-bar';
+      bar.setAttribute('role', 'status');
+      document.body.appendChild(bar);
+    }
+    const when = offlineAt ? new Date(offlineAt).toLocaleTimeString(LOC(), { hour: '2-digit', minute: '2-digit' }) : null;
+    const waits = pending ? `${pending} ${pending === 1 ? 'Eintrag wartet' : 'Einträge warten'} auf Netz` : '';
+    bar.className = offline ? 'offline-bar' : 'offline-bar syncing';
+    bar.textContent = offline
+      ? `📴 Offline${when ? ` · Stand ${when}` : ''}${waits ? ` · ${waits}` : ''}`
+      : `⏳ ${waits.replace(' auf Netz', '')} – wird gesendet …`;
+    document.body.classList.toggle('is-offline', offline);
+  }
+
+  /** What the server would have answered, built from the saved data, so the page works on as if online. */
+  async function optimisticAnswer(method, url, body) {
+    let m;
+    if ((m = url.match(/^\/api\/entries\/(\d{4}-\d{2}-\d{2})$/))) {
+      const date = m[1];
+      const c = (await cacheGet('/api/entries'))?.data || { entries: [] };
+      const old = c.entries.find((e) => e.date === date) || { date, weight: null, steps: null, sleep: null, note: null, caloriesOk: null, calories: null, training: null };
+      const entry = { ...old };
+      for (const k of ['weight', 'steps', 'sleep', 'note', 'caloriesOk', 'calories', 'training']) if (body[k] !== undefined) entry[k] = body[k] === '' ? null : body[k];
+      if (entry.caloriesOk === true) entry.calories = null;
+      const entries = c.entries.filter((e) => e.date !== date).concat([entry]).sort((a, b) => (a.date < b.date ? -1 : 1));
+      await cachePut('/api/entries', { ...c, entries });
+      return { entry, revoked: [], offline: true };
+    }
+    if ((m = url.match(/^\/api\/measurements\/(\d+)\/(\d{4}-\d{2}-\d{2})$/))) {
+      const c = (await cacheGet('/api/measurements'))?.data;
+      if (!c) throw offlineError();
+      const metrics = c.metrics.map((x) => (x.id !== Number(m[1]) ? x : {
+        ...x, values: (x.values || []).filter((v) => v.date !== m[2]).concat(body.value === null || body.value === undefined ? [] : [{ date: m[2], value: body.value }]),
+      }));
+      await cachePut('/api/measurements', { ...c, metrics });
+      return { metrics, offline: true };
+    }
+    if (url === '/api/foodlog') {
+      const key = `/api/foodlog?date=${body.date}`;
+      const c = (await cacheGet(key))?.data || { date: body.date, items: [], totals: { kcal: 0, protein: 0, carbs: 0, fat: 0 }, targets: {} };
+      const f = body.foodId ? (foodCache || []).find((x) => x.id === body.foodId) : body;
+      if (!f) throw offlineError();
+      const amount = Number(body.amount) || 0;
+      const t = (v) => (v === null || v === undefined ? null : Math.round(((amount * v) / 100) * 10) / 10);
+      const item = {
+        id: `local-${Date.now()}`, pending: true, date: body.date, meal: body.meal, name: f.name, brand: f.brand || null, barcode: body.barcode || null,
+        foodId: body.foodId || null, amount, unit: f.unit || 'g', per100: { kcal: f.kcal, protein: f.protein ?? null, carbs: f.carbs ?? null, fat: f.fat ?? null },
+        kcal: Math.round((amount * f.kcal) / 100), protein: t(f.protein), carbs: t(f.carbs), fat: t(f.fat),
+      };
+      const items = c.items.concat([item]);
+      const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
+      for (const i of items) for (const k of Object.keys(totals)) totals[k] += i[k] || 0;
+      for (const k of Object.keys(totals)) totals[k] = Math.round(totals[k]);
+      const day = { ...c, items, totals };
+      await cachePut(key, day);
+      return { day, revoked: [], offline: true };
+    }
+    if (url === '/api/training/workouts') {
+      const c = (await cacheGet('/api/training'))?.data;
+      if (!c) throw offlineError();
+      const num0 = (v) => (v === null || v === undefined || v === '' ? null : Number(String(v).replace(',', '.')));
+      const exercises = (body.exercises || []).map((e) => ({ name: e.name, sets: (e.sets || []).map((s) => ({ weight: num0(s.weight), reps: num0(s.reps) })).filter((s) => s.weight !== null || s.reps !== null) }));
+      const all = exercises.flatMap((e) => e.sets);
+      const last = { ...(c.last || {}) };
+      for (const e of exercises) if (e.sets.length) last[exKey(e.name)] = { date: body.date, sets: e.sets };
+      const data = { ...c, last, recent: [{ id: `local-${Date.now()}`, date: body.date, dayId: body.dayId, dayName: body.dayName, sets: all.length }].concat(c.recent || []) };
+      await cachePut('/api/training', data);
+      return {
+        ...data,
+        summary: {
+          date: body.date, dayName: body.dayName, durationMin: body.durationMin || null, offline: true,
+          volume: Math.round(all.reduce((a, s) => a + (s.weight !== null && s.reps !== null ? s.weight * s.reps : 0), 0)),
+          prevVolume: null, sets: all.length, reps: all.reduce((a, s) => a + (s.reps || 0), 0),
+          exercises: exercises.filter((e) => e.sets.length).length, prs: [], number: null,
+        },
+      };
+    }
+    if (url === '/api/messages') return { id: null, queued: true, offline: true };
+    throw offlineError();
+  }
+
+  async function offlineFallback(method, url, body, key) {
+    setOffline(true);
+    if (method === 'GET') {
+      if (url === '/api/me') {
+        const c = await cacheGet('/api/me', 'me');
+        if (c) return c.data;
+      } else if (isClient() && !NOT_CACHED.test(url)) {
+        const c = await cacheGet(url);
+        if (c) {
+          if (!offlineAt || c.at < offlineAt) setOffline(true, c.at);
+          return c.data;
+        }
+      }
+      throw offlineError();
+    }
+    if (key) {
+      const answer = await optimisticAnswer(method, url, body);
+      saveOutbox(outbox().concat([{ key, uid: me.id, method, url, body, at: Date.now() }]));
+      renderOfflineBar();
+      return answer;
+    }
+    throw offlineError();
+  }
+
   async function api(method, url, body) {
-    const res = await fetch(url, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: 'same-origin',
-    });
+    const queueable = isClient() && OFFLINE_WRITES.some(([m, re]) => m === method && re.test(url));
+    const key = queueable ? newKey() : null;
+    let res;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+        credentials: 'same-origin',
+        // a gym basement can keep a request hanging for minutes: give up and go offline instead
+        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(method === 'GET' ? 12000 : 15000) : undefined,
+      });
+    } catch {
+      return offlineFallback(method, url, body, key);
+    }
+    if (offline) {
+      setOffline(false);
+      syncOutbox();
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err = new Error(data.error || `Fehler ${res.status}`);
@@ -80,7 +274,78 @@
       }
       throw err;
     }
+    if (data && data.user && data.user.id && /^\/api\/(login(\/2fa)?|invite\/accept|password\/reset|me)$/.test(url)) {
+      const prev = await cacheGet('/api/me', 'me');
+      if (prev && prev.data && prev.data.user && prev.data.user.id !== data.user.id) await clearOfflineData();
+    }
+    if (method === 'GET') {
+      if (url === '/api/me' && data.user && data.user.role === 'client') cachePut('/api/me', data, 'me');
+      else if (isClient() && !NOT_CACHED.test(url)) cachePut(url, data);
+    }
     return data;
+  }
+
+  /** Sends what waited in the outbox, oldest first. Stops at the first missing connection; drops what the server refuses. */
+  let syncing = false;
+  async function syncOutbox() {
+    if (syncing || !me) return;
+    const mine = outbox().filter((o) => o.uid === me.id);
+    if (!mine.length) return;
+    syncing = true;
+    renderOfflineBar();
+    let done = 0;
+    const failed = [];
+    try {
+      for (const o of mine) {
+        let res;
+        try {
+          res = await fetch(o.url, {
+            method: o.method, credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': o.key },
+            body: JSON.stringify(o.body),
+            signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined,
+          });
+        } catch {
+          setOffline(true);
+          break;
+        }
+        if (offline) setOffline(false);
+        if (res.status === 401 || res.status === 409 || res.status >= 500) break; // try again later
+        saveOutbox(outbox().filter((x) => x.key !== o.key));
+        if (res.ok) done++;
+        else failed.push((await res.json().catch(() => ({}))).error || `Fehler ${res.status}`);
+      }
+    } finally {
+      syncing = false;
+      renderOfflineBar();
+    }
+    if (done) {
+      toast(`✓ ${done} ${done === 1 ? 'Offline-Eintrag' : 'Offline-Einträge'} gespeichert`);
+      document.dispatchEvent(new CustomEvent('outbox-synced'));
+      // show the server's view – unless someone is typing or a workout is open
+      const busy = (typeof dialog !== 'undefined' && dialog.open) || document.body.classList.contains('sheet-open') || document.querySelector('[data-unsaved]')
+        || (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName));
+      if (!busy && /^(#\/?|#\/nutrition\/diary|#\/training(\/history)?|#\/strategy(\/plan)?|)$/.test(location.hash)) route();
+    }
+    if (failed.length) setTimeout(() => toast(`${failed.length === 1 ? 'Ein Offline-Eintrag konnte' : `${failed.length} Offline-Einträge konnten`} nicht gespeichert werden: ${failed[0]}`, true), done ? 3400 : 0);
+  }
+  window.addEventListener('online', () => syncOutbox());
+  window.addEventListener('offline', () => setOffline(true));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncOutbox();
+  });
+  setInterval(() => {
+    if (me && pendingCount()) syncOutbox();
+  }, 20000);
+
+  /** After login: fetch what a client needs in the gym once, so it is there offline even if not opened yet. */
+  let lastPrefetch = 0;
+  function prefetchForOffline() {
+    if (!isClient() || !navigator.onLine || Date.now() - lastPrefetch < 10 * 60 * 1000) return;
+    lastPrefetch = Date.now();
+    // not /api/messages or /api/checkins: opening those marks things as read
+    for (const u of ['/api/entries', '/api/goals', '/api/measurements', '/api/training', '/api/nutrition', `/api/foodlog?date=${todayStr()}`, '/api/foodlog/recent']) api('GET', u).catch(() => {});
+    if (typeof loadFoods === 'function') loadFoods().catch(() => {});
   }
 
   let toastTimer;
@@ -193,6 +458,15 @@
   // EVERY UPDATE: add a new entry at the TOP with a new id. People who missed several updates see all
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
+    {
+      id: '2026-11-offline', date: 'November 2026',
+      client: [
+        ['📴', 'Funktioniert auch ohne Netz', 'Kein Empfang im Gym-Keller? Die App öffnet sich trotzdem und zeigt deinen letzten Stand. Tageseintrag, Essen über ＋, Training und Chat-Nachrichten kannst du offline speichern – sie gehen automatisch raus, sobald du wieder Netz hast. Oben siehst du, was noch wartet.'],
+      ],
+      coach: [
+        ['📴', 'Offline-Modus für Klienten', 'Klienten können ohne Netz eintragen, trainieren und schreiben; alles wird automatisch nachgesendet – garantiert nur einmal. Beim Abmelden werden die Offline-Daten auf dem Handy gelöscht.'],
+      ],
+    },
     {
       id: '2026-11-security-14', date: 'November 2026',
       client: [
@@ -607,6 +881,8 @@
 
   // ---------- routing ----------
   async function boot() {
+    // the service worker keeps the app itself available offline (and handles push)
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
     try {
       me = (await api('GET', '/api/me')).user;
     } catch {
@@ -619,6 +895,11 @@
       hideSplash();
     }
     setTimeout(maybeShowWhatsNew, 450);
+    if (me) {
+      renderOfflineBar();
+      syncOutbox();
+      setTimeout(prefetchForOffline, 2500);
+    }
   }
 
   /** Start screen with the logo (in index.html) – fades out once the first page is ready. */
@@ -713,6 +994,8 @@
   }
 
   function renderNav() {
+    // logged in and online: keep what the gym needs on the device (at most every 10 minutes)
+    setTimeout(prefetchForOffline, 1500);
     const links =
       me.role === 'coach'
         ? [['#/', 'Klienten', false], ['#/messages', 'Nachrichten', true], ['#/checkin', 'Check-in', false], ['#/admin', 'Admin', false]]
@@ -841,9 +1124,13 @@
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
     setMenu(false);
+    const waiting = pendingCount();
+    if (waiting && !confirm(`${waiting} ${waiting === 1 ? 'Eintrag wartet' : 'Einträge warten'} noch auf Internet und ${waiting === 1 ? 'geht' : 'gehen'} beim Abmelden verloren. Trotzdem abmelden?`)) return;
     await push.forgetDevice().catch(() => {});
     await api('POST', '/api/logout').catch(() => {});
+    await clearOfflineData(); // no health data of this person stays on the device
     me = null;
+    renderOfflineBar();
     location.hash = '';
     route();
   });
@@ -2834,7 +3121,7 @@
           const d = dayOf(m.createdAt);
           const sep = d !== day ? `<div class="chat-day">${esc(d)}</div>` : '';
           day = d;
-          return `${sep}<div class="msg ${m.mine ? 'mine' : 'theirs'}">${esc(m.body)}<time>${timeOf(m.createdAt)}</time></div>`;
+          return `${sep}<div class="msg ${m.mine ? 'mine' : 'theirs'}${m.pending ? ' pending' : ''}">${esc(m.body)}<time>${m.pending ? '⏳ wartet auf Netz' : timeOf(m.createdAt)}</time></div>`;
         })
         .join('');
       if (nearBottom || !scrolledOnce) log.scrollTop = log.scrollHeight;
@@ -2875,9 +3162,15 @@
       const btn = form.querySelector('button');
       btn.disabled = true;
       try {
-        await api('POST', `/api/messages${query}`, { body });
+        const sent = await api('POST', `/api/messages${query}`, { body });
         input.value = '';
         autosize();
+        if (sent.queued) {
+          messages.push({ id: `pending-${Date.now()}`, body, mine: true, createdAt: new Date().toISOString(), pending: true });
+          draw();
+          log.scrollTop = log.scrollHeight;
+          return;
+        }
         await load();
         log.scrollTop = log.scrollHeight;
       } catch (err) {
@@ -2890,6 +3183,12 @@
 
     load();
     const timer = setInterval(load, 8000);
+    const onSynced = () => {
+      messages = messages.filter((m) => !m.pending);
+      load();
+    };
+    document.addEventListener('outbox-synced', onSynced);
+    onCleanup(() => document.removeEventListener('outbox-synced', onSynced));
     onCleanup(() => {
       stopped = true;
       clearInterval(timer);
@@ -5142,7 +5441,7 @@
           <div class="row-between meal-head"><h2>${name}</h2><span class="muted small">${items.length ? `${num(kcal)} kcal` : ''}</span></div>
           ${items.length ? `<ul class="diary-items">${items.map((i) => `<li>
             <${readOnly ? 'div' : 'button type="button"'} class="diary-item" data-item="${i.id}">
-              <span class="di-main"><span class="item-name">${esc(i.name)}</span>
+              <span class="di-main"><span class="item-name">${i.pending ? '<span title="wartet auf Netz" aria-label="wartet auf Netz">⏳</span> ' : ''}${esc(i.name)}</span>
                 <span class="muted small di-sub">${i.brand ? `${esc(i.brand)} · ` : ''}${esc(fmtAmount(i.amount, i.unit))} ${macroInline(i)}</span></span>
               <span class="di-kcal">${num(i.kcal)}<small> kcal</small></span>
             </${readOnly ? 'div' : 'button'}></li>`).join('')}</ul>` : `<p class="muted small diary-empty">${readOnly ? 'Nichts eingetragen.' : 'Noch nichts eingetragen.'}</p>`}
@@ -5176,7 +5475,10 @@
       if (readOnly) return;
       root.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => openAddFood(b.dataset.add)));
       root.querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => scanAndAdd(b.dataset.scan)));
-      root.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => openEditItem(day.items.find((i) => i.id === Number(b.dataset.item)))));
+      root.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => {
+        if (String(b.dataset.item).startsWith('local-')) return toast('Wird gespeichert, sobald du wieder Netz hast – danach kannst du es ändern.');
+        openEditItem(day.items.find((i) => i.id === Number(b.dataset.item)));
+      }));
     }
 
     const { openAddFood, scanAndAdd } = createFoodAdder({ getDate: () => date, onSaved: (r) => afterChange(r) });
@@ -7135,7 +7437,7 @@
     y -= 68 * u + 6 * u;
     ctx.fillStyle = '#fd6e6e';
     ctx.font = font(700, 26 * u);
-    ctx.fillText(`${T('TRAINING')} #${s.number}`, pad, y);
+    ctx.fillText(s.number ? `${T('TRAINING')} #${s.number}` : T('TRAINING'), pad, y);
     if (s.prs.length) {
       const pr = s.prs[0];
       const text = `🏆  ${T('Bestleistung')}: ${pr.name} ${pr.weight.toLocaleString(LOC())} kg${s.prs.length > 1 ? ` +${s.prs.length - 1}` : ''}`;
@@ -7184,7 +7486,8 @@
     function drawSummary() {
       dialog.innerHTML = `<div class="wo-sum">
         <div class="wo-sum-burst" aria-hidden="true">${pr ? '🏆' : '💪'}</div>
-        <p class="wo-sum-eyebrow">Training #${s.number} · ${esc(s.dayName)}</p>
+        <p class="wo-sum-eyebrow">${s.number ? `Training #${s.number} · ` : ''}${esc(s.dayName)}</p>
+        ${s.offline ? '<p class="wo-sum-line small muted">📶 Offline gespeichert – geht automatisch raus, sobald du Netz hast. Bestleistungen prüfen wir dann.</p>' : ''}
         <h2>${esc(head)}</h2>
         <div class="wo-sum-tiles">${summaryStats(s).map(([v, l]) => `<div><strong>${esc(v)}</strong><span>${esc(l)}</span></div>`).join('')}</div>
         ${compare ? `<p class="wo-sum-line">${esc(compare)}</p>` : ''}

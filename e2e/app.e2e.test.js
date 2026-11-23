@@ -252,3 +252,84 @@ test('coach: pause a client, bring them back, delete another one', { skip }, asy
   assert.equal(db.prepare('SELECT 1 FROM users WHERE id = ?').get(goneId), undefined);
   assert.deepEqual(errors, []);
 });
+
+test('offline: the app opens without a connection, entries wait in the outbox and arrive exactly once', { skip }, async () => {
+  const maxId = db.prepare("SELECT id FROM users WHERE username = 'max'").get().id;
+  const days = [{ id: 'd-off', name: 'Offline-Push', exercises: [{ id: 'e1', name: 'Schulterdrücken', sets: 1, reps: '10' }] }];
+  db.prepare('INSERT OR REPLACE INTO training_plans (client_id, split, days_per_week, data, updated_by) VALUES (?, ?, ?, ?, ?)')
+    .run(maxId, 'Custom', 1, JSON.stringify(days), maxId);
+  const count = (sql) => db.prepare(sql).get(maxId).n;
+  const foodBefore = count('SELECT COUNT(*) AS n FROM food_log WHERE client_id = ?');
+  const msgBefore = count('SELECT COUNT(*) AS n FROM messages WHERE client_id = ?');
+  const woBefore = count("SELECT COUNT(*) AS n FROM workouts WHERE client_id = ? AND day_id = 'd-off'");
+  const { page, errors } = await loginAs('max', 'maxpass123', { width: 390, height: 844 });
+  const ctx = page.context();
+  // online once: the service worker keeps the app, the app keeps the data
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  for (const h of ['#/', '#/training', '#/nutrition/diary', '#/chat']) {
+    await page.goto(`${base}/${h}`);
+    await page.waitForTimeout(900);
+  }
+  await page.goto(`${base}/#/`);
+  await page.waitForTimeout(3000); // prefetch for offline
+
+  await ctx.setOffline(true);
+  await page.reload();
+  await page.waitForSelector('#kcal-card:not([hidden])', { timeout: 8000 });
+  await page.waitForSelector('#offline-bar');
+  assert.match(await page.locator('#offline-bar').innerText(), /Offline/);
+
+  // food via ＋
+  await page.click('[data-quick-add]');
+  await page.fill('dialog input[name=q]', 'Skyr');
+  await page.locator('dialog .add-food-list li[data-i]').first().click();
+  await page.click('dialog [type=submit]');
+  await page.waitForFunction(() => /wartet/.test(document.getElementById('offline-bar')?.textContent || ''));
+  // weight
+  if (!(await page.locator('#f-weight').isVisible())) await page.click('[data-open-sheet]');
+  await page.fill('#f-weight', '79,9');
+  await page.click('#entry-form button[type=submit]');
+  await page.waitForTimeout(600);
+  // workout with summary
+  await page.goto(`${base}/#/training`);
+  await page.waitForSelector('[data-start]');
+  const idx = await page.locator('[data-start]').evaluateAll((els) => els.findIndex((e) => /Offline-Push/.test(e.closest('section,li,div').textContent)));
+  await page.locator('[data-start]').nth(Math.max(0, idx)).click();
+  await page.fill('[data-f="weight"]', '40');
+  await page.fill('[data-f="reps"]', '10');
+  await page.click('[data-save]');
+  await page.waitForSelector('.wo-sum');
+  assert.match(await page.locator('.wo-sum').innerText(), /Offline gespeichert/);
+  await page.click('[data-done]');
+  // chat
+  await page.goto(`${base}/#/chat`);
+  await page.waitForTimeout(800);
+  await page.fill('.chat textarea, textarea[name=body]', 'Hab im Keller kein Netz 💪');
+  await page.locator('.chat textarea, textarea[name=body]').press('Enter').catch(() => {});
+  await page.locator('form button[type=submit], .chat-form button').last().click().catch(() => {});
+  await page.waitForSelector('.msg.pending');
+  const waiting = await page.evaluate(() => JSON.parse(localStorage.getItem('sot-outbox') || '[]').length);
+  assert.ok(waiting >= 4, `outbox has ${waiting} entries`);
+  // nothing reached the server yet
+  assert.equal(count('SELECT COUNT(*) AS n FROM food_log WHERE client_id = ?'), foodBefore);
+
+  // back online: everything arrives, exactly once
+  await ctx.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('sot-outbox') || '[]').length === 0, null, { timeout: 15000 });
+  await page.waitForTimeout(800);
+  assert.equal(count('SELECT COUNT(*) AS n FROM food_log WHERE client_id = ?'), foodBefore + 1);
+  assert.equal(count('SELECT COUNT(*) AS n FROM messages WHERE client_id = ?'), msgBefore + 1);
+  assert.equal(count("SELECT COUNT(*) AS n FROM workouts WHERE client_id = ? AND day_id = 'd-off'"), woBefore + 1);
+  const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  assert.equal(db.prepare('SELECT weight FROM entries WHERE user_id = ? AND date = ?').get(maxId, today).weight, 79.9);
+  await page.waitForFunction(() => !document.getElementById('offline-bar'));
+
+  // logout clears the offline data on the device
+  await page.click('#avatar-btn');
+  await page.click('#btn-logout');
+  await page.waitForSelector('#login-form');
+  const left = await page.evaluate(async () => ({ outbox: localStorage.getItem('sot-outbox'), caches: (await caches.keys()).filter((k) => k.startsWith('sot-data')) }));
+  assert.deepEqual(left, { outbox: null, caches: [] });
+  assert.deepEqual(errors, []);
+});

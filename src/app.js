@@ -1517,6 +1517,12 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   }
 
   const legal = legalHandler(legalEnv || process.env);
+  const idem = {
+    get: db.prepare('SELECT status, body FROM idempotency WHERE user_id = ? AND key = ?'),
+    put: db.prepare('INSERT OR IGNORE INTO idempotency (user_id, key, status, body, created_at) VALUES (?, ?, ?, ?, ?)'),
+    prune: db.prepare('DELETE FROM idempotency WHERE created_at < ?'),
+  };
+  const idemInFlight = new Set();
   return async function handler(req, res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -1547,19 +1553,42 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
 
       const ctx = { req, res, url, user: currentUser(req) };
       if (ctx.user) recordActivity(ctx.user);
-      for (const [method, re, fn] of routes) {
-        const m = url.pathname.match(re);
-        if (m && method === req.method) {
-          const result = await fn(ctx, m);
-          if (result !== undefined) {
-            res.writeHead(res.statusCode || 200, {
-              'Content-Type': 'application/json; charset=utf-8',
-              'Cache-Control': 'no-store',
-            });
-            res.end(JSON.stringify(result));
-          }
-          return;
+      // Offline outbox: the same write may arrive twice (answer lost, sent again later). With an Idempotency-Key the
+      // first answer is stored and repeated – the entry, food or message is saved only once.
+      const idemRaw = req.method !== 'GET' && ctx.user ? String(req.headers['idempotency-key'] || '') : '';
+      const idemKey = /^[A-Za-z0-9_-]{8,80}$/.test(idemRaw) ? idemRaw : '';
+      if (idemKey) {
+        const hit = idem.get.get(ctx.user.id, idemKey);
+        if (hit) {
+          res.writeHead(hit.status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Idempotent-Replay': 'true' });
+          return res.end(hit.body);
         }
+        if (idemInFlight.has(`${ctx.user.id}:${idemKey}`)) throw new HttpError(409, 'Wird gerade gespeichert');
+        idemInFlight.add(`${ctx.user.id}:${idemKey}`);
+      }
+      try {
+        for (const [method, re, fn] of routes) {
+          const m = url.pathname.match(re);
+          if (m && method === req.method) {
+            const result = await fn(ctx, m);
+            if (result !== undefined) {
+              const body = JSON.stringify(result);
+              const status = res.statusCode || 200;
+              if (idemKey && status < 300) {
+                if (Math.random() < 0.02) idem.prune.run(Date.now() - 3 * 864e5);
+                idem.put.run(ctx.user.id, idemKey, status, body, Date.now());
+              }
+              res.writeHead(status, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Cache-Control': 'no-store',
+              });
+              res.end(body);
+            }
+            return;
+          }
+        }
+      } finally {
+        if (idemKey) idemInFlight.delete(`${ctx.user.id}:${idemKey}`);
       }
       throw new HttpError(404, 'Nicht gefunden');
     } catch (err) {
