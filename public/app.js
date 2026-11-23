@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-stresstest', date: 'November 2026',
+      client: [
+        ['⚡', 'Schneller', 'Training, Historie, Medaillen und Shop laden auch mit vielen gespeicherten Trainings sofort.'],
+      ],
+      coach: [
+        ['⚡', 'Stresstest bestanden', 'Training, Medaillen, Shop und Datenexport waren bei einem Jahr Trainingsdaten über eine Sekunde langsam – jetzt wenige Millisekunden. Zu große Uploads melden sauber „zu groß“, und ein paar Texte sind jetzt auch auf Englisch, Spanisch und Italienisch übersetzt.'],
+      ],
+    },
+    {
       id: '2026-11-push-only-open', date: 'November 2026',
       client: [],
       coach: [

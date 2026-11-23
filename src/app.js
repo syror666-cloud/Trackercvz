@@ -117,17 +117,24 @@ function parseCookies(header) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let tooBig = false;
     const chunks = [];
     req.on('data', (c) => {
+      if (tooBig) return;
       size += c.length;
       if (size > MAX_BODY) {
+        // answer 413 first (the app can show "zu groß"), then drop the connection instead of reading the rest
+        tooBig = true;
+        chunks.length = 0;
+        req.pause();
+        if (req.res) req.res.once('finish', () => req.destroy());
         reject(new HttpError(413, 'Anfrage zu groß'));
-        req.destroy();
         return;
       }
       chunks.push(c);
     });
     req.on('end', () => {
+      if (tooBig) return;
       if (!chunks.length) return resolve({});
       try {
         const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));

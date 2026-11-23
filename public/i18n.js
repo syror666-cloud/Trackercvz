@@ -822,6 +822,10 @@ Ideal für Erinnerungen: Wer schon Gewicht, Training, Essen o. Ä. eingetragen h
 nur wer noch nicht eingetragen hat|only who hasn't logged yet|solo quien aún no registró|solo chi non ha ancora registrato
 Geht wieder an alle|Goes to everyone again|Vuelve a ir a todos|Va di nuovo a tutti
 Geht jetzt nur an Klienten, die noch nichts eingetragen haben|Now only goes to clients who haven't logged anything|Ahora solo va a clientes que aún no registraron nada|Ora va solo ai clienti che non hanno ancora registrato nulla
+✗ nicht eingehalten|✗ not on plan|✗ no cumplidas|✗ non rispettate
+Du möchtest dein Konto und alle Daten löschen lassen? Dein Coach bekommt Bescheid und löscht es.|Want your account and all data deleted? Your coach is notified and deletes it.|¿Quieres que se elimine tu cuenta y todos tus datos? Tu coach recibe un aviso y la elimina.|Vuoi che il tuo account e tutti i dati vengano eliminati? Il tuo coach viene avvisato e lo elimina.
+Wochen-Check-in und Ernährungsplan als PDF an deine bestätigte E-Mail-Adresse. Hinterlege dafür unter Konto deine E-Mail-Adresse.|Weekly check-in and nutrition plan as PDF to your confirmed e-mail address. Add your e-mail address under Account.|Check-in semanal y plan de nutrición en PDF a tu correo confirmado. Añade tu correo en Cuenta.|Check-in settimanale e piano alimentare in PDF al tuo indirizzo e-mail confermato. Aggiungi la tua e-mail in Account.
+Die Ziele legt dein Coach mit dir fest.|Your coach sets the goals with you.|Tu coach fija los objetivos contigo.|Il tuo coach definisce gli obiettivi con te.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -913,6 +917,10 @@ noch nie|never|nunca|mai
     [/^(\d[\d.]*) gegessen · Ziel (.+)$/, W(0, (m) => `${m[1]} eaten · goal ${m[2]}`, (m) => `${m[1]} comidas · objetivo ${m[2]}`, (m) => `${m[1]} mangiate · obiettivo ${m[2]}`)],
     [/^Ø 7 Tage: (.+)$/, W(0, (m) => `7-day avg: ${m[1]}`, (m) => `Media 7 días: ${m[1]}`, (m) => `Media 7 giorni: ${m[1]}`)],
     [/^Aktuell (.+) kg · noch (.+) kg$/, W(0, (m) => `Now ${m[1]} kg · ${m[2]} kg to go`, (m) => `Ahora ${m[1]} kg · faltan ${m[2]} kg`, (m) => `Ora ${m[1]} kg · mancano ${m[2]} kg`)],
+    [/^Die Ziele legt dein Coach mit dir fest – zuletzt angepasst am (.+)\.$/, W(0, (m) => `Your coach sets the goals with you – last changed on ${m[1]}.`, (m) => `Tu coach fija los objetivos contigo; último cambio el ${m[1]}.`, (m) => `Il tuo coach definisce gli obiettivi con te – ultima modifica il ${m[1]}.`)],
+    [/^Gewicht im Wochenschnitt ([+−])(.+) kg \(([+−])(.+) %\) – genau in Richtung Ziel$/, W(0, (m) => `Weekly average weight ${m[1]}${m[2]} kg (${m[3]}${m[4]} %) – right on track`, (m) => `Peso medio semanal ${m[1]}${m[2]} kg (${m[3]}${m[4]} %): justo hacia tu objetivo`, (m) => `Peso medio settimanale ${m[1]}${m[2]} kg (${m[3]}${m[4]} %) – proprio verso l'obiettivo`)],
+    [/^Schrittziel an (\d+) von 7 Tagen erreicht$/, W(0, (m) => `Step goal reached on ${m[1]} of 7 days`, (m) => `Objetivo de pasos alcanzado ${m[1]} de 7 días`, (m) => `Obiettivo passi raggiunto ${m[1]} giorni su 7`)],
+    [/^Schlafziel in (\d+) von 7 Nächten erreicht$/, W(0, (m) => `Sleep goal reached ${m[1]} of 7 nights`, (m) => `Objetivo de sueño alcanzado ${m[1]} de 7 noches`, (m) => `Obiettivo sonno raggiunto ${m[1]} notti su 7`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

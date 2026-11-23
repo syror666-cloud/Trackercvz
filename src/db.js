@@ -249,6 +249,8 @@ CREATE TABLE IF NOT EXISTS workout_sets (
   reps           INTEGER
 );
 CREATE INDEX IF NOT EXISTS workout_sets_key ON workout_sets (exercise_key, workout_id);
+-- sets of one workout (every join from workouts to their sets; without it each lookup scans all sets of all clients)
+CREATE INDEX IF NOT EXISTS workout_sets_workout ON workout_sets (workout_id, id);
 
 -- Fridge: energy drinks bought with medals in the Hall of Fame shop.
 CREATE TABLE IF NOT EXISTS fridge_items (
