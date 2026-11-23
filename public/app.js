@@ -194,6 +194,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-security-14', date: 'November 2026',
+      client: [
+        ['📅', 'Nachtragen bis 31 Tage', 'Einträge, Essen und Trainings kannst du für die letzten 31 Tage nachtragen oder ändern – so bleiben Medaillen und Head2Head fair.'],
+      ],
+      coach: [
+        ['🛡️', 'Die 14 typischen Lücken geprüft', 'Admin-Seite, fremde IDs, Schlüssel im Browser, Preise, negative Mengen, gefälschte Token, Mehrfach-Einlösen, Admin-Registrierung, Codes erraten, KI-Manipulation, Skripte in Namen, falsche Uploads, .env in Git, Datenbank-Zugriff – alles getestet und abgesichert. Neu: Profilbilder werden auf echte Bilddaten geprüft, die KI behandelt Klienten-Texte nur als Daten, und Klienten können nur 31 Tage zurück eintragen (kein Medaillen-Farmen).'],
+      ],
+    },
+    {
       id: '2026-11-2fa', date: 'November 2026',
       client: [
         ['🔐', 'Zwei-Faktor-Anmeldung', 'Unter Konto kannst du dein Konto zusätzlich mit einem Code aus Authy, Google Authenticator & Co. schützen – dann reicht ein gestohlenes Passwort allein nicht mehr.'],
@@ -1702,6 +1711,7 @@
     stickyColumn(form);
     const today = todayStr();
     form.date.max = today;
+    form.date.min = addDays(today, -31); // the server takes entries for the last 31 days
     form.date.value = today;
 
     // ---- Phones: the form opens as a sheet from the "Heute" card ----
@@ -5142,7 +5152,7 @@
       }).join('');
       root.innerHTML = `
         <div class="diary-date">
-          <button type="button" class="icon-btn" data-day="-1" aria-label="Vorheriger Tag">‹</button>
+          <button type="button" class="icon-btn" data-day="-1" aria-label="Vorheriger Tag" ${!readOnly && date <= addDays(todayStr(), -31) ? 'disabled' : ''}>‹</button>
           <strong>${esc(label)}</strong>
           <button type="button" class="icon-btn" data-day="1" aria-label="Nächster Tag" ${isToday ? 'disabled' : ''}>›</button>
         </div>
@@ -7578,7 +7588,7 @@
           <button type="button" class="back" data-back>← Trainingsplan</button>
           <div class="page-head"><div>${eyebrow('Training')}<${H}>${esc(d.name)}</${HC}>
             <p class="muted">${rows.some((r) => r.last) ? 'Die Werte vom letzten Mal sind schon eingetragen – passe an, was du heute geschafft hast.' : 'Trag pro Satz Gewicht und Wiederholungen ein. Beim nächsten Mal stehen diese Werte schon hier.'}</p></div>
-            <div class="field wo-date"><label for="wo-date">Datum</label><input type="date" id="wo-date" value="${woDate}" max="${todayStr()}"></div></div>
+            <div class="field wo-date"><label for="wo-date">Datum</label><input type="date" id="wo-date" value="${woDate}" max="${todayStr()}"${opts.coach ? '' : ` min="${addDays(todayStr(), -31)}"`}></div></div>
           ${touched ? '<p class="wo-kept small muted" role="status">✓ Deine Eingaben werden auf diesem Gerät zwischengespeichert – auch wenn du die App kurz verlässt.</p>' : ''}
           <div class="wo-list">${rows.map((r, i) => `
             <section class="card wo-ex" data-r="${i}">

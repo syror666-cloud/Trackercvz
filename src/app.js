@@ -75,6 +75,16 @@ function maxAllowedDate() {
   return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+/** Earliest date a client may still log or change (31 days back): honest catching up yes, inventing a past
+ *  to collect medals and tokens no. Coaches are not limited. */
+const CLIENT_BACKFILL_DAYS = 31;
+function minClientDate() {
+  // CLIENT_BACKFILL_DAYS only exists for tests that replay long histories
+  const days = Number(process.env.CLIENT_BACKFILL_DAYS) || CLIENT_BACKFILL_DAYS;
+  return new Date(Date.now() - (days + 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+const BACKFILL_MSG = `Einträge sind nur für die letzten ${CLIENT_BACKFILL_DAYS} Tage möglich`;
+
 function numberField(value, { name, min, max, integer }) {
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
@@ -297,6 +307,13 @@ function parseAvatar(dataUrl) {
   if (!m) throw new HttpError(400, 'Bitte ein Bild (JPG, PNG oder WebP) wählen');
   const bytes = Buffer.from(m[2], 'base64');
   if (bytes.length > 250 * 1024) throw new HttpError(413, 'Das Bild ist zu groß');
+  // the bytes must really be that kind of picture (file signature), not HTML/script/anything else labelled as one
+  const sig = {
+    'image/png': (b) => b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+    'image/jpeg': (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+    'image/webp': (b) => b.length > 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP',
+  };
+  if (!sig[m[1]](bytes)) throw new HttpError(400, 'Das ist kein gültiges Bild (JPG, PNG oder WebP)');
   return { type: m[1], bytes };
 }
 
@@ -805,7 +822,11 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       if (u.role !== 'coach' && u.id !== Number(id) && !peers) throw new HttpError(404, 'Nicht gefunden');
       const m = target && target.avatar && target.avatar.match(/^data:(image\/[a-z]+);base64,(.+)$/);
       if (!m) throw new HttpError(404, 'Kein Profilbild');
-      ctx.res.writeHead(200, { 'Content-Type': m[1], 'Cache-Control': 'private, max-age=604800' });
+      ctx.res.writeHead(200, {
+        'Content-Type': m[1], 'Cache-Control': 'private, max-age=604800',
+        // even if it were opened directly: no scripts, no embedding – it is only ever a picture
+        'Content-Security-Policy': "default-src 'none'; sandbox", 'Content-Disposition': 'inline; filename="avatar"',
+      });
       ctx.res.end(Buffer.from(m[2], 'base64'));
       return undefined;
     }],
@@ -1365,6 +1386,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       if (u.role !== 'client') throw new HttpError(403, 'Nur Klienten können Einträge erfassen');
       if (!isValidDate(date)) throw new HttpError(400, 'Ungültiges Datum');
       if (date > maxAllowedDate()) throw new HttpError(400, 'Einträge in der Zukunft sind nicht möglich');
+      if (date < minClientDate()) throw new HttpError(400, BACKFILL_MSG);
       const body = await readBody(ctx.req);
       const incoming = {
         weight: numberField(body.weight, { name: 'Gewicht', min: 20, max: 400 }),
@@ -1407,7 +1429,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
 
   const deps = {
     db, notifier, reminders, HttpError, readBody, textField, numberField, requireUser, requireCoach, targetClient, clientById,
-    isValidDate, maxAllowedDate, localDate, aiClient,
+    isValidDate, maxAllowedDate, minClientDate, BACKFILL_MSG, localDate, aiClient,
     onPlanApplied: (clientId) => reports && reports.autoPlanMail(clientId),
   };
   metrics = metricsModule(deps);

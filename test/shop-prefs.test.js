@@ -1,5 +1,8 @@
 'use strict';
 
+// these tests replay long histories (months back); the 31-day limit for clients has its own test
+process.env.CLIENT_BACKFILL_DAYS = '100000';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');

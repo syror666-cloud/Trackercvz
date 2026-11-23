@@ -50,7 +50,7 @@ function productFromOff(p) {
   };
 }
 
-function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate, reconcileFor, barcodeLookup = offLookup, catalog = null }) {
+function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate, minClientDate, BACKFILL_MSG, reconcileFor, barcodeLookup = offLookup, catalog = null }) {
   const q = {
     day: db.prepare('SELECT * FROM food_log WHERE client_id = ? AND date = ? ORDER BY id'),
     one: db.prepare('SELECT * FROM food_log WHERE id = ?'),
@@ -117,6 +117,7 @@ function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requir
   function checkDate(date) {
     if (!isValidDate(date)) throw new HttpError(400, 'Ungültiges Datum');
     if (date > maxAllowedDate()) throw new HttpError(400, 'Einträge in der Zukunft sind nicht möglich');
+    if (minClientDate && date < minClientDate()) throw new HttpError(400, BACKFILL_MSG);
   }
   function ownItem(ctx, id) {
     const u = requireClient(ctx);

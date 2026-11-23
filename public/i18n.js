@@ -855,6 +855,8 @@ Mit Authy verbinden|Connect with Authy|Conectar con Authy|Collega con Authy
 Code aus der App|Code from the app|Código de la app|Codice dall'app
 Schütze dein Coach-Konto mit Zwei-Faktor-Anmeldung|Protect your coach account with two-factor sign-in|Protege tu cuenta de coach con verificación en dos pasos|Proteggi il tuo account coach con l'accesso a due fattori
 Der Code stimmt nicht|The code is wrong|El código no es correcto|Il codice non è corretto
+Einträge sind nur für die letzten 31 Tage möglich|Entries are only possible for the last 31 days|Solo se pueden hacer registros de los últimos 31 días|Le registrazioni sono possibili solo per gli ultimi 31 giorni
+Das ist kein gültiges Bild (JPG, PNG oder WebP)|This is not a valid picture (JPG, PNG or WebP)|No es una imagen válida (JPG, PNG o WebP)|Non è un'immagine valida (JPG, PNG o WebP)
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

@@ -7,7 +7,7 @@ const { SPLITS, CUSTOM, buildPlan, EXERCISES, splitInfo } = require('./training-
 /** Exercises are matched by name across plan edits: "Bankdrücken " and "bankdrücken" are the same lift. */
 const exerciseKey = (name) => name.trim().toLowerCase().replace(/\s+/g, ' ');
 
-function trainingRoutes({ db, notifier, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate }) {
+function trainingRoutes({ db, notifier, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate, minClientDate, BACKFILL_MSG }) {
   const q = {
     plan: db.prepare('SELECT * FROM training_plans WHERE client_id = ?'),
     upsertPlan: db.prepare(
@@ -174,6 +174,7 @@ function trainingRoutes({ db, notifier, HttpError, readBody, textField, numberFi
       const body = await readBody(ctx.req);
       const date = body.date;
       if (!isValidDate(date) || date > maxAllowedDate()) throw new HttpError(400, 'Ungültiges Datum');
+      if (ctx.user.role === 'client' && minClientDate && date < minClientDate()) throw new HttpError(400, BACKFILL_MSG);
       const dayId = typeof body.dayId === 'string' && /^[\w-]{1,40}$/.test(body.dayId) ? body.dayId : null;
       if (!dayId) throw new HttpError(400, 'Trainingstag fehlt');
       const dayName = textField(body.dayName, { name: 'Trainingstag', max: 40 }) || 'Training';
