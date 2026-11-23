@@ -9,6 +9,7 @@
  *  PUT   /api/design-vote          client: { choice: 'club' | 'classic', comment }
  *  GET   /api/design-votes         coach: counts and comments
  *  POST  /api/me/design-intro/seen  anyone: don't show the announcement again
+ *  GET   /api/coach-note           client: the coach's latest message of the last 7 days (for the dashboard; doesn't mark it read)
  */
 
 const CHOICES = ['club', 'classic'];
@@ -22,6 +23,9 @@ function designVoteRoutes({ db, HttpError, readBody, textField, requireUser, req
     all: db.prepare(`SELECT v.choice, v.comment, v.updated_at, u.id, u.display_name FROM design_votes v
       JOIN users u ON u.id = v.user_id WHERE u.role = 'client' ORDER BY v.updated_at DESC, v.user_id DESC`),
     members: db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'client' AND archived_at IS NULL"),
+    coachNote: db.prepare(`SELECT m.body, m.created_at, s.display_name FROM messages m JOIN users s ON s.id = m.sender_id
+      WHERE m.client_id = ? AND s.role = 'coach' AND m.created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')
+      ORDER BY m.id DESC LIMIT 1`),
     seen: db.prepare("UPDATE users SET design_intro_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ? AND design_intro_at IS NULL"),
   };
   const requireClient = (ctx) => {
@@ -64,6 +68,12 @@ function designVoteRoutes({ db, HttpError, readBody, textField, requireUser, req
         members: q.members.get().n,
         items: rows.map((r) => ({ clientId: r.id, displayName: r.display_name, choice: r.choice, comment: r.comment || '', updatedAt: r.updated_at })),
       };
+    }],
+
+    ['GET', /^\/api\/coach-note$/, async (ctx) => {
+      const u = requireClient(ctx);
+      const m = q.coachNote.get(u.id);
+      return { note: m ? { body: m.body.length > 280 ? `${m.body.slice(0, 277)}…` : m.body, createdAt: m.created_at, coachName: m.display_name } : null };
     }],
 
     ['POST', /^\/api\/me\/design-intro\/seen$/, async (ctx) => {

@@ -482,13 +482,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
-      id: '2026-11-design-club', date: 'November 2026',
+      id: '2026-11-design-club-2', date: 'November 2026',
       client: [
-        ['🎨', 'Neues Design – stimm mit ab', 'Tiefes Navy, Beige aus dem Studio und Coral nur noch für Knöpfe. Alles ist an seinem gewohnten Platz. Unter Einstellungen kannst du zwischen neuem und bisherigem Design wechseln und abstimmen, welches bleiben soll.'],
+        ['🎨', 'Neues Design – stimm mit ab', 'Tiefes Navy, Beige aus dem Studio und ein neues Dashboard: deine freien Kalorien groß, darunter Eiweiß, Kohlenhydrate und Schritte, und die letzte Nachricht deines Coaches als eigene Karte. Unter Einstellungen kannst du zwischen neuem und bisherigem Design wechseln und abstimmen, welches bleiben soll.'],
         ['📳', 'Haptisches Feedback', 'Ein kurzes Vibrieren beim Abhaken eines Satzes, beim Speichern und wenn der Pausen-Timer abläuft. Auf dem iPhone ist es ein leichtes Tippen. Abschalten kannst du es unter Einstellungen → Darstellung.'],
       ],
       coach: [
-        ['🎨', 'Neues Design mit Abstimmung', 'Navy und Studio-Beige als neuer Standard, das bisherige Design bleibt wählbar (Konto → Design wählen). Deine Klienten stimmen unter Einstellungen ab; Ergebnis und Kommentare siehst du in der Übersicht, neue Kommentare kommen als Push.'],
+        ['🎨', 'Neues Design mit Abstimmung (Runde 2)', 'Navy und Studio-Beige, dunkel als Standard, mit umgebautem Klienten-Dashboard: freie Kalorien als Hauptzahl, drei Kacheln, deine letzte Nachricht der Woche als beige Karte, schwebende Leiste. Das bisherige Design bleibt wählbar (Konto → Design wählen). Die Abstimmung ist neu gestartet; Ergebnis und Kommentare siehst du in der Übersicht.'],
         ['📳', 'Haptisches Feedback', 'Vibration bei Satz-Häkchen, Speichern, Fehlern und Timer-Ende (Android mit Mustern, iPhone als leichtes Tippen). Abschaltbar unter Darstellung.'],
       ],
     },
@@ -1982,12 +1982,16 @@
     const numberMetrics = () => state.metrics.filter((m) => m.kind === 'number');
 
     setView(`
-      <div class="page-head">
-        <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p>
-          <p class="member-line"><span>Mitglied</span> <b>#${String(me.id).padStart(3, '0')}</b>${me.memberSince ? ` · <span>seit</span> ${esc(fmtDate(me.memberSince.slice(0, 10), { month: 'long', year: 'numeric' }))}` : ''}</p></div>
-      </div>
+      ${isClub() ? `<div class="club-head">
+        <p class="club-member"><span><span>Mitglied</span> <b>#${String(me.id).padStart(3, '0')}</b></span>${me.memberSince ? `<span><span>seit</span> ${esc(fmtDate(me.memberSince.slice(0, 10), { month: 'long' }))}</span>` : ''}</p>
+        <h1 class="club-hello">${greeting()}, <em>${esc(me.displayName.split(' ')[0])}.</em></h1>
+        <p class="muted" id="streak"></p>
+      </div>` : `<div class="page-head">
+        <div>${eyebrow(todayLong())}<h1>${greeting()}, ${esc(me.displayName.split(' ')[0])}</h1><p class="muted" id="streak"></p></div>
+      </div>`}
       ${me.archivedAt ? `<div class="card pause-note" role="status"><span aria-hidden="true">⏸</span><span><strong>Coaching pausiert${me.archiveUntil ? ` bis ${esc(fmtDate(me.archiveUntil, { day: 'numeric', month: 'long' }))}` : ''}</strong><span class="muted small">Erinnerungen sind solange aus. Du kannst weiter eintragen und deinem Coach schreiben.</span></span></div>` : ''}
       <section class="card kcal-card" id="kcal-card" hidden aria-label="Kalorien heute"></section>
+      <div id="coach-note"></div>
       <div id="recap-card"></div>
       <div id="workout-resume"></div>
       <div id="push-prompt"></div>
@@ -2090,6 +2094,8 @@
         items.push(chip('Kalorien', e && e.caloriesOk !== null && e.caloriesOk !== undefined, e && e.caloriesOk ? 'eingehalten' : e && e.calories ? `${num(e.calories)} kcal` : 'nicht eingehalten'));
       }
       const done = items.filter((x) => x.startsWith('<li class="done"')).length;
+      const kc = document.getElementById('kcal-card');
+      if (kc && kc.redraw) kc.redraw();
       card.innerHTML = `
         <div class="row-between today-head">
           <div><h2>Heute</h2><p class="small muted" style="margin:2px 0 0">${done} von ${items.length} eingetragen</p></div>
@@ -2266,7 +2272,13 @@
     maybeShowPushPrompt(document.getElementById('push-prompt'));
     mountWorkoutResume(document.getElementById('workout-resume'));
     mountRecapCard(document.getElementById('recap-card'));
-    mountKcalCard(document.getElementById('kcal-card'));
+    mountKcalCard(document.getElementById('kcal-card'), {
+      steps: () => {
+        const e = state.entries.find((x) => x.date === todayStr());
+        return { value: e && e.steps !== null && e.steps !== undefined ? e.steps : null, goal: state.goals && state.goals.stepsGoal };
+      },
+    });
+    mountCoachNote(document.getElementById('coach-note'));
     mountH2HHome(document.getElementById('h2h-home'));
     mountClientCheckin(document.getElementById('checkin-card'), async () => {
       const g = await api('GET', '/api/goals');
@@ -5049,9 +5061,10 @@
   // ---- Client: Dashboard calories, Strategy (goals + nutrition plan), "More" ----
 
   /** Dashboard: how much is left to eat today, straight from the food diary. */
-  async function mountKcalCard(root) {
+  async function mountKcalCard(root, opts = {}) {
     if (!root) return;
     let day;
+    root.redraw = () => { if (day && root.isConnected) draw(); };
     const load = async () => {
       try {
         day = await api('GET', `/api/foodlog?date=${todayStr()}`);
@@ -5072,6 +5085,28 @@
       const R = 46;
       const C = 2 * Math.PI * R;
       root.hidden = false;
+      root.classList.toggle('ck', isClub());
+      if (isClub()) {
+        // new design: hero with the number that matters, three small tiles below
+        const st = opts.steps ? opts.steps() : { value: null, goal: null };
+        const tile = (value, label, p) => `<div class="ck-tile"><strong>${value}</strong><span>${label}</span><i class="ck-bar"><em style="width:${Math.round(Math.max(0, Math.min(1, p || 0)) * 100)}%"></em></i></div>`;
+        const mp = (k) => (tg[k] ? (t[k] || 0) / tg[k] : 0);
+        root.innerHTML = `
+          <div class="ck-hero">
+            <div class="kcal-ring ${over ? 'over' : ''}" role="img" aria-label="${num(t.kcal)} kcal gegessen${target ? ` von ${num(target)}` : ''}">
+              <svg viewBox="0 0 108 108" aria-hidden="true"><circle cx="54" cy="54" r="${R}" class="kr-track"/>
+                <circle cx="54" cy="54" r="${R}" class="kr-fill" stroke-dasharray="${(C * pct).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 54 54)"/></svg>
+            </div>
+            <div class="ck-num"><strong>${num(target ? Math.abs(left) : t.kcal)}</strong>
+              <span><span>${target ? (left >= 0 ? 'kcal frei' : 'kcal drüber') : 'kcal gegessen'}</span> · ${target ? `<span>Ziel</span> ${tg.kcalMin && tg.kcalMax ? esc(fmtKcal(tg.kcalMin, tg.kcalMax).replace(/\s*kcal$/, '')) : num(target)}` : '<span>noch kein Ziel</span>'}</span></div>
+          </div>
+          <div class="ck-tiles">
+            ${tile(`${gram(t.protein || 0)} g`, 'Eiweiß', mp('protein'))}
+            ${tile(`${gram(t.carbs || 0)} g`, 'Kohlenh.', mp('carbs'))}
+            ${tile(st.value === null ? '–' : num(st.value), 'Schritte', st.goal && st.value ? st.value / st.goal : 0)}
+          </div>`;
+        return;
+      }
       root.innerHTML = `
         <div class="kcal-card-main">
           <div class="kcal-ring ${over ? 'over' : ''}" role="img" aria-label="${num(t.kcal)} kcal gegessen${target ? ` von ${num(target)}` : ''}">
@@ -8289,6 +8324,23 @@
     ['club', 'Neues Design', 'Navy, Studio-Beige und Haptik'],
   ];
   const designName = (k) => (k === 'classic' ? 'Bisheriges Design' : 'Neues Design');
+  const isClub = () => document.documentElement.classList.contains('design-club');
+
+  /** New design: the coach's latest message (last 7 days) as a beige card on the dashboard. */
+  async function mountCoachNote(root) {
+    if (!root || !isClub()) return;
+    let note = null;
+    try { note = (await api('GET', '/api/coach-note')).note; } catch { return; }
+    if (!note || !root.isConnected) return;
+    const at = new Date(note.createdAt);
+    const when = at.toDateString() === new Date().toDateString()
+      ? at.toLocaleTimeString(LOC(), { hour: '2-digit', minute: '2-digit' })
+      : at.toLocaleDateString(LOC(), { weekday: 'short', day: 'numeric', month: 'short' });
+    root.innerHTML = `<a class="coach-note" href="#/chat">
+      <span class="cn-avatar" aria-hidden="true">${esc((note.coachName || 'C').trim().charAt(0).toUpperCase())}</span>
+      <span class="cn-body"><small><span>Dein Coach</span> · ${esc(when)}</small><span class="cn-text">${esc(note.body)}</span></span>
+    </a>`;
+  }
   const designPreview = (k) => `<span class="dv-preview dv-${k}" aria-hidden="true"><i></i><i></i><i></i><b></b></span>`;
 
   /** Pick a look (applies at once). Clients also vote, with an optional comment. */
@@ -8425,6 +8477,8 @@
     root.classList.toggle('glass', Boolean(p.glass));
     const club = p.design !== 'classic';
     root.classList.toggle('design-club', club);
+    // the new design is dark-first: "System" means dark there, "Hell" shows the sand variant
+    if (club && p.theme !== 'light') root.dataset.theme = 'dark';
     const dark = p.theme === 'dark' || (p.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
     const bar = club ? (dark ? '#061520' : '#f1e9dc') : (dark ? '#002941' : '#ffffff');
     document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', bar));
@@ -8451,6 +8505,7 @@
           ${[['system', 'System'], ['light', 'Hell'], ['dark', 'Dunkel']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${p.theme === k}" data-pref="theme" data-val="${k}">${l}</button>`).join('')}
         </div>
       </div>
+      ${p.design !== 'classic' ? '<p class="muted small pref-note">Das neue Design ist dunkel gedacht. „Hell“ zeigt die Variante in Studio-Beige.</p>' : ''}
       <div class="pref-row pref-glass">
         <div><span class="pref-label">Liquid Glass</span>
           <p class="muted small">Gläserne, durchscheinende Leisten und Menüs – angelehnt an das aktuelle iOS-Design.</p></div>

@@ -478,6 +478,13 @@ function migrate(db) {
   // the thank-you screen with the wish box is shown once to every member
   addColumns(db, 'users', [['thanks_seen_at', 'TEXT']]);
   addColumns(db, 'users', [['design_intro_at', 'TEXT']]);
+  // Design vote, round 2 (reworked dashboard): everyone starts again – votes cleared, announcement again, new look on
+  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'design_vote_round2'").get()) {
+    db.exec(`DELETE FROM design_votes;
+      UPDATE users SET design_intro_at = NULL;
+      UPDATE users SET prefs = json_set(prefs, '$.design', 'club') WHERE json_valid(prefs) AND json_extract(prefs, '$.design') = 'classic';
+      INSERT INTO settings (key, value) VALUES ('design_vote_round2', 'done');`);
+  }
   // two-factor sign-in (TOTP): encrypted secret, pending secret during setup, last used step, hashed recovery codes
   addColumns(db, 'users', [['totp_secret', 'TEXT'], ['totp_pending', 'TEXT'], ['totp_enabled_at', 'TEXT'], ['totp_last_counter', 'INTEGER'], ['recovery_codes', 'TEXT']]);
   if (!hadOnlyOpen) db.exec("UPDATE notifications SET only_open = 1 WHERE schedule IN ('daily', 'weekly')");

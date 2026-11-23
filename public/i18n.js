@@ -895,6 +895,11 @@ Kurzes Vibrieren beim Abhaken eines Satzes, Speichern und wenn der Pausen-Timer 
 Auf dem iPhone ist es in der Web-App ein leichtes Tippen.|On iPhone the web app gives a light tap.|En iPhone la web app da un toque ligero.|Su iPhone la web app dà un leggero tocco.
 Mitglied|Member|Miembro|Membro
 seit|since|desde|da
+kcal gegessen|kcal eaten|kcal comidas|kcal mangiate
+noch kein Ziel|no target yet|aún sin objetivo|ancora nessun obiettivo
+Dein Coach|Your coach|Tu coach|Il tuo coach
+Ziel|Target|Objetivo|Obiettivo
+Das neue Design ist dunkel gedacht. „Hell“ zeigt die Variante in Studio-Beige.|The new design is meant to be dark. “Light” shows the studio-beige variant.|El diseño nuevo está pensado en oscuro. «Claro» muestra la variante en beige del estudio.|Il nuovo design è pensato scuro. «Chiaro» mostra la variante beige dello studio.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

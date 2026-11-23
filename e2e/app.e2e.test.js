@@ -107,7 +107,8 @@ test('client: ＋ in the tab bar – search a food, pick the meal, calories on t
   await page.fill('#fa-amount', '200');
   await page.selectOption('#fa-meal', 'abend');
   await page.click('dialog [type=submit]');
-  await page.waitForFunction(() => /^[1-9]/.test(document.querySelector('#kcal-card .kcal-card-side p')?.textContent || ''));
+  // new design: the big number; classic: the line under the title
+  await page.waitForFunction(() => /^[1-9]/.test((document.querySelector('#kcal-card .ck-num strong') || document.querySelector('#kcal-card .kcal-card-side p'))?.textContent || ''));
   const row = db.prepare("SELECT meal, amount FROM food_log WHERE client_id = (SELECT id FROM users WHERE username = 'max') ORDER BY id DESC LIMIT 1").get();
   assert.deepEqual({ ...row }, { meal: 'abend', amount: 200 });
   // strategy and more
