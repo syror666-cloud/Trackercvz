@@ -110,14 +110,14 @@ test('e-mail: confirm, log in with it, reset a forgotten password', async (t) =>
   await tick();
   const code2 = outbox[2].text.match(/Dein Code: (\d{6})/)[1];
   const bad = code2 === '000000' ? '111111' : '000000';
-  for (let k = 0; k < 4; k++) await anon('POST', '/api/password/reset', { login: 'max', code: bad, password: 'abcdefgh1' });
-  assert.match((await anon('POST', '/api/password/reset', { login: 'max', code: bad, password: 'abcdefgh1' })).data.error, /Zu viele Fehlversuche/);
-  assert.equal((await anon('POST', '/api/password/reset', { login: 'max', code: code2, password: 'abcdefgh1' })).status, 400, 'burnt');
+  for (let k = 0; k < 4; k++) await anon('POST', '/api/password/reset', { login: 'max', code: bad, password: 'Wolkenberg7' });
+  assert.match((await anon('POST', '/api/password/reset', { login: 'max', code: bad, password: 'Wolkenberg7' })).data.error, /Zu viele Fehlversuche/);
+  assert.equal((await anon('POST', '/api/password/reset', { login: 'max', code: code2, password: 'Wolkenberg7' })).status, 400, 'burnt');
   // expired code
   await anon('POST', '/api/password/forgot', { login: 'max' });
   await tick();
   db.prepare('UPDATE email_tokens SET expires_at = 1').run();
-  assert.match((await anon('POST', '/api/password/reset', { login: 'max', code: outbox[3].text.match(/Dein Code: (\d{6})/)[1], password: 'abcdefgh1' })).data.error, /abgelaufen/);
+  assert.match((await anon('POST', '/api/password/reset', { login: 'max', code: outbox[3].text.match(/Dein Code: (\d{6})/)[1], password: 'Wolkenberg7' })).data.error, /abgelaufen/);
   void id;
 });
 

@@ -2767,3 +2767,33 @@ body.recap-open { overflow: hidden; }
 .skip-box { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
 .skip-box summary { cursor: pointer; font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .skip-box textarea { width: 100%; margin: 8px 0; }
+
+/* ---- thank-you screen with the wish box ---- */
+dialog.thanks-dialog { width: min(480px, calc(100vw - 24px)); padding: 0; border-radius: 26px; overflow: hidden; }
+.thanks-dialog form { padding: 0 24px 20px; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.thanks-hero { margin: 0 -24px 6px; height: 110px; display: grid; place-items: center; background: radial-gradient(circle at 70% 20%, rgba(253, 110, 110, 0.55), transparent 60%), linear-gradient(140deg, #0d3f5e, #001a2b); }
+.thanks-hero span { font-size: 3.2rem; animation: wo-pop 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.thanks-dialog h2 { margin: 0; font-size: 1.7rem; }
+.thanks-lead { margin: 0; }
+.thanks-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
+.thanks-tiles > div { background: var(--surface-2); border-radius: 16px; padding: 10px 6px; display: flex; flex-direction: column; }
+.thanks-tiles strong { font: 700 1.5rem var(--font-display); font-variant-numeric: tabular-nums; }
+.thanks-tiles span { font-size: 0.75rem; color: var(--muted); }
+.thanks-community, .thanks-ask { margin: 0; }
+.thanks-field { text-align: left; margin: 0; }
+.thanks-field textarea { width: 100%; }
+.thanks-actions { display: flex; gap: 8px; justify-content: space-between; }
+.thanks-actions .btn-primary { flex: 1; }
+@media (prefers-reduced-motion: reduce) { .thanks-hero span { animation: none; } }
+
+/* ---- coach: wishes & ideas as to-dos ---- */
+.feedback-card { margin-bottom: 14px; border-left: 4px solid var(--accent); }
+.fb-list { list-style: none; margin: 10px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fb-item { display: flex; gap: 12px; align-items: flex-start; }
+.fb-item.done .fb-body { color: var(--muted); text-decoration: line-through; }
+.fb-check { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--line); background: transparent; color: transparent; font-weight: 700; padding: 0; }
+.fb-check:hover { color: var(--muted); }
+.fb-check[aria-pressed="true"] { background: var(--good); border-color: var(--good); color: #fff; }
+.fb-main { flex: 1; min-width: 0; }
+.fb-meta, .fb-body { margin: 0; }
+.fb-body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 2px 0 4px; }

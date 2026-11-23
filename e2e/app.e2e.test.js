@@ -67,7 +67,7 @@ async function loginAs(username, password, viewport = { width: 1200, height: 900
 async function dismissOverlays(page) {
   for (let i = 0; i < 3; i++) {
     await page.waitForTimeout(500);
-    const close = page.locator('[data-wn-ok], .tour [data-skip]');
+    const close = page.locator('[data-wn-ok], .tour [data-skip], [data-thanks-later]');
     if (await close.count()) await close.first().click();
   }
 }

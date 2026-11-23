@@ -826,6 +826,16 @@ Geht jetzt nur an Klienten, die noch nichts eingetragen haben|Now only goes to c
 Du möchtest dein Konto und alle Daten löschen lassen? Dein Coach bekommt Bescheid und löscht es.|Want your account and all data deleted? Your coach is notified and deletes it.|¿Quieres que se elimine tu cuenta y todos tus datos? Tu coach recibe un aviso y la elimina.|Vuoi che il tuo account e tutti i dati vengano eliminati? Il tuo coach viene avvisato e lo elimina.
 Wochen-Check-in und Ernährungsplan als PDF an deine bestätigte E-Mail-Adresse. Hinterlege dafür unter Konto deine E-Mail-Adresse.|Weekly check-in and nutrition plan as PDF to your confirmed e-mail address. Add your e-mail address under Account.|Check-in semanal y plan de nutrición en PDF a tu correo confirmado. Añade tu correo en Cuenta.|Check-in settimanale e piano alimentare in PDF al tuo indirizzo e-mail confermato. Aggiungi la tua e-mail in Account.
 Die Ziele legt dein Coach mit dir fest.|Your coach sets the goals with you.|Tu coach fija los objetivos contigo.|Il tuo coach definisce gli obiettivi con te.
+Ohne Wunsch weiter|Continue without a wish|Seguir sin deseo|Continua senza desiderio
+Absenden|Send|Enviar|Invia
+Wunsch oder Idee senden|Send a wish or idea|Enviar deseo o idea|Invia un desiderio o un'idea
+Was fehlt dir, was wäre cool?|What's missing, what would be cool?|¿Qué te falta, qué molaría?|Cosa ti manca, cosa sarebbe bello?
+Geht direkt an deinen Coach. Jede Idee wird gelesen.|Goes straight to your coach. Every idea is read.|Va directo a tu coach. Se lee cada idea.|Va direttamente al tuo coach. Ogni idea viene letta.
+Ihr nutzt StayOnTrack richtig fleißig – das freut uns riesig. Jeder Eintrag, jedes Training und jede Nachricht hilft, dass das Coaching für dich wirklich funktioniert.|You use StayOnTrack really diligently – we love that. Every entry, workout and message helps make the coaching really work for you.|Usáis StayOnTrack con muchas ganas, ¡nos encanta! Cada registro, entrenamiento y mensaje ayuda a que el coaching funcione de verdad para ti.|Usate StayOnTrack con grande impegno – ci fa davvero piacere. Ogni registrazione, allenamento e messaggio aiuta il coaching a funzionare davvero per te.
+Dieses Passwort ist zu leicht zu erraten – bitte ein anderes wählen|This password is too easy to guess – please choose another one|Esta contraseña es demasiado fácil de adivinar; elige otra|Questa password è troppo facile da indovinare – scegline un'altra
+Wünsche & Ideen|Wishes & ideas|Deseos e ideas|Desideri e idee
+alles erledigt|all done|todo hecho|tutto fatto
+Antworten →|Reply →|Responder →|Rispondi →
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai
@@ -921,6 +931,7 @@ noch nie|never|nunca|mai
     [/^Gewicht im Wochenschnitt ([+−])(.+) kg \(([+−])(.+) %\) – genau in Richtung Ziel$/, W(0, (m) => `Weekly average weight ${m[1]}${m[2]} kg (${m[3]}${m[4]} %) – right on track`, (m) => `Peso medio semanal ${m[1]}${m[2]} kg (${m[3]}${m[4]} %): justo hacia tu objetivo`, (m) => `Peso medio settimanale ${m[1]}${m[2]} kg (${m[3]}${m[4]} %) – proprio verso l'obiettivo`)],
     [/^Schrittziel an (\d+) von 7 Tagen erreicht$/, W(0, (m) => `Step goal reached on ${m[1]} of 7 days`, (m) => `Objetivo de pasos alcanzado ${m[1]} de 7 días`, (m) => `Obiettivo passi raggiunto ${m[1]} giorni su 7`)],
     [/^Schlafziel in (\d+) von 7 Nächten erreicht$/, W(0, (m) => `Sleep goal reached ${m[1]} of 7 nights`, (m) => `Objetivo de sueño alcanzado ${m[1]} de 7 noches`, (m) => `Obiettivo sonno raggiunto ${m[1]} notti su 7`)],
+    [/^Danke, (.+)!$/, W(0, (m) => `Thank you, ${m[1]}!`, (m) => `¡Gracias, ${m[1]}!`, (m) => `Grazie, ${m[1]}!`)],
     [/^Noch (\d+) Token$/, W(0, (m) => `${m[1]} more tokens`, (m) => `Faltan ${m[1]} tokens`, (m) => `Ancora ${m[1]} token`)],
     [/^(\d+) Token verdient$/, W(0, (m) => `${m[1]} tokens earned`, (m) => `${m[1]} tokens ganados`, (m) => `${m[1]} token guadagnati`)],
     [/^\(je (\d) Token\)$/, W(0, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} each)`, (m) => `(${m[1]} token${m[1] === '1' ? '' : 's'} c/u)`, (m) => `(${m[1]} token l'una)`)],

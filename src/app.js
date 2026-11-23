@@ -24,6 +24,7 @@ const { legalHandler } = require('./legal');
 const { inviteRoutes } = require('./invites');
 const { attentionRoutes } = require('./attention');
 const { recapRoutes } = require('./recap');
+const { feedbackRoutes } = require('./feedback');
 const { privacyRoutes } = require('./privacy');
 const { createReminders, adminRoutes } = require('./admin');
 const { metricsModule, CATEGORIES } = require('./metrics');
@@ -33,7 +34,8 @@ const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 const MAX_BODY = 400 * 1024; // room for a small profile picture
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 10; // failed logins per client address and window
-const LOGIN_MAX_PER_ACCOUNT = 20; // failed logins per username and window, whatever the address
+const LOGIN_MAX_PER_ACCOUNT = 10; // failed logins per username and window, whatever the address
+const LOGIN_MAX_PER_ACCOUNT_DAY = 30; // and per username and day – rotating addresses can't guess for long
 const LOGIN_MAX_TRACKED = 10000; // upper bound for the in-memory attempt table
 
 const MIME = {
@@ -98,12 +100,21 @@ function validateUsername(u) {
   return u;
 }
 
-function validatePassword(p) {
+// The most common passwords (and simple patterns) are refused – they fall to the first guesses of any attacker.
+const COMMON_PASSWORDS = new Set(['12345678', '123456789', '1234567890', 'password', 'passwort', 'password1', 'passwort1', 'qwertz123', 'qwerty123', 'qwertzuiop', 'qwertyuiop', 'iloveyou', 'sunshine', 'princess', 'football', 'fussball', 'schalke04', 'hallo123', 'hallo1234', 'abc12345', 'abcd1234', '11111111', '00000000', '87654321', 'asdfghjk', 'letmein1', 'welcome1', 'willkommen', 'geheim123', 'stayontrack', 'fitness123', 'training1', 'gym12345']);
+function validatePassword(p, { username, displayName } = {}) {
   if (typeof p !== 'string' || p.length < 8 || p.length > 200) {
     throw new HttpError(400, 'Passwort: mindestens 8 Zeichen');
   }
+  const low = p.toLowerCase();
+  const personal = [username, ...(String(displayName || '').split(/\s+/))].filter((x) => x && String(x).length >= 3).map((x) => String(x).toLowerCase());
+  if (COMMON_PASSWORDS.has(low) || /^(.)\1+$/.test(p) || /^(0123456789|123456789|12345678|abcdefgh)/.test(low) || personal.some((x) => low === x || low.startsWith(x) && /^\d*$/.test(low.slice(x.length)))) {
+    throw new HttpError(400, 'Dieses Passwort ist zu leicht zu erraten – bitte ein anderes wählen');
+  }
   return p;
 }
+// a real scrypt run for unknown usernames, so the answer time doesn't tell whether an account exists
+const DUMMY_HASH = hashPassword('dummy-password-for-timing');
 
 function parseCookies(header) {
   const out = {};
@@ -275,6 +286,7 @@ const publicUser = (u) => ({
   mustChangePassword: Boolean(u.must_change_password), onboarded: Boolean(u.onboarded_at) || u.role === 'coach',
   deletionRequestedAt: u.deletion_requested_at || null,
   archivedAt: u.archived_at || null, archiveUntil: u.archive_until || null,
+  showThanks: u.role === 'client' && !u.thanks_seen_at && Boolean(u.onboarded_at),
 });
 
 /** Accepts a small JPEG/PNG/WebP data URL (the browser resizes the picture before upload). */
@@ -288,7 +300,9 @@ function parseAvatar(dataUrl) {
 
 function csvCell(v) {
   if (v === null || v === undefined) return '';
-  const s = String(v);
+  let s = String(v);
+  // Excel/Sheets would run cells starting with = + - @ as formulas (CSV injection): make them plain text
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -603,9 +617,9 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   function recordLoginFailure(keys) {
     const now = Date.now();
     if (loginAttempts.size >= LOGIN_MAX_TRACKED) pruneLoginAttempts(now);
-    for (const [key] of keys) {
+    for (const [key, , windowMs = LOGIN_WINDOW_MS] of keys) {
       const rec = loginAttempts.get(key);
-      if (!rec || rec.reset < now) loginAttempts.set(key, { count: 1, reset: now + LOGIN_WINDOW_MS });
+      if (!rec || rec.reset < now) loginAttempts.set(key, { count: 1, reset: now + windowMs });
       else rec.count += 1;
     }
   }
@@ -633,16 +647,18 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const { username, password } = await readBody(ctx.req);
       const name = typeof username === 'string' ? username.trim().toLowerCase().slice(0, 254) : '';
       // Limited per address AND per account, so changing addresses does not allow unlimited guessing.
-      const keys = [[`ip:${ip}`, LOGIN_MAX_ATTEMPTS], [`user:${name}`, LOGIN_MAX_PER_ACCOUNT]];
+      const keys = [[`ip:${ip}`, LOGIN_MAX_ATTEMPTS], [`user:${name}`, LOGIN_MAX_PER_ACCOUNT], [`day:${name}`, LOGIN_MAX_PER_ACCOUNT_DAY, 864e5]];
       checkLoginRate(keys);
       // username or e-mail address
       const u = name ? mail.findForLogin(username.trim()) : null;
-      if (!u || typeof password !== 'string' || !verifyPassword(password, u.password_hash)) {
+      const valid = typeof password === 'string' && verifyPassword(password, u ? u.password_hash : DUMMY_HASH);
+      if (!u || !valid) {
         recordLoginFailure(keys);
         throw new HttpError(401, 'Benutzername/E-Mail oder Passwort falsch');
       }
       loginAttempts.delete(`ip:${ip}`);
       loginAttempts.delete(`user:${name}`);
+      loginAttempts.delete(`day:${name}`);
       return { user: startSession(ctx, u) };
     }],
 
@@ -740,7 +756,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       const u = requireUser(ctx);
       if (!u.must_change_password) throw new HttpError(409, 'Dein Passwort ist schon eingerichtet');
       const { newPassword } = await readBody(ctx.req);
-      const pw = validatePassword(newPassword);
+      const pw = validatePassword(newPassword, { username: u.username, displayName: u.display_name });
       if (verifyPassword(pw, u.password_hash)) throw new HttpError(400, 'Bitte ein anderes Passwort als das Startpasswort wählen');
       q.setPassword.run(hashPassword(pw), u.id);
       q.deleteUserSessions.run(u.id, u.tokenHash);
@@ -759,7 +775,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       if (typeof currentPassword !== 'string' || !verifyPassword(currentPassword, u.password_hash)) {
         throw new HttpError(400, 'Aktuelles Passwort ist falsch');
       }
-      q.setPassword.run(hashPassword(validatePassword(newPassword)), u.id);
+      q.setPassword.run(hashPassword(validatePassword(newPassword, { username: u.username, displayName: u.display_name })), u.id);
       q.deleteUserSessions.run(u.id, u.tokenHash);
       return { ok: true };
     }],
@@ -805,8 +821,8 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
       requireCoach(ctx);
       const body = await readBody(ctx.req);
       const username = validateUsername(body.username);
-      const password = validatePassword(body.password);
       const displayName = textField(body.displayName, { name: 'Name', max: 80 }) || username;
+      const password = validatePassword(body.password, { username, displayName });
       if (q.userByName.get(username)) throw new HttpError(409, 'Benutzername ist bereits vergeben');
       const id = createUser(db, { username, displayName, password, role: 'client' });
       q.mustChange.run(id); // a start password from the coach: the client picks their own at first login
@@ -1373,7 +1389,7 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   }
   routes.push(...privacyRoutes({ ...deps, publicUser }), ...attentionRoutes(deps), ...inviteRoutes({
     ...deps, mailer, appUrl, clientIp, validateUsername, validatePassword, startSession, setEmail: mail.setEmail,
-  }), ...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...recapRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
+  }), ...google.routes, ...reports.routes, ...mail.routes, ...h2hRoutes({ ...deps, publicUser, achievements }), ...foodlogRoutes({ ...deps, catalog, reconcileFor: shop.reconcileFor, ...(barcodeLookup ? { barcodeLookup } : {}) }), ...achievements.routes, ...shop.routes, ...nutritionRequestRoutes({ ...deps, autoDraft: ai.autoDraft }), ...ai.routes, ...nutrition, ...trainingRoutes(deps), ...recapRoutes(deps), ...feedbackRoutes(deps), ...adminRoutes(deps), ...metrics.routes);
   if (telegram) routes.push(...telegram.routes(deps));
 
   // App usage for the admin tool: one row per day and user, "last seen" at most once a minute.
@@ -1424,6 +1440,10 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'same-origin');
+    // camera only for this app (barcode scanner, workout photo); nothing else
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    if (secureCookies) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     res.setHeader(
       'Content-Security-Policy',
       "default-src 'self'; connect-src 'self' https://world.openfoodfacts.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'"
@@ -1471,4 +1491,4 @@ function createApp({ db, publicDir, secureCookies = false, trustProxy = false, n
   };
 }
 
-module.exports = { createApp, isValidDate };
+module.exports = { createApp, isValidDate, _test: { validatePassword, csvCell } };

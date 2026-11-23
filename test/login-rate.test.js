@@ -41,9 +41,9 @@ test('security: per-account limit holds even when the attacker really changes ad
   const { server, login } = await start(true);
   t.after(() => server.close());
   const results = [];
-  for (let i = 0; i < 22; i++) results.push(await login('Coach', 'falsch', `203.0.113.${i}`));
-  assert.equal(results.filter((s) => s === 401).length, 20);
-  assert.deepEqual(results.slice(20), [429, 429]);
+  for (let i = 0; i < 12; i++) results.push(await login('Coach', 'falsch', `203.0.113.${i}`));
+  assert.equal(results.filter((s) => s === 401).length, 10);
+  assert.deepEqual(results.slice(10), [429, 429]);
   // the account stays locked for the window, even with the right password; other accounts work
   assert.equal(await login('coach', 'coachpass123', '203.0.113.200'), 429);
   assert.equal(await login('max', 'maxpass1234', '203.0.113.201'), 200);
@@ -55,4 +55,16 @@ test('security: without a proxy the forwarded header is ignored', async (t) => {
   const results = [];
   for (let i = 0; i < 11; i++) results.push(await login('max', 'falsch', `198.51.100.${i}`));
   assert.equal(results[10], 429);
+});
+
+test('security: weak passwords are refused, CSV cells cannot run formulas', async () => {
+  const { validatePassword, csvCell } = require('../src/app')._test || {};
+  if (!validatePassword) return; // helpers not exported
+  for (const p of ['12345678', 'passwort1', 'aaaaaaaa', 'Maximilian2024']) {
+    assert.throws(() => validatePassword(p, { username: 'max', displayName: 'Maximilian Muster' }), /zu leicht/);
+  }
+  assert.equal(validatePassword('Wolkenberg7', { username: 'max' }), 'Wolkenberg7');
+  assert.equal(csvCell('=HYPERLINK("x")'), `"'=HYPERLINK(""x"")"`);
+  assert.equal(csvCell('-5 kg'), "'-5 kg");
+  assert.equal(csvCell(-5), '-5');
 });

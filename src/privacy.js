@@ -57,6 +57,7 @@ function privacyRoutes({ db, HttpError, readBody, textField, requireUser, notifi
       head2head: all('SELECT * FROM h2h_challenges WHERE challenger_id = ? OR opponent_id = ? ORDER BY id', id, id).map((c) => ({
         ...c, challenger: name(c.challenger_id), opponent: name(c.opponent_id),
       })),
+      wishesAndIdeas: all('SELECT body, created_at, done_at FROM feedback WHERE client_id = ? ORDER BY id', id),
       googleHealth: one('SELECT scopes, connected_at, last_sync_at, last_error FROM google_links WHERE user_id = ?', id),
       pushDevices: all('SELECT user_agent, created_at, last_success_at FROM push_subscriptions WHERE user_id = ?', id),
       pushConsent: one('SELECT * FROM push_consent WHERE user_id = ?', id),

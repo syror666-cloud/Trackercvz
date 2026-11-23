@@ -194,6 +194,17 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-thanks-security', date: 'November 2026',
+      client: [
+        ['💙', 'Danke!', 'Ihr nutzt StayOnTrack richtig fleißig – danke dafür. Unter „Mehr“ kannst du jederzeit Wünsche und Ideen schicken, sie gehen direkt an deinen Coach.'],
+        ['🔒', 'Noch sicherer', 'Wir haben die App gezielt auf Sicherheitslücken getestet und weiter abgesichert. Sehr leicht zu erratende Passwörter (z. B. „12345678“) werden nicht mehr angenommen.'],
+      ],
+      coach: [
+        ['💡', 'Wünsche & Ideen als To-dos', 'Klienten sehen einmalig einen Danke-Bildschirm mit Wunschfeld (später unter „Mehr“). Jeder Wunsch kommt als To-do oben auf deine Startseite, per Push und – falls verbunden – per Telegram. Abhaken mit ✓.'],
+        ['🔒', 'Sicherheitstest bestanden', 'Gezielter Angriffstest ohne und mit Login: kein Zugriff ohne Anmeldung, kein Klient sieht fremde Daten, kein eingeschleuster Code wird ausgeführt. Zusätzlich gehärtet: Tageslimit für falsche Passwörter pro Konto, Login verrät nicht mehr, ob ein Name existiert, Excel-sicherer CSV-Export, schwache Passwörter abgelehnt, HSTS.'],
+      ],
+    },
+    {
       id: '2026-11-stresstest', date: 'November 2026',
       client: [
         ['⚡', 'Schneller', 'Training, Historie, Medaillen und Shop laden auch mit vielen gespeicherten Trainings sofort.'],
@@ -525,6 +536,8 @@
     }
     // a brand-new client gets the welcome tour instead of release notes from before their time
     if (me.role === 'client' && !me.onboarded) return startTour();
+    // once: thank the member and ask for wishes – before the release notes
+    if (me.role === 'client' && me.showThanks) await showThanks();
     if (me.seenRelease === RELEASE) return;
     // everything since the last update this person saw (unknown / none: the last three updates)
     const seenAt = CHANGELOG.findIndex((r) => r.id === me.seenRelease);
@@ -2799,6 +2812,7 @@
         <div>${eyebrow(todayLong())}<h1>Meine Klienten</h1><p class="muted">${clients.length} ${clients.length === 1 ? 'Klient' : 'Klienten'}${archived.length ? ` · ${archived.length} pausiert` : ''}</p></div>
         <button class="btn-primary" id="btn-new-client" type="button">+ Neuer Klient</button>
       </div>
+      <div id="feedback-card"></div>
       ${clients.length ? '<div id="attention"></div>' : ''}
       ${clients.length ? coachDashboard(clients, queue, weightAutomation) : ''}
       ${clients.length ? `<div class="client-list">${cards}</div>` : archived.length ? '<div class="card empty-state"><p>Alle Klienten sind gerade pausiert.</p></div>' : `<div class="card empty-state">
@@ -2846,6 +2860,7 @@
 
     mountInvites(document.getElementById('invites-card'));
     mountAttention(document.getElementById('attention'));
+    mountFeedbackCard(document.getElementById('feedback-card'));
     app.querySelectorAll('[data-unarchive]').forEach((b) => b.addEventListener('click', (e) => {
       e.preventDefault();
       unarchiveClient(Number(b.dataset.unarchive), b, () => renderCoachHome());
@@ -4327,6 +4342,148 @@
     app.querySelector('[data-diary-quick]').addEventListener('click', () => quickAddFood());
   }
 
+  // ---- Thank-you screen with a wish box (once per member), feedback from "Mehr", to-dos for the coach ----
+  function feedbackForm(placeholder) {
+    return `<div class="field thanks-field"><label for="fb-body">Deine Wünsche & Ideen <span class="muted">(optional)</span></label>
+      <textarea id="fb-body" name="body" maxlength="2000" rows="4" placeholder="${esc(placeholder)}"></textarea>
+      <div class="hint">Geht direkt an deinen Coach. Jede Idee wird gelesen.</div></div>`;
+  }
+
+  /** Shown once: thanks for using the app so much, the member's own numbers, and a box for wishes. */
+  async function showThanks() {
+    let stats = null;
+    try {
+      stats = await api('GET', '/api/thanks');
+    } catch { /* without numbers then */ }
+    const first = esc(me.displayName.split(' ')[0]);
+    const m = stats && stats.mine;
+    const c = stats && stats.community;
+    const tile = (v, l) => `<div><strong>${esc(num(v))}</strong><span>${esc(l)}</span></div>`;
+    return new Promise((resolve) => {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'thanks-dialog';
+      dlg.setAttribute('aria-labelledby', 'thanks-title');
+      dlg.innerHTML = `<form method="dialog" novalidate>
+        <div class="thanks-hero" aria-hidden="true"><span>💙</span></div>
+        <h2 id="thanks-title">Danke, ${first}!</h2>
+        <p class="thanks-lead">Ihr nutzt StayOnTrack richtig fleißig – das freut uns riesig. Jeder Eintrag, jedes Training und jede Nachricht hilft, dass das Coaching für dich wirklich funktioniert.</p>
+        ${m && (m.days || m.workouts) ? `<div class="thanks-tiles">${tile(m.days, m.days === 1 ? 'Tag eingetragen' : 'Tage eingetragen')}${tile(m.workouts, m.workouts === 1 ? 'Training' : 'Trainings')}${m.foods ? tile(m.foods, 'Lebensmittel') : ''}</div>` : ''}
+        ${c && c.members > 1 ? `<p class="small muted thanks-community">Zusammen mit allen ${num(c.members)} Mitgliedern: ${num(c.days)} Tage eingetragen und ${num(c.workouts)} Trainings 🎉</p>` : ''}
+        <p class="thanks-ask"><strong>Was wünschst du dir?</strong> Neue Funktionen, etwas, das nervt, eine Idee fürs Coaching – schreib's uns.</p>
+        ${feedbackForm('z. B. „Eine Wasser-Erinnerung wäre super“ oder „Der Scanner findet mein Müsli nicht“')}
+        <p class="error" hidden></p>
+        <div class="thanks-actions">
+          <button type="button" class="btn-ghost" data-thanks-later>Ohne Wunsch weiter</button>
+          <button type="submit" class="btn-primary">Absenden</button>
+        </div>
+      </form>`;
+      document.body.appendChild(dlg);
+      const form = dlg.querySelector('form');
+      const errEl = form.querySelector('.error');
+      let closed = false;
+      const finish = () => {
+        if (closed) return;
+        closed = true;
+        me.showThanks = false;
+        dlg.close();
+        dlg.remove();
+        resolve();
+      };
+      form.querySelector('[data-thanks-later]').addEventListener('click', () => {
+        api('POST', '/api/thanks/seen').catch(() => {});
+        finish();
+      });
+      dlg.addEventListener('cancel', (e) => {
+        e.preventDefault();
+        api('POST', '/api/thanks/seen').catch(() => {});
+        finish();
+      });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = form.body.value.trim();
+        if (!body) {
+          api('POST', '/api/thanks/seen').catch(() => {});
+          return finish();
+        }
+        const btn = form.querySelector('[type=submit]');
+        btn.disabled = true;
+        try {
+          await api('POST', '/api/feedback', { body });
+          finish();
+          savedHud('Danke! 💙', 'Dein Wunsch ist bei deinem Coach');
+        } catch (err) {
+          errEl.textContent = err.message;
+          errEl.hidden = false;
+          btn.disabled = false;
+        }
+      });
+      dlg.showModal();
+    });
+  }
+
+  /** "Mehr" → wish or idea, any time. */
+  function openFeedbackDialog() {
+    openDialog(`<h2>💡 Wunsch oder Idee</h2>
+      <p class="muted small" style="margin-top:-8px">Was fehlt dir, was nervt, was wäre cool? Dein Coach bekommt es als Aufgabe.</p>
+      ${feedbackForm('Schreib einfach drauflos …')}
+      <div class="dialog-actions"><button type="button" class="btn-secondary" data-close>Abbrechen</button><button type="submit" class="btn-primary">Absenden</button></div>`,
+    async (f) => {
+      if (!f.body.value.trim()) throw new Error('Bitte schreib kurz deinen Wunsch oder deine Idee.');
+      await api('POST', '/api/feedback', { body: f.body.value });
+      savedHud('Danke! 💙', 'Dein Wunsch ist bei deinem Coach');
+    });
+  }
+
+  /** Coach home: wishes and ideas from the members, as to-dos. */
+  async function mountFeedbackCard(root) {
+    if (!root) return;
+    let data;
+    try {
+      data = await api('GET', '/api/feedback');
+    } catch {
+      return;
+    }
+    let showDone = false;
+    const draw = () => {
+      if (!data.items.length) {
+        root.innerHTML = '';
+        return;
+      }
+      const open = data.items.filter((i) => !i.doneAt);
+      const done = data.items.filter((i) => i.doneAt);
+      const when = (iso) => new Date(iso).toLocaleDateString(LOC(), { day: 'numeric', month: 'short' });
+      const item = (i) => `<li class="fb-item ${i.doneAt ? 'done' : ''}">
+        <button type="button" class="fb-check" data-fb-done="${i.id}" aria-pressed="${Boolean(i.doneAt)}" aria-label="${i.doneAt ? 'Wieder offen' : 'Erledigt'}">✓</button>
+        <div class="fb-main"><p class="fb-meta"><a href="#/client/${i.clientId}"><strong>${esc(i.displayName)}</strong></a> <span class="muted small">· ${esc(when(i.createdAt))}</span></p>
+          <p class="fb-body">${esc(i.body)}</p>
+          ${i.doneAt ? '' : `<a class="small" href="#/messages/${i.clientId}">Antworten →</a>`}</div>
+      </li>`;
+      root.innerHTML = `<section class="card feedback-card">
+        <div class="row-between"><h2>💡 Wünsche & Ideen</h2><span class="badge ${open.length ? 'warn' : 'good'}">${open.length ? `${open.length} offen` : 'alles erledigt'}</span></div>
+        ${open.length ? `<ul class="fb-list">${open.map(item).join('')}</ul>` : '<p class="muted small">Alles abgehakt – stark.</p>'}
+        ${done.length ? `<button type="button" class="link-btn small" data-fb-toggle>${showDone ? 'Erledigte ausblenden' : `Erledigte anzeigen (${done.length})`}</button>
+          ${showDone ? `<ul class="fb-list">${done.map(item).join('')}</ul>` : ''}` : ''}
+      </section>`;
+      root.querySelectorAll('[data-fb-done]').forEach((b) => b.addEventListener('click', async () => {
+        const it = data.items.find((x) => x.id === Number(b.dataset.fbDone));
+        const doneNow = !it.doneAt;
+        try {
+          await api('PATCH', `/api/feedback/${it.id}`, { done: doneNow });
+          it.doneAt = doneNow ? new Date().toISOString() : null;
+          draw();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      }));
+      const tg = root.querySelector('[data-fb-toggle]');
+      if (tg) tg.addEventListener('click', () => {
+        showDone = !showDone;
+        draw();
+      });
+    };
+    draw();
+  }
+
   // ---- Client: Dashboard calories, Strategy (goals + nutrition plan), "More" ----
 
   /** Dashboard: how much is left to eat today, straight from the food diary. */
@@ -4469,6 +4626,9 @@
         <button type="button" class="more-row" data-more-recap><span class="more-icon" aria-hidden="true">🎬</span><span class="more-text"><strong>Monatsrückblick</strong><span class="muted small">Dein Monat als Story</span></span><span class="att-chev" aria-hidden="true">›</span></button>
       </div>
       <div class="card more-list">
+        <button type="button" class="more-row" data-more-feedback><span class="more-icon" aria-hidden="true">💡</span><span class="more-text"><strong>Wunsch oder Idee senden</strong><span class="muted small">Was fehlt dir, was wäre cool?</span></span><span class="att-chev" aria-hidden="true">›</span></button>
+      </div>
+      <div class="card more-list">
         ${row('#/account/fame', '🏆', 'Hall of Fame', 'Medaillen und Kühlschrank')}
         ${row('#/account/h2h', '⚔️', 'Head2Head', 'Fordere andere heraus')}
       </div>
@@ -4477,6 +4637,7 @@
         ${row('#/settings', '⚙️', 'Einstellungen', 'Mitteilungen, Google Health, Darstellung, Daten')}
       </div>`);
     refreshUnread();
+    app.querySelector('[data-more-feedback]').addEventListener('click', () => openFeedbackDialog());
     app.querySelector('[data-more-recap]').addEventListener('click', async () => {
       try {
         const { months } = await api('GET', '/api/recap/months');

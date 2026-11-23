@@ -342,6 +342,16 @@ CREATE TABLE IF NOT EXISTS telegram_refs (
   PRIMARY KEY (chat_id, message_id)
 );
 
+-- wishes and ideas from the members: a to-do for the coach until marked done
+CREATE TABLE IF NOT EXISTS feedback (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  done_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS feedback_open ON feedback (done_at, id);
+
 CREATE TABLE IF NOT EXISTS invites (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash   TEXT NOT NULL UNIQUE,
@@ -447,6 +457,8 @@ function migrate(db) {
   // planned push messages can go only to clients who haven't tracked yet today; existing daily/weekly ones switch it on
   const hadOnlyOpen = db.prepare("SELECT 1 FROM pragma_table_info('notifications') WHERE name = 'only_open'").get();
   addColumns(db, 'notifications', [['only_open', 'INTEGER NOT NULL DEFAULT 0']]);
+  // the thank-you screen with the wish box is shown once to every member
+  addColumns(db, 'users', [['thanks_seen_at', 'TEXT']]);
   if (!hadOnlyOpen) db.exec("UPDATE notifications SET only_open = 1 WHERE schedule IN ('daily', 'weekly')");
   if (!hadOnboarding) db.exec("UPDATE users SET onboarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE onboarded_at IS NULL");
   // the Apple Health shortcut import was replaced by Google Health

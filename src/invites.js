@@ -147,7 +147,7 @@ function inviteRoutes({ db, HttpError, readBody, textField, requireCoach, notifi
       const i = find(b.token);
       if (!i) throw new HttpError(404, 'Diese Einladung ist ungültig, abgelaufen oder wurde schon benutzt.');
       const username = validateUsername(typeof b.username === 'string' ? b.username.trim() : b.username);
-      const password = validatePassword(b.password);
+      const password = validatePassword(b.password, { username, displayName: i.display_name });
       if (b.consent !== true) throw new HttpError(400, 'Bitte stimme der Datenschutzerklärung zu');
       if (q.userByName.get(username)) throw new HttpError(409, 'Dieser Benutzername ist schon vergeben');
       const displayName = textField(b.displayName, { name: 'Name', max: 80 }) || i.display_name;
