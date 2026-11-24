@@ -50,7 +50,7 @@ function productFromOff(p) {
   };
 }
 
-function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate, minClientDate, BACKFILL_MSG, reconcileFor, barcodeLookup = offLookup, catalog = null }) {
+function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requireUser, targetClient, isValidDate, maxAllowedDate, minClientDate, BACKFILL_MSG, reconcileFor, barcodeLookup = offLookup, catalog = null, planOf = null }) {
   const q = {
     day: db.prepare('SELECT * FROM food_log WHERE client_id = ? AND date = ? ORDER BY id'),
     one: db.prepare('SELECT * FROM food_log WHERE id = ?'),
@@ -88,13 +88,36 @@ function foodlogRoutes({ db, HttpError, readBody, textField, numberField, requir
     for (const k of Object.keys(totals)) totals[k] = k === 'kcal' ? Math.round(totals[k]) : Math.round(totals[k]);
     const g = q.goals.get(clientId) || {};
     const m = q.macroGoals.get(clientId) || {};
+    // What the dashboard shows: the diary – or, with an empty diary, what the daily entry says
+    // ("eaten as planned" → the plan's calories and macros; "no, X kcal" → those calories).
+    let shown = totals;
+    let source = 'diary';
+    const e = items.length ? null : q.entry.get(clientId, date);
+    if (e && e.calories_ok === 1) {
+      const p = plannedDay(clientId, g, m);
+      if (p) { shown = p; source = 'plan'; }
+    } else if (e && e.calories_ok === 0 && e.calories) {
+      shown = { ...totals, kcal: e.calories };
+      source = 'entry';
+    }
     return {
-      date, items, totals,
+      date, items, totals, shown, source,
       targets: {
         kcal: g.calories_goal ?? null, kcalMin: g.calories_min ?? null, kcalMax: g.calories_max ?? null,
         protein: m.protein ?? null, carbs: m.carbs ?? null, fat: m.fat ?? null,
       },
     };
+  }
+
+  /** A day eaten exactly as planned: the plan's meals, else the calorie goal with the macro goals. */
+  function plannedDay(clientId, g, m) {
+    const plan = planOf ? planOf(clientId) : null;
+    if (plan && plan.totalKcal > 0) {
+      return { kcal: Math.round(plan.totalKcal), protein: Math.round(plan.macros.protein), carbs: Math.round(plan.macros.carbs), fat: Math.round(plan.macros.fat) };
+    }
+    const kcal = g.calories_goal ?? (g.calories_min && g.calories_max ? Math.round((g.calories_min + g.calories_max) / 2) : null);
+    if (!kcal) return null;
+    return { kcal, protein: m.protein ?? 0, carbs: m.carbs ?? 0, fat: m.fat ?? 0 };
   }
 
   /** Keeps the tracker's calorie field in step with the diary. */

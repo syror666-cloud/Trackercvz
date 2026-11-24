@@ -900,6 +900,8 @@ noch kein Ziel|no target yet|aún sin objetivo|ancora nessun obiettivo
 Dein Coach|Your coach|Tu coach|Il tuo coach
 Ziel|Target|Objetivo|Obiettivo
 Das neue Design ist dunkel gedacht. „Hell“ zeigt die Variante in Studio-Beige.|The new design is meant to be dark. “Light” shows the studio-beige variant.|El diseño nuevo está pensado en oscuro. «Claro» muestra la variante en beige del estudio.|Il nuovo design è pensato scuro. «Chiaro» mostra la variante beige dello studio.
+✓ Laut Plan gegessen|✓ Eaten as planned|✓ Comido según el plan|✓ Mangiato secondo il piano
+Aus deinem Tageseintrag|From your daily entry|De tu registro diario|Dal tuo inserimento giornaliero
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

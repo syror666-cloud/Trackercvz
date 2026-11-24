@@ -482,6 +482,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-plan-kcal', date: 'November 2026',
+      client: [
+        ['✅', '„Nach Plan gegessen“ zählt auf dem Dashboard', 'Wenn du im Tageseintrag angibst, dass du laut Plan gegessen hast, zeigt das Dashboard die Kalorien und Makros deines Plans. Mit „Nein“ und einer Kalorienzahl siehst du diese Zahl. Sobald du etwas ins Tagebuch einträgst, zählt das Tagebuch.'],
+      ],
+      coach: [
+        ['✅', 'Kalorien laut Plan auf dem Klienten-Dashboard', '„Laut Plan eingehalten: Ja“ füllt die Kalorienkarte mit Kalorien und Makros des Ernährungsplans (ohne Mahlzeiten: Kalorienziel und Makroziele). Das Tagebuch hat immer Vorrang.'],
+      ],
+    },
+    {
       id: '2026-11-design-club-2', date: 'November 2026',
       client: [
         ['🎨', 'Neues Design – stimm mit ab', 'Tiefes Navy, Beige aus dem Studio und ein neues Dashboard: deine freien Kalorien groß, darunter Eiweiß, Kohlenhydrate und Schritte, und die letzte Nachricht deines Coaches als eigene Karte. Unter Einstellungen kannst du zwischen neuem und bisherigem Design wechseln und abstimmen, welches bleiben soll.'],
@@ -2273,6 +2282,10 @@
     mountWorkoutResume(document.getElementById('workout-resume'));
     mountRecapCard(document.getElementById('recap-card'));
     mountKcalCard(document.getElementById('kcal-card'), {
+      entryKey: () => {
+        const e = state.entries.find((x) => x.date === todayStr());
+        return e ? `${e.caloriesOk}|${e.calories}` : '';
+      },
       steps: () => {
         const e = state.entries.find((x) => x.date === todayStr());
         return { value: e && e.steps !== null && e.steps !== undefined ? e.steps : null, goal: state.goals && state.goals.stepsGoal };
@@ -5064,7 +5077,14 @@
   async function mountKcalCard(root, opts = {}) {
     if (!root) return;
     let day;
-    root.redraw = () => { if (day && root.isConnected) draw(); };
+    // the daily entry can change what the card shows ("eaten as planned"): reload when it changes, else just redraw
+    const entryKey = () => (opts.entryKey ? opts.entryKey() : '');
+    let seenKey = entryKey();
+    root.redraw = () => {
+      if (!day || !root.isConnected) return;
+      const k = entryKey();
+      if (k !== seenKey) { seenKey = k; load(); } else draw();
+    };
     const load = async () => {
       try {
         day = await api('GET', `/api/foodlog?date=${todayStr()}`);
@@ -5076,7 +5096,8 @@
       draw();
     };
     function draw() {
-      const t = day.totals;
+      const t = day.shown || day.totals;
+      const srcNote = day.source === 'plan' ? '<span class="ck-src">✓ Laut Plan gegessen</span>' : day.source === 'entry' ? '<span class="ck-src">Aus deinem Tageseintrag</span>' : '';
       const tg = day.targets;
       const target = tg.kcal || (tg.kcalMin && tg.kcalMax ? Math.round((tg.kcalMin + tg.kcalMax) / 2) : null);
       const left = target ? target - t.kcal : null;
@@ -5090,14 +5111,16 @@
         // new design: hero with the number that matters, three small tiles below
         const st = opts.steps ? opts.steps() : { value: null, goal: null };
         const tile = (value, label, p) => `<div class="ck-tile"><strong>${value}</strong><span>${label}</span><i class="ck-bar"><em style="width:${Math.round(Math.max(0, Math.min(1, p || 0)) * 100)}%"></em></i></div>`;
-        const mp = (k) => (tg[k] ? (t[k] || 0) / tg[k] : 0);
+        // against the macro goal; without one, the share of the energy (like the bars in the classic design)
+        const energy = (t.protein || 0) * 4 + (t.carbs || 0) * 4 + (t.fat || 0) * 9;
+        const mp = (k) => (tg[k] ? (t[k] || 0) / tg[k] : energy ? ((t[k] || 0) * (k === 'fat' ? 9 : 4)) / energy : 0);
         root.innerHTML = `
           <div class="ck-hero">
             <div class="kcal-ring ${over ? 'over' : ''}" role="img" aria-label="${num(t.kcal)} kcal gegessen${target ? ` von ${num(target)}` : ''}">
               <svg viewBox="0 0 108 108" aria-hidden="true"><circle cx="54" cy="54" r="${R}" class="kr-track"/>
                 <circle cx="54" cy="54" r="${R}" class="kr-fill" stroke-dasharray="${(C * pct).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 54 54)"/></svg>
             </div>
-            <div class="ck-num"><strong>${num(target ? Math.abs(left) : t.kcal)}</strong>
+            <div class="ck-num">${srcNote}<strong>${num(target ? Math.abs(left) : t.kcal)}</strong>
               <span><span>${target ? (left >= 0 ? 'kcal frei' : 'kcal drüber') : 'kcal gegessen'}</span> · ${target ? `<span>Ziel</span> ${tg.kcalMin && tg.kcalMax ? esc(fmtKcal(tg.kcalMin, tg.kcalMax).replace(/\s*kcal$/, '')) : num(target)}` : '<span>noch kein Ziel</span>'}</span></div>
           </div>
           <div class="ck-tiles">
@@ -5115,7 +5138,7 @@
             <div class="kr-text"><strong>${target ? num(Math.abs(left)) : num(t.kcal)}</strong><span>${target ? (left >= 0 ? 'kcal frei' : 'kcal drüber') : 'kcal'}</span></div>
           </div>
           <div class="kcal-card-side">
-            <h2>Kalorien heute</h2>
+            <h2>Kalorien heute</h2>${srcNote}
             <p class="small muted">${num(t.kcal)} gegessen${target ? ` · Ziel ${tg.kcalMin && tg.kcalMax ? esc(fmtKcal(tg.kcalMin, tg.kcalMax)) : `${num(target)} kcal`}` : ' · noch kein Kalorienziel'}</p>
             ${macroBars(t, tg)}
           </div>
