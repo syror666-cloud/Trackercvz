@@ -902,6 +902,9 @@ Ziel|Target|Objetivo|Obiettivo
 Das neue Design ist dunkel gedacht. „Hell“ zeigt die Variante in Studio-Beige.|The new design is meant to be dark. “Light” shows the studio-beige variant.|El diseño nuevo está pensado en oscuro. «Claro» muestra la variante en beige del estudio.|Il nuovo design è pensato scuro. «Chiaro» mostra la variante beige dello studio.
 ✓ Laut Plan gegessen|✓ Eaten as planned|✓ Comido según el plan|✓ Mangiato secondo il piano
 Aus deinem Tageseintrag|From your daily entry|De tu registro diario|Dal tuo inserimento giornaliero
+In Grau steht, was du letztes Mal geschafft hast – trag einfach die heutigen Werte ein. Gleich wie letztes Mal? Tipp auf ✓, dann wird es übernommen.|Grey shows what you did last time – just enter today's values. Same as last time? Tap ✓ to take it over.|En gris ves lo que hiciste la última vez – escribe los valores de hoy. ¿Igual que la última vez? Toca ✓ y se copia.|In grigio vedi cosa hai fatto l'ultima volta – inserisci i valori di oggi. Come l'ultima volta? Tocca ✓ per riprenderlo.
+In Grau steht, was du letztes Mal geschafft hast – trag einfach die heutigen Werte ein.|Grey shows what you did last time – just enter today's values.|En gris ves lo que hiciste la última vez – escribe los valores de hoy.|In grigio vedi cosa hai fatto l'ultima volta – inserisci i valori di oggi.
+Trag pro Satz Gewicht und Wiederholungen ein. Beim nächsten Mal siehst du diese Werte hier in Grau.|Enter weight and reps for each set. Next time you'll see these values here in grey.|Anota peso y repeticiones por serie. La próxima vez verás estos valores aquí en gris.|Inserisci peso e ripetizioni per serie. La prossima volta vedrai questi valori qui in grigio.
 heute|today|hoy|oggi
 gestern|yesterday|ayer|ieri
 noch nie|never|nunca|mai

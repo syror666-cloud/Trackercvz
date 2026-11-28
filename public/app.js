@@ -482,11 +482,13 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
-      id: '2026-11-plan-kcal', date: 'November 2026',
+      id: '2026-11-training-hints', date: 'November 2026',
       client: [
+        ['🏋️', 'Letzte Gewichte nur noch in Grau', 'Beim Training stehen die Werte vom letzten Mal nur noch grau im Feld – du tippst direkt die heutigen ein, ohne erst zu löschen. Gleich wie letztes Mal? Tipp auf ✓, dann wird der graue Wert übernommen.'],
         ['✅', '„Nach Plan gegessen“ zählt auf dem Dashboard', 'Wenn du im Tageseintrag angibst, dass du laut Plan gegessen hast, zeigt das Dashboard die Kalorien und Makros deines Plans. Mit „Nein“ und einer Kalorienzahl siehst du diese Zahl. Sobald du etwas ins Tagebuch einträgst, zählt das Tagebuch.'],
       ],
       coach: [
+        ['🏋️', 'Training: letzte Werte als graue Vorlage', 'Gewicht und Wiederholungen vom letzten Mal sind nicht mehr vorausgefüllt, sondern stehen grau im Feld. ✓ ohne Eingabe übernimmt sie.'],
         ['✅', 'Kalorien laut Plan auf dem Klienten-Dashboard', '„Laut Plan eingehalten: Ja“ füllt die Kalorienkarte mit Kalorien und Makros des Ernährungsplans (ohne Mahlzeiten: Kalorienziel und Makroziele). Das Tagebuch hat immer Vorrang.'],
       ],
     },
@@ -7968,7 +7970,7 @@
       }));
     }
 
-    // ---- 4. workout: weight + reps per set, prefilled with the last session ----
+    // ---- 4. workout: weight + reps per set; last session's values shown greyed out as a reminder, not filled in ----
     function drawWorkout() {
       const d = workoutDay;
       const draft = restored && restored.dayId === d.id ? restored : null;
@@ -7979,7 +7981,9 @@
         const kept = draft && draft.rows.find((x) => x.name === e.name);
         return {
           name: e.name, target: `${e.sets} × ${e.reps || '–'}`, last: l,
-          sets: kept ? kept.sets.map((x) => ({ ...x })) : Array.from({ length: n }, (_, i) => (l && l.sets[i] ? { ...l.sets[i] } : { weight: null, reps: null })),
+          // last time's set as a grey hint in the empty field
+          hints: Array.from({ length: Math.max(n, kept ? kept.sets.length : 0) }, (_, i) => (l && (l.sets[i] || l.sets[l.sets.length - 1])) || null),
+          sets: kept ? kept.sets.map((x) => ({ ...x })) : Array.from({ length: n }, () => ({ weight: null, reps: null })),
         };
       });
       let woDate = draft && draft.date && draft.date <= todayStr() ? draft.date : todayStr();
@@ -7997,7 +8001,7 @@
         root.innerHTML = `
           <button type="button" class="back" data-back>← Trainingsplan</button>
           <div class="page-head"><div>${eyebrow('Training')}<${H}>${esc(d.name)}</${HC}>
-            <p class="muted">${rows.some((r) => r.last) ? 'Die Werte vom letzten Mal sind schon eingetragen – passe an, was du heute geschafft hast.' : 'Trag pro Satz Gewicht und Wiederholungen ein. Beim nächsten Mal stehen diese Werte schon hier.'}</p></div>
+            <p class="muted">${rows.some((r) => r.last) ? `In Grau steht, was du letztes Mal geschafft hast – trag einfach die heutigen Werte ein.${rest ? ' Gleich wie letztes Mal? Tipp auf ✓, dann wird es übernommen.' : ''}` : 'Trag pro Satz Gewicht und Wiederholungen ein. Beim nächsten Mal siehst du diese Werte hier in Grau.'}</p></div>
             <div class="field wo-date"><label for="wo-date">Datum</label><input type="date" id="wo-date" value="${woDate}" max="${todayStr()}"${opts.coach ? '' : ` min="${addDays(todayStr(), -31)}"`}></div></div>
           ${touched ? '<p class="wo-kept small muted" role="status">✓ Deine Eingaben werden auf diesem Gerät zwischengespeichert – auch wenn du die App kurz verlässt.</p>' : ''}
           <div class="wo-list">${rows.map((r, i) => `
@@ -8007,8 +8011,8 @@
               <div class="wo-sets">
                 <div class="wo-set wo-set-head${rest ? ' with-done' : ''}" aria-hidden="true"><span>Satz</span><span>Gewicht</span><span>Wdh.</span>${rest ? '<span></span>' : ''}</div>
                 ${r.sets.map((s, j) => `<div class="wo-set${rest ? ' with-done' : ''}${s.done ? ' is-done' : ''}" data-s="${j}"><span class="wo-num">${j + 1}</span>
-                  <div class="input-unit"><input inputmode="decimal" value="${val(s.weight)}" aria-label="${esc(r.name)} Satz ${j + 1} Gewicht" data-f="weight"><span>kg</span></div>
-                  <div class="input-unit"><input inputmode="numeric" value="${val(s.reps)}" aria-label="${esc(r.name)} Satz ${j + 1} Wiederholungen" data-f="reps"><span>Wdh.</span></div>${rest ? `
+                  <div class="input-unit"><input inputmode="decimal" value="${val(s.weight)}" placeholder="${r.hints[j] ? val(r.hints[j].weight) : ''}" aria-label="${esc(r.name)} Satz ${j + 1} Gewicht${r.hints[j] && r.hints[j].weight !== null ? `, letztes Mal ${val(r.hints[j].weight)} kg` : ''}" data-f="weight"><span>kg</span></div>
+                  <div class="input-unit"><input inputmode="numeric" value="${val(s.reps)}" placeholder="${r.hints[j] ? val(r.hints[j].reps) : ''}" aria-label="${esc(r.name)} Satz ${j + 1} Wiederholungen${r.hints[j] && r.hints[j].reps !== null ? `, letztes Mal ${val(r.hints[j].reps)}` : ''}" data-f="reps"><span>Wdh.</span></div>${rest ? `
                   <button type="button" class="wo-done" data-done-set aria-pressed="${s.done ? 'true' : 'false'}" aria-label="${esc(r.name)} Satz ${j + 1} erledigt – Pause starten">✓</button>` : ''}</div>`).join('')}
               </div>
               <button type="button" class="btn-add" data-add-set><span aria-hidden="true">+</span> Satz</button>
@@ -8026,8 +8030,21 @@
             keep();
           })));
           el.querySelectorAll('[data-done-set]').forEach((b) => b.addEventListener('click', () => {
-            const set = r.sets[Number(b.closest('[data-s]').dataset.s)];
+            const j = Number(b.closest('[data-s]').dataset.s);
+            const set = r.sets[j];
             set.done = !set.done;
+            // done without typing = same as last time: take over the grey values
+            const hint = r.hints[j];
+            if (set.done && hint) {
+              const empty = (v) => v === null || v === undefined || String(v).trim() === '';
+              for (const f of ['weight', 'reps']) {
+                if (empty(set[f]) && !empty(hint[f])) {
+                  set[f] = hint[f];
+                  const inp = b.closest('[data-s]').querySelector(`[data-f="${f}"]`);
+                  if (inp) inp.value = val(hint[f]);
+                }
+              }
+            }
             b.setAttribute('aria-pressed', String(set.done));
             b.closest('[data-s]').classList.toggle('is-done', set.done);
             keep();
@@ -8037,8 +8054,11 @@
             }
           }));
           el.querySelector('[data-add-set]').addEventListener('click', () => {
-            const prev = r.sets[r.sets.length - 1] || { weight: null, reps: null };
-            r.sets.push({ weight: prev.weight, reps: prev.reps });
+            // a new set starts empty; the grey hint is last time's set (or what was just done)
+            const prev = r.sets[r.sets.length - 1];
+            const filled = prev && (prev.weight || prev.reps) ? { weight: prev.weight ?? null, reps: prev.reps ?? null } : null;
+            r.hints[r.sets.length] = (r.last && r.last.sets[r.sets.length]) || filled || r.hints[r.sets.length - 1] || null;
+            r.sets.push({ weight: null, reps: null });
             keep();
             paint();
           });

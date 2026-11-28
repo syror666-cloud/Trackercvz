@@ -215,6 +215,20 @@ test('training: unsaved workout input survives a reload and is cleared after sav
   await page.waitForFunction(() => !document.querySelector('.recap'));
   const left = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('sot-workout-')));
   assert.deepEqual(left, []);
+  // next workout: last time's values are only grey hints, ✓ without typing takes them over
+  await page.goto(`${base}/#/training`);
+  await page.click('[data-start="0"]');
+  await page.waitForSelector('[data-f="weight"]');
+  const w1 = page.locator('[data-f="weight"]').first();
+  assert.equal(await w1.inputValue(), '');
+  assert.equal(await w1.getAttribute('placeholder'), '55');
+  assert.equal(await page.locator('[data-f="reps"]').first().getAttribute('placeholder'), '12');
+  await page.locator('[data-f="weight"]').nth(1).fill('60'); // typed straight in, nothing to delete
+  await page.locator('[data-done-set]').first().click();
+  assert.equal(await w1.inputValue(), '55');
+  assert.equal(await page.locator('[data-f="reps"]').first().inputValue(), '12');
+  await page.click('[data-rest-skip]').catch(() => {});
+  await page.click('[data-back]');
   assert.deepEqual(errors, []);
 });
 

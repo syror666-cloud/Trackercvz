@@ -3114,3 +3114,6 @@ html.design-club[data-theme="dark"] .ck-bar { background: rgba(255, 255, 255, 0.
 .ck-src { display: inline-block; margin: 0 0 6px; padding: 3px 9px; border-radius: 99px; font: 600 0.72rem/1.3 var(--font-body); background: var(--sand-soft); color: var(--sand-ink); }
 :root:not(.design-club) .ck-src { background: var(--ivory); color: var(--text); margin: 4px 0; }
 html.design-club[data-theme="dark"] .ck-src { background: rgba(220, 199, 163, 0.16); }
+
+/* workout: last time's values as a grey reminder in the empty field */
+.wo-set input::placeholder { color: var(--muted); opacity: 0.75; font-style: italic; }
