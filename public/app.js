@@ -482,6 +482,15 @@
   // of them (newest first); once dismissed it does not come back on any device.
   const CHANGELOG = [
     {
+      id: '2026-11-login-club', date: 'November 2026',
+      client: [
+        ['🌙', 'Anmeldung im neuen Look', 'Auch der Anmeldebildschirm und der App-Start sind jetzt in Navy und Studio-Beige.'],
+      ],
+      coach: [
+        ['🌙', 'Anmeldung im neuen Look', 'Login, Startbildschirm der installierten App und Statusleiste nutzen jetzt das neue Design (wer das bisherige gewählt hat, sieht es auch beim Login).'],
+      ],
+    },
+    {
       id: '2026-11-training-hints', date: 'November 2026',
       client: [
         ['🏋️', 'Letzte Gewichte nur noch in Grau', 'Beim Training stehen die Werte vom letzten Mal nur noch grau im Feld – du tippst direkt die heutigen ein, ohne erst zu löschen. Gleich wie letztes Mal? Tipp auf ✓, dann wird der graue Wert übernommen.'],

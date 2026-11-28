@@ -3117,3 +3117,11 @@ html.design-club[data-theme="dark"] .ck-src { background: rgba(220, 199, 163, 0.
 
 /* workout: last time's values as a grey reminder in the empty field */
 .wo-set input::placeholder { color: var(--muted); opacity: 0.75; font-style: italic; }
+
+/* login & other pre-login screens in the new design: beige accents, coral stays on the button */
+html.design-club .login-intro h1 em, html.design-club .login-wordmark b { color: var(--sand-ink); }
+html.design-club .login-facts { color: var(--muted); }
+html.design-club .login-facts span::before { color: var(--sand); }
+html.design-club .login-logo { border-radius: 14px; }
+html.design-club .login-legal a { text-decoration-color: var(--sand); }
+html.design-club[data-theme="dark"] .login-card { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09), 0 30px 70px -30px rgba(0, 0, 0, 0.6); }
